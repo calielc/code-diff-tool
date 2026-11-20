@@ -145,6 +145,8 @@ export function tokensOf(theme: Theme): Record<string, string> {
   const p = theme.palette
   return {
     ...p,
+    page: p.panel,
+    panel: mix(p.bg, p.fg, 0.05),
     'on-accent': luminance(p.accent) > 0.5 ? '#14161a' : '#ffffff',
     orange: p.warn,
     highlight: mix(p.bg, p.warn, 0.4),

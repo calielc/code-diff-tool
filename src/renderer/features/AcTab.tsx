@@ -99,10 +99,11 @@ export function AcTab(): React.JSX.Element {
       {r.data.issues
         .filter((t) => ai.criteria.some((c) => c.name.startsWith(`${t.key} AC`)))
         .map((t) => (
-          <div key={t.key} className="card" data-testid={`ac-issue-${t.key}`}>
-            <h3>
-              <span className="mono">{t.key}</span> {t.title}
-            </h3>
+          <div key={t.key} className="panelcard accard" data-testid={`ac-issue-${t.key}`}>
+            <div className="cardhead">
+              <strong className="mono">{t.key}</strong>
+              <span className="muted">{t.title}</span>
+            </div>
             {ai.criteria
               .filter((c) => c.name.startsWith(`${t.key} AC`))
               .map((c) => {
@@ -110,16 +111,25 @@ export function AcTab(): React.JSX.Element {
                 const st = e?.state ?? 'none'
                 const n = c.name.slice(c.name.lastIndexOf('AC') + 2)
                 return (
-                  <div key={c.name} className="acrow" data-testid={`ac-${testId(c.name)}`}>
-                    <span className={`mark ${st}`}>{MARK[st]}</span> <strong>{n}.</strong> {c.text} <span className="muted small">{WORD[st]}</span>
-                    {e && <div className="small">{e.why}</div>}
-                    {e?.evidence.map((ev, i) => (
-                      <button key={i} className="link mono small" onClick={() => r.requestOpen(ev.mr, ev.path, ev.newLine)}>
-                        !{iid(ev.mr)} {base(ev.path)}
-                        {ev.newLine ? `:${ev.newLine}` : ''}
-                      </button>
-                    ))}
-                    {e?.draft && run && <Suggestion run={run} entry={e} />}
+                  <div key={c.name} className={`acrow ${st}`} data-testid={`ac-${testId(c.name)}`}>
+                    <span className={`acicon ${st}`}>{MARK[st]}</span>
+                    <span className="aclabel mono">AC{n}</span>
+                    <div className="acbody">
+                      <div className="actext">{c.text}</div>
+                      {e && <div className="acwhy">{e.why}</div>}
+                      {e && e.evidence.length > 0 && (
+                        <div className="acevid">
+                          {e.evidence.map((ev, i) => (
+                            <button key={i} className="link mono small" onClick={() => r.requestOpen(ev.mr, ev.path, ev.newLine)}>
+                              !{iid(ev.mr)} {base(ev.path)}
+                              {ev.newLine ? `:${ev.newLine}` : ''}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {e?.draft && run && <Suggestion run={run} entry={e} />}
+                    </div>
+                    <span className={`acstate ${st}`}>{WORD[st]}</span>
                   </div>
                 )
               })}

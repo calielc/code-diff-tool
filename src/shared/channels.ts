@@ -47,6 +47,8 @@ export const CH = {
   accessRemove: 'access:remove',
   devReadChange: 'dev:readChange',
   menuOpenDev: 'menu:openDev',
+  commitsList: 'commits:list',
+  commitsFile: 'commits:file',
   themeGet: 'theme:get',
   themeChoose: 'theme:choose',
   themeSet: 'theme:set',

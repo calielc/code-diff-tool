@@ -73,6 +73,37 @@ export function parseNameStatus(raw: string): NameStatus[] {
   return out
 }
 
+export interface CommitRow {
+  sha: string
+  author: string
+  date: string
+  subject: string
+}
+
+/** The commits after `base` up to `head`, oldest first, optionally only those that touch one of the paths. */
+export async function commitList(cwd: string, base: string, head: string, paths: string[] = []): Promise<CommitRow[]> {
+  assertSha(base)
+  assertSha(head)
+  const args = ['log', '--reverse', '--format=%H%x1f%an%x1f%aI%x1f%s%x1e', `${base}..${head}`]
+  if (paths.length > 0) args.push('--', ...paths)
+  const r = await git(cwd, args)
+  return r.stdout
+    .split('\x1e')
+    .map((x) => x.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [sha, author, date, subject] = line.split('\x1f')
+      return { sha, author, date, subject: subject ?? '' }
+    })
+}
+
+/** The first parent of a commit, or null for a root commit. */
+export async function parentOf(cwd: string, sha: string): Promise<string | null> {
+  assertSha(sha)
+  const r = await git(cwd, ['rev-parse', '--verify', '--quiet', `${sha}^1`], true)
+  return r.code === 0 && SHA_RE.test(r.stdout) ? r.stdout : null
+}
+
 /** Changed files between two commits. */
 export async function changedFiles(cwd: string, base: string, head: string): Promise<NameStatus[]> {
   assertSha(base)

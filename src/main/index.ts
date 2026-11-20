@@ -9,6 +9,7 @@ import { registerDevHandlers } from './ipc/dev'
 import { registerReviewHandlers } from './ipc/reviews'
 import { registerFlowHandlers } from './ipc/flow'
 import { registerAiHandlers } from './ipc/ai'
+import { registerCommitHandlers } from './ipc/commits'
 import { currentTheme, registerThemeHandlers, setTheme } from './ipc/theme'
 import { registerLaunchHandlers, receiveLaunch } from './ipc/launch'
 import { parseLaunchRequest, PROTOCOL } from '@shared/launch'
@@ -95,6 +96,7 @@ if (!app.requestSingleInstanceLock()) {
     registerChatHandlers()
     registerFlowHandlers()
     registerAiHandlers()
+    registerCommitHandlers()
     registerLaunchHandlers()
     void readAppState().then(async (st) => {
       if (st.workspaceRoot) await markStaleRecords(st.workspaceRoot)

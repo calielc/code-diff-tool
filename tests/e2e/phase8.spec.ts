@@ -117,8 +117,8 @@ test('the flow arrives without a reload and shows the chain, the reading order a
   await expect(page.getByTestId('flow-summary')).toHaveText('A user sees the change.')
   await expect(page.getByTestId('lane-backend/x')).toBeVisible()
   await expect(page.getByTestId('step-s1')).toContainText('The change')
-  await expect(page.getByTestId('step-s1')).toContainText('Changed')
-  await expect(page.getByTestId('step-s2')).toContainText('Existing')
+  await expect(page.getByTestId('step-s1')).toContainText('CHANGED')
+  await expect(page.getByTestId('step-s2')).toContainText('EXISTING')
   // the second step sits one row below its caller
   const y1 = (await page.getByTestId('step-s1').boundingBox())!.y
   const y2 = (await page.getByTestId('step-s2').boundingBox())!.y
@@ -131,7 +131,7 @@ test('the flow arrives without a reload and shows the chain, the reading order a
     .getByTestId('step-s1')
     .getByRole('button', { name: /a\.txt:2/ })
     .click()
-  await expect(page.getByTestId('file-scope')).toContainText('backend/x!12')
+  await expect(page.getByTestId('file-scope')).toContainText('!12 · backend/x')
   await expect(page.locator('table.diff tr.add')).toBeVisible()
   expect(JSON.parse(readFileSync(join(s.root, '.code-diff', 'reviews', 'R-1', 'flow.json'), 'utf8')).summary).toBe('A user sees the change.')
   await app.close()

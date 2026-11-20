@@ -98,6 +98,10 @@ const api: CodeDiffApi = {
       return () => ipcRenderer.removeListener(CH.themeSet, listener)
     }
   },
+  commits: {
+    list: (a) => ipcRenderer.invoke(CH.commitsList, a),
+    file: (a) => ipcRenderer.invoke(CH.commitsFile, a)
+  },
   launch: {
     take: () => ipcRenderer.invoke(CH.launchTake),
     onNew: (cb) => {

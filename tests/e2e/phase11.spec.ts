@@ -194,10 +194,10 @@ test('changes and issues are added from inside the open review, which is built a
   await expect(page.getByTestId('mr-backend/x!12')).toBeVisible()
   await expect(page.getByTestId('mr-backend/x!13')).toHaveCount(0)
 
-  await page.getByTestId('add-changes').click()
+  // the row is at the bottom of the Code changes tab
   await expect(page.getByTestId('add-changes-confirm')).toBeDisabled() // nothing typed yet
   await page.getByTestId('add-urls').fill('not a url')
-  await expect(page.getByTestId('add-problem').first()).toBeVisible()
+  await expect(page.getByTestId('add-problem')).toBeVisible()
   await expect(page.getByTestId('add-changes-confirm')).toBeDisabled()
   await page.getByTestId('add-urls').fill(MR13_URL)
   await page.getByTestId('add-changes-confirm').click()
@@ -205,5 +205,32 @@ test('changes and issues are added from inside the open review, which is built a
   await expect(page.getByTestId('mr-backend/x!13')).toBeVisible({ timeout: 30_000 })
   await expect(page.getByTestId('mr-backend/x!12')).toBeVisible()
   expect(JSON.parse(readFileSync(file, 'utf8')).mrs.map((m: { iid: number }) => m.iid)).toEqual([12, 13])
+  await app.close()
+})
+
+test('every column of the code changes table sorts: ascending, descending, then the original order (acceptance check 8)', async () => {
+  const s = setup()
+  writeReview(s, 'R-1', { ...OLD, issues: [], mrs: [...OLD.mrs, { provider: 'gitlab', host: 'gitlab.com', projectPath: 'team/backend/x', iid: 13 }] })
+  forge = await startFakeForge({ ...mrFixture(s), ...mr13(s) })
+  const env = { ...process.env, CODEDIFF_USER_DATA: s.ud, ...forgeEnv(forge.url) } as Record<string, string>
+  const app = await electron.launch({ args: [main], env })
+  const page = await app.firstWindow()
+  await page.getByTestId('review-R-1').dblclick()
+  await expect(page.getByTestId('mr-backend/x!13')).toBeVisible()
+  const order = (): Promise<string[]> =>
+    page.locator('table.reviews tbody tr[data-testid^="mr-"]').evaluateAll((rows) => rows.map((r) => r.getAttribute('data-testid') as string))
+  expect(await order()).toEqual(['mr-backend/x!12', 'mr-backend/x!13'])
+  // all nine columns have a sort button
+  for (const key of ['mr', 'title', 'repo', 'state', 'pipeline', 'author', 'approved', 'comments', 'updated'])
+    await expect(page.getByTestId(`sort-${key}`)).toBeVisible()
+  await page.getByTestId('sort-mr').click()
+  expect(await order()).toEqual(['mr-backend/x!12', 'mr-backend/x!13'])
+  await expect(page.locator('th[aria-sort="ascending"]')).toHaveCount(1)
+  await page.getByTestId('sort-mr').click()
+  expect(await order()).toEqual(['mr-backend/x!13', 'mr-backend/x!12'])
+  await expect(page.locator('th[aria-sort="descending"]')).toHaveCount(1)
+  await page.getByTestId('sort-mr').click()
+  expect(await order()).toEqual(['mr-backend/x!12', 'mr-backend/x!13'])
+  await expect(page.locator('th[aria-sort="descending"], th[aria-sort="ascending"]')).toHaveCount(0)
   await app.close()
 })

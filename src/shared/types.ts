@@ -3,6 +3,8 @@ import type { LlmConfig, ToolId, CustomTool } from './llm'
 import type { ChatEvent, ChatRequest } from './chat'
 import type { FlowState } from './flow'
 import type { LaunchRequest } from './launch'
+import type { CommitInfo } from './commits'
+import type { FileObject } from './diff'
 import type { AiStateView } from './ai'
 import type { PendingComment, SubmitInput, ThreadsAnswer } from './comments'
 import type { WatchMessage } from './watch'
@@ -157,6 +159,12 @@ export interface CodeDiffApi {
     choose(id: string): Promise<string>
     /** The theme changed, for example from the Theme menu. */
     onSet(cb: (id: string) => void): () => void
+  }
+  commits: {
+    /** The commits of a change that touch a file, oldest first. */
+    list(a: { slug: string; mr: string; path: string; oldPath: string }): Promise<Result<CommitInfo[]>>
+    /** The file as one commit of the change changed it. */
+    file(a: { slug: string; mr: string; path: string; oldPath: string; sha: string }): Promise<Result<FileObject>>
   }
   launch: {
     /** The request from outside the app that is waiting, if any. Taking it clears it. */

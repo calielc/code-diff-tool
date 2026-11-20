@@ -49,7 +49,7 @@ test('a theme applies to the page at once, is marked in the Theme menu and survi
       ?.click()
   )
   await expect.poll(() => cssVar(page, '--bg')).toBe('#282a36')
-  expect(await bodyBg(page)).toBe('rgb(40, 42, 54)')
+  expect(await bodyBg(page)).toBe('rgb(33, 34, 44)') // the page colour is the panel colour of the theme
   expect(await cssVar(page, '--accent')).toBe('#bd93f9')
   expect(await cssVar(page, '--add-bg')).toMatch(/^#[0-9a-f]{6}$/)
   expect(await page.evaluate(() => document.documentElement.getAttribute('data-theme'))).toBe('dracula')

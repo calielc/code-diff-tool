@@ -79,8 +79,13 @@ export function AiPanel(): React.JSX.Element | null {
   return (
     <div className="aipanel">
       <button className="pill" data-testid="ai-pill" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
-        {run?.state === 'running' && <span className="spin">◐ </span>}✦ AI review ·{' '}
-        <span data-testid="ai-words">{gathering ? 'gathering context…' : words}</span> ▾
+        {(run?.state === 'running' || gathering) && <span className="spin">◐ </span>}
+        <span className="pilltext">
+          {!gathering && !run && words === 'ready' ? '✦ ' : ''}
+          {gathering || (!run && words === 'ready') ? '' : 'AI review · '}
+          <span data-testid="ai-words">{gathering ? 'Gathering context…' : !run && words === 'ready' ? 'Start AI review' : words}</span>
+        </span>
+        <span className="caret">▾</span>
       </button>
       {open && (
         <div className={`aibox ${run?.state ?? ''}`} data-testid="ai-box">
@@ -201,5 +206,5 @@ function detail(ai: AiStateView, run: RunView | null, drafts: number, gathering:
   if (unreadable.length > 0)
     return `${unreadable.map((k) => `${k}: ${ai.unreadable[k]}. `).join('')}Without it, the review checks no acceptance criteria of that issue.`
   if (gathering) return 'The app collects the issues, the diffs, the history and the threads. The AI review can start once it is ready.'
-  return `${ai.tool} reads the whole review with its issues, and leaves draft comments for you to read first.`
+  return `${ai.tool.charAt(0).toUpperCase()}${ai.tool.slice(1)} reads the whole review with its issues, and leaves draft comments for you to read first.`
 }

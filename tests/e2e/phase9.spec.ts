@@ -142,7 +142,7 @@ test('the AI review runs, saves its record and turns findings into drafts (accep
   await expect(page.getByTestId('ai-box')).toContainText('1 blocking')
   await expect(page.getByTestId('ai-box')).toContainText('1 suggestion(s)')
   await expect(page.getByText(/2 AI draft\(s\) arrived, not posted yet/)).toBeVisible()
-  await expect(page.getByTestId('tab-diff')).toContainText('(2)')
+  await expect(page.getByTestId('count-drafts')).toHaveText('2 drafts')
   const rec = record(s, 'review-run.json') as { state: string; skill: string; model: string; drafts: string[]; commits: Record<string, string> }
   expect(rec).toMatchObject({ state: 'done', skill: 'general-review', model: 'opus' })
   expect(rec.drafts).toHaveLength(2)
@@ -218,7 +218,7 @@ test('the AC validation shows each criterion and adds a suggested comment as a d
   await expect(page.getByTestId('ac-box')).toContainText('1 not met')
   await page.getByTestId('ac-add-draft').click()
   await expect(page.getByTestId('ac-suggestion-LX-1-AC1')).toContainText('Draft added')
-  await expect(page.getByTestId('tab-diff')).toContainText('(1)')
+  await expect(page.getByTestId('count-drafts')).toHaveText('1 draft')
   const saved = record(s, 'comments.json') as Record<string, { body: string; claude: { ac: string } }>
   expect(Object.values(saved)[0]).toMatchObject({ body: '🤖 Spec, blocking: Show the card here.', claude: { ac: 'LX-1 AC1' } })
   expect((record(s, 'ac-run.json') as { drafts: unknown }).drafts).toBeNull()

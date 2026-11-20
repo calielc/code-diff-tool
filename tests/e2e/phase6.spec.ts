@@ -115,7 +115,7 @@ test('the Issues tab shows the rows, criteria counts, a failed row and the detai
     ...jiraIssue('LX-2', { title: 'Hide the card', assignee: null, type: 'Bug', criteria: 3 }),
     'GET rest/api/3/issue/LX-99': { fail: 'HTTP 404 Issue does not exist' }
   })
-  await expect(page.getByTestId('tab-issues')).toHaveText('Issues (3)')
+  await expect(page.getByTestId('count-issues')).toHaveText('3')
   await page.getByTestId('tab-issues').click()
   await expect(page.getByTestId('issues-summary')).toHaveText('3 issues · 5 acceptance criteria, 1 Jira did not give')
   // rows keep the order of the review file, and the first one is selected with its file shown
@@ -158,7 +158,7 @@ test('adding issues: the statuses, the refused values, and the limits (checks 8,
   await expect(input).toHaveValue('abc LX-1') // the input now holds the refused values
   expect(JSON.parse(readFileSync(join(s.root, '.code-diff', 'reviews', 'R-1', 'review.json'), 'utf8')).issues).toEqual(['LX-1', 'LX-3'])
   await page.getByRole('button', { name: 'Reload to see them' }).click()
-  await expect(page.getByTestId('tab-issues')).toHaveText('Issues (2)', { timeout: 15_000 })
+  await expect(page.getByTestId('count-issues')).toHaveText('2', { timeout: 15_000 })
   await app.close()
 })
 
@@ -225,7 +225,7 @@ test('spec files become issues next to Jira issues, with their own detail and re
   await expect(page.getByTestId('add-status')).toContainText('Added Checkout.md, notes.txt.')
   await expect(page.getByTestId('add-problem')).toHaveText('doc.pdf: Only .md, .txt and .html files can be added.')
   await page.getByRole('button', { name: 'Reload to see them' }).click()
-  await expect(page.getByTestId('tab-issues')).toHaveText('Issues (3)', { timeout: 15_000 })
+  await expect(page.getByTestId('count-issues')).toHaveText('3', { timeout: 15_000 })
   // the spec file row: its name is the key, the type is Spec, and its criteria are counted
   const row = page.getByTestId('issue-Checkout.md')
   await expect(row).toContainText('Spec')
@@ -260,7 +260,7 @@ test('a new review can start with spec files, and a refused file is shown before
   await expect(page.getByTestId('file-problems')).toContainText('doc.pdf: Only .md, .txt and .html files can be added.')
   expect(JSON.parse(readFileSync(join(s.root, '.code-diff', 'reviews', 'S-1', 'review.json'), 'utf8')).issues).toEqual(['Checkout.md'])
   await page.getByRole('button', { name: 'Open the review' }).click()
-  await expect(page.getByTestId('tab-issues')).toHaveText('Issues (1)')
+  await expect(page.getByTestId('count-issues')).toHaveText('1')
   await app.close()
 })
 

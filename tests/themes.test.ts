@@ -28,6 +28,7 @@ describe('themes', () => {
   it.each(THEMES.map((t) => [t.name, t] as const))('%s gives every colour variable of the page and stays readable', (_name, theme) => {
     const tokens = tokensOf(theme)
     for (const key of [
+      'page',
       'bg',
       'fg',
       'muted',

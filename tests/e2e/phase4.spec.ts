@@ -162,7 +162,7 @@ test('combines changes to different files, and splits parts when two changes con
   await expect(page.getByText('Part 1 · !12, !13')).toBeVisible()
   // by MR again: the same path stays open when it exists
   await page.getByRole('button', { name: 'By MR' }).click()
-  await expect(page.getByTestId('file-scope')).toContainText('backend/x!13')
+  await expect(page.getByTestId('file-scope')).toContainText('!13 · backend/x')
   await app.close()
 })
 

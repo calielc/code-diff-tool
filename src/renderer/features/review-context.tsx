@@ -40,6 +40,9 @@ export interface ReviewCtx {
   flow: FlowState
   /** The AI review and the acceptance criteria check. Null until the first answer. */
   ai: AiStateView | null
+  /** The files marked as viewed, by entry id. Kept on this machine for each review. */
+  viewed: Set<string>
+  setViewed: React.Dispatch<React.SetStateAction<Set<string>>>
 }
 
 const Ctx = createContext<ReviewCtx | null>(null)
@@ -70,6 +73,20 @@ export function ReviewProvider(props: { slug: string; result: BuildResult; onRel
     return api.flow.onState((m) => m.slug === slug && setFlow(m.state))
   }, [slug, props.result])
 
+  const [viewed, setViewed] = useState<Set<string>>(() => {
+    try {
+      return new Set(JSON.parse(localStorage.getItem(`codediff:viewed:${slug}`) ?? '[]') as string[])
+    } catch {
+      return new Set()
+    }
+  })
+  useEffect(() => {
+    try {
+      localStorage.setItem(`codediff:viewed:${slug}`, JSON.stringify([...viewed]))
+    } catch {
+      /* storage can be blocked: the marks then last until the window closes */
+    }
+  }, [slug, viewed])
   const [ai, setAi] = useState<AiStateView | null>(null)
   const announced = useRef<string | null>(null)
   useEffect(() => {
@@ -197,7 +214,9 @@ export function ReviewProvider(props: { slug: string; result: BuildResult; onRel
     viewedRequest,
     requestViewed: (mr, paths) => setViewedRequest({ mr, paths, nonce: ++nonce.current }),
     flow,
-    ai
+    ai,
+    viewed,
+    setViewed
   }
 
   return (

@@ -270,7 +270,7 @@ test('an Open card switches to the Diff tab and shows the file', async () => {
   await page.getByTestId('chat-ask').click()
   await page.getByTestId('action-card').getByRole('button', { name: 'Apply' }).click()
   await expect(page.getByTestId('diff-tab')).toBeVisible()
-  await expect(page.getByTestId('file-scope')).toContainText('backend/x!12')
+  await expect(page.getByTestId('file-scope')).toContainText('!12 · backend/x')
   await expect(page.locator('table.diff tr.add')).toBeVisible()
   await app.close()
 })

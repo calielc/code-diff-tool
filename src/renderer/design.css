@@ -1,0 +1,1037 @@
+/* The look of the app: page and cards, IBM Plex type, tabs, toolbar groups and the file panel. Loaded after styles.css. */
+
+:root {
+  --sans: 'IBM Plex Sans', system-ui, sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Code', Consolas, monospace;
+  --seg-on: color-mix(in srgb, var(--accent) 14%, var(--bg));
+  --radius: 8px;
+}
+body {
+  font: 13px/1.45 var(--sans);
+}
+.mono,
+code,
+pre,
+table.diff td.code,
+table.diff td.ln,
+.commitchip,
+.tcount,
+.tkey,
+.counts,
+kbd {
+  font-family: var(--mono);
+}
+button,
+input,
+select,
+textarea {
+  font-family: var(--sans);
+}
+button {
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  padding: 4px 10px;
+  font-size: 12.5px;
+}
+button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+}
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+button.primary:disabled {
+  opacity: 0.45;
+}
+button.ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+}
+button.ghost:hover:not(:disabled) {
+  color: var(--fg);
+  background: var(--panel);
+  border-color: transparent;
+}
+kbd {
+  display: inline-block;
+  min-width: 16px;
+  padding: 0 4px;
+  margin-left: 4px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 10.5px;
+  line-height: 15px;
+  text-align: center;
+}
+
+/* ---- the review screen fills the window; the panels scroll inside it ---- */
+.page.wide {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  padding: 10px 16px 12px;
+}
+.page.wide > * {
+  flex: none;
+}
+.page.wide > .difftab,
+.page.wide > .tabpane {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.tabpane {
+  overflow: auto;
+}
+
+.reviewhead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 0 6px;
+}
+.reviewhead h1 {
+  flex: none;
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  max-width: 60%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.reviewhead .sub {
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.grow {
+  flex: 1;
+}
+
+/* ---- tabs ---- */
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin: 0 0 8px;
+  border-bottom: 1px solid var(--line);
+}
+.tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: -1px;
+}
+.tabs button.on {
+  color: var(--fg);
+  font-weight: 600;
+  border-bottom-color: var(--accent);
+}
+.tcount {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fg);
+}
+.tthreads {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+}
+.tdrafts {
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 0 6px;
+  border-radius: 9px;
+  background: var(--note-bg);
+  color: var(--note-fg);
+}
+.tkey {
+  font-size: 10px;
+  min-width: 16px;
+  padding: 0 4px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--muted);
+  font-weight: 400;
+  text-align: center;
+}
+.acdots {
+  display: inline-flex;
+  gap: 3px;
+}
+.acdot {
+  display: inline-grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  font: 600 9.5px/1 var(--mono);
+  color: #fff;
+  background: var(--muted);
+}
+.acdot.covered {
+  background: var(--ok);
+}
+.acdot.partial {
+  background: var(--orange);
+}
+.acdot.missing {
+  background: var(--bad);
+}
+
+/* ---- the AI pill, a split button at the right of the title ---- */
+.aipanel .pill {
+  border-radius: 7px;
+  border: 0;
+  padding: 6px 12px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.aipanel .pill:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+/* ---- banners ---- */
+.banner {
+  padding: 8px 14px;
+  border-radius: 6px;
+  margin: 0 0 8px;
+  font-size: 12.5px;
+}
+.banner.warn {
+  background: var(--note-bg);
+  color: var(--note-fg);
+  border: 0;
+}
+
+/* ---- the Diff tab ---- */
+.difftab {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.difftoolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+  padding: 2px 0 6px;
+}
+.fgroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.glabel {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--bg);
+  overflow: hidden;
+}
+.seg button {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--fg);
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 6px 12px;
+}
+.seg button + button {
+  border-left: 1px solid var(--line);
+}
+.seg button.on {
+  background: var(--seg-on);
+  color: var(--accent);
+  font-weight: 600;
+}
+.seg button:disabled {
+  color: var(--muted);
+  opacity: 0.7;
+}
+.seg.toggles button.on {
+  color: var(--accent);
+}
+.seg.toggles button:not(.on) {
+  color: var(--muted);
+}
+.seg small {
+  font: 500 10.5px var(--mono);
+  margin-left: 3px;
+}
+.checkrow {
+  display: flex;
+  gap: 22px;
+  padding: 2px 0 8px;
+  font-size: 12.5px;
+  color: var(--fg);
+}
+.checkrow label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.difflayout {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(250px, 320px) minmax(0, 1fr);
+  gap: 10px;
+}
+.difflayout > aside[hidden] {
+  display: none;
+}
+.difflayout:has(> aside[hidden]) {
+  grid-template-columns: minmax(0, 1fr);
+}
+.filetree {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg);
+  padding: 8px 8px 0;
+}
+.filetree > input {
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  font-size: 12.5px;
+}
+.progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 2px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.progress .bar6 {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--line);
+  overflow: hidden;
+}
+.progress .bar6 > div {
+  height: 100%;
+  background: var(--ok);
+}
+.filetree .tree {
+  flex: 1 1 auto;
+}
+.noiseblock {
+  position: sticky;
+  bottom: 0;
+  margin: 6px -8px 0;
+  padding: 8px 12px;
+  border-top: 1px solid var(--line);
+  background: var(--bg);
+  font-size: 12px;
+}
+
+.rightcard {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg);
+  overflow: hidden;
+}
+.rightscroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+.filepanel {
+  min-width: 0;
+}
+.fileheader {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: block;
+  padding: 8px 14px 6px;
+  background: var(--bg);
+  border: 0;
+}
+.fh1,
+.fh2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+}
+.fh2 {
+  font-size: 12px;
+}
+.fpath {
+  font-size: 13.5px;
+}
+.fpath .fdir {
+  color: var(--muted);
+}
+.statechip,
+.commitchip,
+.headchip {
+  border-radius: 10px;
+  font-size: 11px;
+  padding: 1px 8px;
+}
+.statechip {
+  background: var(--seg-on);
+  color: var(--accent);
+  font-weight: 500;
+}
+.commitchip {
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+.headchip {
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  margin-left: 6px;
+  font-size: 10.5px;
+}
+.fileheader .counts {
+  font-size: 12px;
+}
+.viewedbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 12.5px;
+  background: var(--bg);
+}
+.reviewbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--line);
+  background: var(--bg);
+  margin: 0;
+}
+.reviewbar button {
+  font-weight: 500;
+}
+.reviewbar button.primary {
+  font-weight: 600;
+}
+
+/* ---- the diff ---- */
+table.diff {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+table.diff td.code {
+  white-space: pre;
+  padding: 0 10px;
+  line-height: 19px;
+}
+table.diff td.ln {
+  width: 1%;
+  min-width: 44px;
+  padding: 0 8px;
+  text-align: right;
+  color: var(--muted);
+  white-space: nowrap;
+  user-select: none;
+}
+table.diff tr.hunk td {
+  padding: 3px 14px;
+  font: 11.5px var(--mono);
+}
+table.diff.side td.code {
+  width: 50%;
+  max-width: 0;
+  overflow: hidden;
+  text-overflow: clip;
+}
+table.diff.side td.code.del {
+  background: var(--del-bg);
+}
+table.diff.side td.code.add {
+  background: var(--add-bg);
+}
+table.diff.side td.code.empty {
+  background: var(--panel);
+}
+table.diff.side tr.pair td.ln {
+  background: transparent;
+}
+table.diff.side td.sign {
+  width: 14px;
+}
+table.diff.full tr.add td.code {
+  background: var(--add-bg);
+}
+
+/* ---- refinements ---- */
+.difftoolbar {
+  gap: 6px 14px;
+}
+.fgroup {
+  gap: 6px;
+}
+.seg button {
+  padding: 5px 9px;
+  font-size: 12px;
+}
+.glabel {
+  font-size: 12px;
+}
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+.aipanel .pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  overflow: hidden;
+}
+.aipanel .pill .pilltext {
+  padding: 6px 4px 6px 14px;
+  white-space: nowrap;
+}
+.aipanel .pill .spin {
+  padding-left: 12px;
+  margin-right: -10px;
+}
+.aipanel .pill .caret {
+  align-self: stretch;
+  display: grid;
+  place-items: center;
+  padding: 0 9px;
+  font-size: 9px;
+  background: color-mix(in srgb, #000 16%, var(--accent));
+}
+
+.panelcard {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg);
+  overflow: hidden;
+}
+.cardhead {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.panelcard .issues > p:first-child {
+  margin: 0;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.panelcard table.reviews {
+  width: 100%;
+  border-collapse: collapse;
+}
+.panelcard table.reviews th {
+  padding: 7px 10px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+}
+.panelcard table.reviews td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+.panelcard table.reviews th:first-child,
+.panelcard table.reviews td:first-child {
+  padding-left: 14px;
+}
+.panelcard table.reviews td a {
+  font-family: var(--mono);
+  font-weight: 600;
+}
+.panelcard .addissues,
+.panelcard .issuedetail {
+  margin: 0;
+  padding: 10px 14px;
+}
+
+/* a read-only line (merged change): a bar at the left edge of the line */
+table.diff td.ln:first-child {
+  position: relative;
+}
+.stripe {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  margin: 0;
+  background: var(--accent);
+}
+
+.chatfab {
+  background: #c8552f;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+
+/* the file tree */
+.trow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  padding-right: 6px;
+  font-size: 12.5px;
+}
+.trow .tname {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.trow.repo .tname,
+.trow.group .tname {
+  font-weight: 600;
+}
+.trow .counts {
+  flex: none;
+  font-size: 11px;
+}
+.trow .count {
+  flex: none;
+  min-width: 20px;
+  padding: 0 5px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  text-align: center;
+  font: 11px var(--mono);
+  color: var(--muted);
+}
+.trow.current {
+  background: var(--seg-on);
+  color: var(--accent);
+  font-weight: 500;
+}
+.badge {
+  width: 15px;
+  height: 15px;
+  font-size: 9.5px;
+}
+.badge.A {
+  background: color-mix(in srgb, var(--ok) 22%, var(--bg));
+  color: var(--ok);
+}
+.badge.D {
+  background: color-mix(in srgb, var(--bad) 22%, var(--bg));
+  color: var(--bad);
+}
+.badge.M,
+.badge.R {
+  background: var(--seg-on);
+  color: var(--accent);
+}
+
+.aipanel .pill .spin {
+  display: inline-block;
+  font-size: 0;
+  width: 12px;
+  height: 12px;
+  margin: 0 -6px 0 14px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+.panelcard th button,
+.panelcard th {
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 12px;
+}
+.trow .statechip {
+  flex: none;
+}
+.trow .tname.lead {
+  flex: none;
+}
+
+/* ---- the Acceptance criteria tab ---- */
+.accard {
+  margin-bottom: 10px;
+}
+.acrow {
+  display: grid;
+  grid-template-columns: 26px 44px minmax(0, 1fr) auto;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--line);
+  border-left: 3px solid transparent;
+}
+.acrow.covered {
+  border-left-color: var(--ok);
+}
+.acrow.partial {
+  border-left-color: var(--orange);
+}
+.acrow.missing {
+  border-left-color: var(--bad);
+}
+.acicon {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  font-size: 11px;
+  background: var(--panel);
+  color: var(--muted);
+  border: 1px solid var(--line);
+}
+.acicon.covered {
+  background: color-mix(in srgb, var(--ok) 14%, var(--bg));
+  color: var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 35%, var(--bg));
+}
+.acicon.partial {
+  background: color-mix(in srgb, var(--orange) 16%, var(--bg));
+  color: var(--orange);
+  border-color: color-mix(in srgb, var(--orange) 40%, var(--bg));
+}
+.acicon.missing {
+  background: color-mix(in srgb, var(--bad) 14%, var(--bg));
+  color: var(--bad);
+  border-color: color-mix(in srgb, var(--bad) 35%, var(--bg));
+}
+.aclabel {
+  color: var(--muted);
+  font-size: 12px;
+  padding-top: 2px;
+}
+.actext {
+  font-weight: 500;
+}
+.acwhy {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.acevid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-top: 4px;
+}
+.acevid button.link {
+  padding: 0;
+  border: 0;
+  font-size: 11.5px;
+}
+.acstate {
+  align-self: start;
+  padding-top: 2px;
+  text-transform: uppercase;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+.acstate.covered {
+  color: var(--ok);
+}
+.acstate.partial {
+  color: var(--note-fg);
+}
+.acstate.missing {
+  color: var(--bad);
+}
+.aibox.inline {
+  border-radius: var(--radius);
+}
+.chatpanel {
+  height: min(640px, calc(100vh - 150px));
+  display: flex;
+  flex-direction: column;
+  border-left: 3px solid #c8552f;
+}
+
+.chatpanel .chatmessages {
+  max-height: none;
+  flex: 1 1 auto;
+  overflow: auto;
+}
+
+.statepill,
+.pipechip {
+  display: inline-block;
+  padding: 0 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  line-height: 18px;
+  background: var(--panel);
+  color: var(--muted);
+}
+.statepill.merged {
+  background: var(--seg-on);
+  color: var(--accent);
+}
+.statepill.opened {
+  background: color-mix(in srgb, var(--ok) 16%, var(--bg));
+  color: var(--ok);
+}
+.statepill.closed {
+  background: color-mix(in srgb, var(--bad) 14%, var(--bg));
+  color: var(--bad);
+}
+.statepill.draft {
+  background: var(--note-bg);
+  color: var(--note-fg);
+}
+.pipechip {
+  font-family: var(--mono);
+}
+.pipechip.success {
+  background: color-mix(in srgb, var(--ok) 16%, var(--bg));
+  color: var(--ok);
+}
+.pipechip.failed {
+  background: color-mix(in srgb, var(--bad) 14%, var(--bg));
+  color: var(--bad);
+}
+.pipechip.running,
+.pipechip.pending {
+  background: var(--note-bg);
+  color: var(--note-fg);
+}
+.person {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.titlecell {
+  max-width: 420px;
+}
+
+/* ---- Critical thinking ---- */
+.flowview {
+  padding: 14px 18px 18px;
+}
+.flowsummary {
+  max-width: 920px;
+  margin: 0 0 14px;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.flowcanvas {
+  position: relative;
+}
+.flowcanvas .lanes {
+  position: relative;
+  display: grid;
+  gap: 28px;
+  align-items: start;
+  margin: 0;
+}
+.lane {
+  display: flex;
+  flex-direction: column;
+  gap: 38px;
+  padding: 10px 14px 16px;
+  border-radius: 10px;
+  background: var(--panel);
+}
+.lanehead {
+  text-align: center;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--muted);
+  padding: 0 0 2px;
+  border: 0;
+}
+.flowbox {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1.5px solid var(--line);
+  border-radius: 7px;
+  background: var(--bg);
+}
+.flowbox.new {
+  border-color: var(--ok);
+}
+.flowbox.changed {
+  border-color: var(--line);
+}
+.flowbox.existing {
+  border-style: dashed;
+  background: transparent;
+}
+.flowbox .boxhead strong {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.boxfoot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.boxpath {
+  padding: 0;
+  border: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 11px;
+}
+.boxtext {
+  display: none;
+}
+.flowbox .kind {
+  border: 0;
+  padding: 0;
+  font: 600 9.5px var(--mono);
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.flowbox .kind.new {
+  color: var(--ok);
+}
+.flowlines {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+.flowedge {
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 1.2;
+}
+.arrowhead {
+  fill: var(--muted);
+}
+.edgelabel {
+  fill: var(--accent);
+  font: 11px var(--mono);
+  pointer-events: all;
+  cursor: pointer;
+}
+
+.flowcanvas .lanes {
+  justify-content: start;
+}
+
+.trow.focused {
+  background: var(--seg-on);
+  outline: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  outline-offset: -1px;
+}
+
+/* commit chips of the file header */
+.commits {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.commits .commitchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px 0 4px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-size: 11px;
+  color: var(--muted);
+  background: var(--bg);
+}
+.commits .commitchip.on {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--seg-on);
+}
+.commits .commitchip input {
+  margin: 0;
+  width: 11px;
+  height: 11px;
+}
+.chipbtn {
+  border: 0;
+  padding: 1px 0;
+  background: transparent;
+  font-size: 11px;
+  color: inherit;
+}
+.headchip {
+  background: transparent;
+  cursor: pointer;
+  margin-left: 0;
+}
+.headchip.on {
+  background: var(--seg-on);
+  font-weight: 600;
+}
+.morecommits {
+  font-size: 11px;
+  padding: 1px 4px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--muted);
+}
+.commitonly {
+  background: var(--seg-on);
+}
+.commitbanner {
+  margin: 4px 14px 8px;
+}

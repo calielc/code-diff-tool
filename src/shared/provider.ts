@@ -71,6 +71,8 @@ export interface ChangeInfo {
   diffRefs: DiffRefs
   pipeline: { status: string; url: string | null; id: string | number | null; projectId: string | number | null } | null
   userNotesCount: number
+  /** Commits that the target branch has and the source branch does not. null: unknown, or the change is merged or closed. */
+  behindTarget: number | null
 }
 
 export interface Approvals {

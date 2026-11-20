@@ -324,7 +324,7 @@ test('Submit is disabled for the viewer’s own change', async () => {
   const own = fixtures(s)
   ;(own[`GET ${EP(12)}`] as { json: { author: { username: string } } }).json.author.username = 'me'
   const { app, page } = await open(s, own)
-  await expect(page.getByTestId('submit-backend/x!12')).toBeDisabled()
+  await expect(page.getByTestId('submit-backend/x!12')).toHaveCount(0) // the author sees Mark as draft, not Submit review
   await page.getByTestId('tab-diff').click()
   await expect(page.getByTestId('open-submit')).toBeDisabled()
   await app.close()
@@ -346,7 +346,7 @@ test('the watcher shows another person’s approval and offers a refresh for new
     }),
     { CODEDIFF_WATCH_MS: '700' }
   )
-  await expect(page.getByTestId(`approvals-backend/x!12`)).toHaveText('bob', { timeout: 15_000 })
+  await expect(page.getByTestId(`approvals-backend/x!12`).locator('[data-user="bob"]')).toHaveCount(1, { timeout: 15_000 })
   await expect(page.getByTestId('refresh-banner')).toContainText('New commits on !12.', { timeout: 15_000 })
   await app.close()
 })

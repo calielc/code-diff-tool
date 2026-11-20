@@ -68,6 +68,10 @@ export interface CodeDiffApi {
     chooseRoot(): Promise<Result<string> | null>
     setRoot(path: string): Promise<Result<string>>
   }
+  people: {
+    /** A data URL for each picture url, or null when it is refused or cannot be downloaded. */
+    avatars(urls: string[]): Promise<Record<string, string | null>>
+  }
   reviews: {
     /** Adds changes and issues to an existing review. */
     addTo(input: { slug: string; urls: string; issues: string }): Promise<Result<{ slug: string; addedChanges: number; addedIssues: number }>>

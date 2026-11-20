@@ -163,6 +163,8 @@ export interface BuiltMr {
   key: string
   /** Folder name of the clone. */
   repo: string
+  /** The default branch of the clone (origin/HEAD), null when it cannot be read. */
+  defaultBranch: string | null
   snapshot: ChangeSnapshot
   /** True for a closed change, which gets no diff. */
   noDiff: boolean
@@ -194,3 +196,18 @@ export const STAGE_LABELS: Record<StageId, string> = {
 
 /** The title of a review: the saved title, or the slug. */
 export const reviewTitle = (slug: string, file: { title?: string } | null): string => file?.title?.trim() || slug
+
+export interface BranchStatus {
+  kind: 'level' | 'behind' | 'unknown' | 'none'
+  label: string
+  title: string
+  sortValue: number
+}
+
+export function branchStatus(info: Pick<ChangeInfo, 'state' | 'draft' | 'targetBranch' | 'behindTarget'>): BranchStatus {
+  const { behindTarget: n, targetBranch: target } = info
+  if (info.state !== 'opened') return { kind: 'none', label: '–', title: '', sortValue: -1 }
+  if (n === null) return { kind: 'unknown', label: '–', title: 'Not known', sortValue: -1 }
+  if (n === 0) return { kind: 'level', label: 'Up to date', title: `Level with ${target}`, sortValue: 0 }
+  return { kind: 'behind', label: `${n} behind`, title: `${n} ${n === 1 ? 'commit' : 'commits'} behind ${target}. Rebase or merge to catch up.`, sortValue: n }
+}

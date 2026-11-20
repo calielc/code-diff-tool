@@ -27,6 +27,8 @@ export interface ReviewCtx {
   deleteNote(mr: string, noteId: number): Promise<string | null>
   resolve(mr: string, threadId: string, resolved: boolean): Promise<string | null>
   reload(): void
+  /** Shows an approval that worked, without a rebuild: the viewer joins the approvers. */
+  approveInPlace(keys: string[]): void
   refreshBanner: string[] | null
   /** The file the reviewer looks at now, for the review chat. */
   screen: { path: string; where: string } | null
@@ -206,6 +208,16 @@ export function ReviewProvider(props: { slug: string; result: BuildResult; onRel
       return null
     },
     reload: props.onReload,
+    approveInPlace: (keys) =>
+      keys.forEach((key) =>
+        updateMr(key, (m) => {
+          const a = m.snapshot.approvals
+          return {
+            ...m,
+            snapshot: { ...m.snapshot, approvals: { ...a, approvedBy: [...a.approvedBy, data.viewer], userHasApproved: true, userCanApprove: false } }
+          }
+        })
+      ),
     refreshBanner: banner,
     screen,
     setScreen,

@@ -46,7 +46,8 @@ export function mapPull(ref: ChangeRef, pr: J, people: Record<string, Person>): 
     autoMerge: { enabled: state === 'opened' && !!pr.auto_merge, by: strOrNull(pr.auto_merge?.enabled_by?.login) },
     diffRefs: { base: baseSha, start: baseSha, head: str(pr.head?.sha) },
     pipeline: null, // filled from the check runs of the head commit
-    userNotesCount: (typeof pr.comments === 'number' ? pr.comments : 0) + (typeof pr.review_comments === 'number' ? pr.review_comments : 0)
+    userNotesCount: (typeof pr.comments === 'number' ? pr.comments : 0) + (typeof pr.review_comments === 'number' ? pr.review_comments : 0),
+    behindTarget: null // filled by a compare call for an open pull request
   }
 }
 
@@ -148,6 +149,15 @@ async function readThreads(ref: ChangeRef, people: Record<string, Person>): Prom
   return mapThreads(nodes, people)
 }
 
+async function readBehind(ref: ChangeRef, info: ChangeInfo): Promise<number | null> {
+  try {
+    const c = (await forgeApi(at(ref), `repos/${ref.project}/compare/${info.targetBranch}...${info.diffRefs.head}`, 'GET')) as J
+    return typeof c?.behind_by === 'number' ? c.behind_by : null
+  } catch {
+    return null
+  }
+}
+
 export async function readPull(ref: ChangeRef): Promise<ChangeSnapshot> {
   const base = `repos/${ref.project}/pulls/${ref.iid}`
   const people: Record<string, Person> = {}
@@ -158,6 +168,7 @@ export async function readPull(ref: ChangeRef): Promise<ChangeSnapshot> {
     readThreads(ref, people)
   ])
   const info = mapPull(ref, pr, people)
+  if (info.state === 'opened') info.behindTarget = await readBehind(ref, info)
   const runs = await forgePaged<J>(
     at(ref),
     `repos/${ref.project}/commits/${info.diffRefs.head}/check-runs`,

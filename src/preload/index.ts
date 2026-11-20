@@ -11,6 +11,7 @@ const api: CodeDiffApi = {
     chooseRoot: () => ipcRenderer.invoke(CH.chooseRoot),
     setRoot: (path) => ipcRenderer.invoke(CH.setRoot, path)
   },
+  people: { avatars: (urls) => ipcRenderer.invoke(CH.peopleAvatars, urls) },
   reviews: {
     addTo: (input) => ipcRenderer.invoke(CH.reviewsAddTo, input),
     list: () => ipcRenderer.invoke(CH.reviewsList),

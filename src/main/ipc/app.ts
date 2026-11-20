@@ -1,9 +1,11 @@
-import { BrowserWindow, clipboard, dialog, shell } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, shell } from 'electron'
 import { homedir } from 'node:os'
+import { join } from 'node:path'
 import { z } from 'zod'
 import { CH } from '@shared/channels'
 import type { Result } from '@shared/types'
 import { readAppState, writeAppState } from '../services/app-state'
+import { getAvatars } from '../services/avatars'
 import { checkTools, findRootCandidate } from '../services/tools'
 import { isDirectory, scanClones } from '../services/workspace'
 import { handle } from './guard'
@@ -45,6 +47,8 @@ export function registerAppHandlers(): void {
     if (ok.ok) await writeAppState({ workspaceRoot: path })
     return ok
   })
+
+  handle(CH.peopleAvatars, z.array(z.string().max(2048)).max(200), (urls) => getAvatars(urls, join(app.getPath('userData'), 'avatars')))
 
   handle(CH.copyText, z.string().max(10_000), (text) => clipboard.writeText(text))
 

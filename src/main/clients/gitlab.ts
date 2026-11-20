@@ -53,7 +53,8 @@ export function mapMr(ref: ChangeRef, mr: J, people: Record<string, Person>): Ch
     },
     diffRefs: { base: str(d.base_sha), start: str(d.start_sha), head: str(d.head_sha) },
     pipeline: hp ? { status: str(hp.status), url: strOrNull(hp.web_url), id: hp.id ?? null, projectId: hp.project_id ?? null } : null,
-    userNotesCount: typeof mr.user_notes_count === 'number' ? mr.user_notes_count : 0
+    userNotesCount: typeof mr.user_notes_count === 'number' ? mr.user_notes_count : 0,
+    behindTarget: state === 'opened' && typeof mr.diverged_commits_count === 'number' ? mr.diverged_commits_count : null
   }
 }
 

@@ -241,6 +241,27 @@ test('Cancel stops a slow build and returns to Home', async () => {
   await app.close()
 })
 
+test('the steps of the loading page sit one below the other', async () => {
+  const { env, shas } = makeEnv()
+  seed(env, 'steps', { title: 'Steps', mrs: [{ projectPath: 'team/backend/x', iid: 12 }], issues: [] })
+  const app = await launch(env, mr('team/backend/x', 12, 'opened', shas.a, shas.b, 30_000))
+  const page = await home(app)
+  await page.getByTestId('review-steps').dblclick()
+  await expect(page.getByTestId('stage-reading')).toHaveAttribute('data-state', 'running')
+  const boxes = await page.locator('li[data-testid^="stage-"]').evaluateAll((items) =>
+    items.map((li) => {
+      const r = li.getBoundingClientRect()
+      return { x: Math.round(r.left), y: Math.round(r.top) }
+    })
+  )
+  expect(boxes.length).toBeGreaterThan(2)
+  expect(new Set(boxes.map((b) => b.x)).size).toBe(1)
+  expect(boxes.map((b) => b.y)).toEqual([...boxes.map((b) => b.y)].sort((a, b) => a - b))
+  expect(new Set(boxes.map((b) => b.y)).size).toBe(boxes.length)
+  await page.getByTestId('cancel-build').click()
+  await app.close()
+})
+
 test('the Home screen stays blocked while no GitLab or GitHub token is saved', async () => {
   const { env } = makeEnv()
   // no CODEDIFF_TEST_CREDENTIALS, so the fresh data folder holds no token

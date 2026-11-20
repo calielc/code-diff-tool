@@ -1,7 +1,7 @@
 import type { ChangeRef } from '@shared/provider'
 import { STAGE_LABELS, reviewTitle, type BuildProgress, type BuildResult, type BuildStage, type BuiltMr, type StageId, type StageState } from '@shared/review'
 import type { Result } from '@shared/types'
-import { fetchHeads, hasCommit, mergeBase, type BlobCache } from '../clients/git'
+import { defaultBranch, fetchHeads, hasCommit, mergeBase, type BlobCache } from '../clients/git'
 import { buildCombined, type CombinedMr } from '../diff/combined'
 import { buildFiles, mapLimit } from '../diff/mr-files'
 import type { CombinedPart, FileObject } from '@shared/diff'
@@ -258,9 +258,12 @@ async function runBuild(job: Job): Promise<Result<BuildResult>> {
     // 6. Assemble the result
     current = 'preparing'
     stage('preparing', 'running')
+    const defaults = new Map<string, string | null>()
+    for (const l of located) if (!defaults.has(l.clone.dir)) defaults.set(l.clone.dir, await defaultBranch(l.clone.dir))
     const mrs: BuiltMr[] = located.map((l, i) => ({
       key: `${l.clone.name}!${l.ref.iid}`,
       repo: l.clone.name,
+      defaultBranch: defaults.get(l.clone.dir) ?? null,
       snapshot: snaps[i],
       noDiff: snaps[i].info.state === 'closed',
       files: filesByKey.get(`${l.clone.name}!${l.ref.iid}`) ?? []

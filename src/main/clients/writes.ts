@@ -95,7 +95,7 @@ async function submitGitLab(
       await forgeApi(gitlabAt(ref), `${base}/draft_notes/bulk_publish`, 'POST', o.changes ? { body: { reviewer_state: 'requested_changes' } } : {})
       stage = 'published'
     }
-    if (o.approve) await forgeApi(gitlabAt(ref), `${base}/approve`, 'POST')
+    if (o.approve) await forgeApi(gitlabAt(ref), `${base}/approve`, 'POST', { body: {} })
     if (o.unapprove) await forgeApi(gitlabAt(ref), `${base}/unapprove`, 'POST')
     if (o.ready || o.draft) {
       const current = (await forgeApi(gitlabAt(ref), base, 'GET')) as J // the title as it is now, so a rename since the page loaded stays

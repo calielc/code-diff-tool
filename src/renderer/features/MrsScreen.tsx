@@ -1,16 +1,34 @@
-import { useEffect, useRef, useState } from 'react'
-import type { BuildResult, BuiltMr } from '@shared/review'
-import { conversationThreads } from '@shared/threads'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import type { BuildResult } from '@shared/review'
+import {
+  DEFAULT_MR_FILTERS,
+  DEFAULT_MR_SORT,
+  approveAllCandidates,
+  commentsCell,
+  formatMrDate,
+  mrSortValue,
+  mrStateKey,
+  mrVisible,
+  parseStoredMrSort,
+  pipelineStages,
+  stackInfo,
+  yourReview,
+  type MrFilters,
+  type MrSortKey,
+  type MrSortRow,
+  type MrStateKey
+} from '@shared/mr-table'
+import { branchStatus } from '@shared/review'
 import { api } from '../api'
 import { DiffTab } from './DiffTab'
 import { ReviewChat } from './ReviewChat'
 import { ReviewProvider, useReview } from './review-context'
 import { SubmitDialog } from './SubmitDialog'
-import { DraftCard, ThreadCard } from './ThreadViews'
 import { IssuesTab } from './IssuesTab'
 import { AcTab } from './AcTab'
 import { AddChanges } from './AddChanges'
 import { AiPanel } from './AiPanel'
+import { Avatar, useAvatars } from './ui'
 
 type Tab = 'mrs' | 'diff' | 'issues' | 'ac'
 // The tab of each review, kept while the review is built again, so a reload does not lose your place.
@@ -23,61 +41,48 @@ const TABS: { id: Tab; label: string; testId: string }[] = [
   { id: 'ac', label: 'Acceptance criteria', testId: 'tab-ac' }
 ]
 
-type MrSortKey = 'mr' | 'title' | 'repo' | 'state' | 'pipeline' | 'author' | 'approved' | 'comments' | 'updated'
 const MR_COLUMNS: { key: MrSortKey; label: string; header: string }[] = [
   { key: 'mr', label: 'MR number', header: 'MR' },
+  { key: 'stack', label: 'stack', header: 'Stack' },
   { key: 'title', label: 'title', header: 'Title' },
   { key: 'repo', label: 'repo', header: 'Repo' },
-  { key: 'state', label: 'state', header: 'State' },
   { key: 'pipeline', label: 'pipeline', header: 'Pipeline' },
   { key: 'author', label: 'author', header: 'Author' },
   { key: 'approved', label: 'approvals', header: 'Approved by' },
-  { key: 'comments', label: 'open comments', header: 'Comments' },
-  { key: 'updated', label: 'last update', header: 'Updated' }
+  { key: 'review', label: 'your review', header: 'Your review' },
+  { key: 'comments', label: 'threads', header: 'Comments' },
+  { key: 'created', label: 'creation time', header: 'Created' },
+  { key: 'updated', label: 'last update', header: 'Updated' },
+  { key: 'merged', label: 'merge time', header: 'Merged' },
+  { key: 'state', label: 'state', header: 'State' }
 ]
 
-/** Text sorts without regard to case, numbers and dates as numbers; an empty value sorts first. */
-function compareMrs(a: BuiltMr, b: BuiltMr, key: MrSortKey): number {
-  const text = (m: BuiltMr): string | number => {
-    const i = m.snapshot.info
-    switch (key) {
-      case 'mr':
-        return i.ref.iid
-      case 'title':
-        return i.title.toLowerCase()
-      case 'repo':
-        return m.repo.toLowerCase()
-      case 'state':
-        return (i.draft ? 'draft' : i.state).toLowerCase()
-      case 'pipeline':
-        return (i.pipeline?.status ?? '').toLowerCase()
-      case 'author':
-        return i.author.toLowerCase()
-      case 'approved':
-        return m.snapshot.approvals.approvedBy.join(', ').toLowerCase()
-      case 'comments':
-        return m.snapshot.threads.filter((t) => t.resolvable && !t.resolved).length
-      case 'updated':
-        return i.updatedAt ? new Date(i.updatedAt).getTime() : 0
-    }
-  }
-  const x = text(a)
-  const y = text(b)
+/** An empty value sorts first. Text sorts without regard to case, numbers and dates as numbers. */
+function compareValues(x: string | number | null, y: string | number | null): number {
+  if (x === null || y === null) return x === y ? 0 : x === null ? -1 : 1
   return typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y), undefined, { numeric: true })
 }
 
-const initials = (name: string): string =>
-  name
-    .split(/[\s._-]+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((p) => p[0].toUpperCase())
-    .join('')
+const STAGE_GLYPH: Record<string, string> = { success: '✓', failed: '✕', warning: '!', running: '▶', pending: '…', canceled: '⊘', skipped: '»', manual: '▷' }
+const STATE_TEXT: Record<MrStateKey, string> = { draft: 'Draft', opened: 'Open', merged: 'Merged', closed: 'Closed' }
+const BUSY_TEXT = { approve: 'Approving…', revoke: 'Revoking…', 'mark-ready': 'Marking as ready…', 'mark-draft': 'Marking as draft…' } as const
+type RowAction = keyof typeof BUSY_TEXT
 
-/** A date as "3 Nov, 12:26" in the time zone of the computer. */
-const when = (iso: string): string => (iso ? new Date(iso).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '–')
+function openOutside(e: React.MouseEvent, url: string): void {
+  e.preventDefault()
+  void api.system.openExternal(url)
+}
 
-const STATE_WORD: Record<string, string> = { opened: 'open', merged: 'merged', closed: 'closed', locked: 'locked' }
+function loadFilters(): MrFilters {
+  try {
+    const v = JSON.parse(localStorage.getItem('codediff:mrFilters') ?? 'null') as Partial<MrFilters> | null
+    return v?.states && v.approvals
+      ? { states: { ...DEFAULT_MR_FILTERS.states, ...v.states }, approvals: { ...DEFAULT_MR_FILTERS.approvals, ...v.approvals } }
+      : DEFAULT_MR_FILTERS
+  } catch {
+    return DEFAULT_MR_FILTERS
+  }
+}
 
 /** The review after a build: the MRs tab and the Diff tab, with live data from the watcher. */
 export function MrsScreen(props: { result: BuildResult; slug: string; onHome: () => void; onReload: () => void }): React.JSX.Element {
@@ -95,14 +100,12 @@ function Screen(props: { onHome: () => void }): React.JSX.Element {
   const [submitFor, setSubmitFor] = useState<string | null>(null)
   const { data } = r
   const draftCount = Object.keys(r.drafts).length
-  const stateCount = (k: 'draft' | 'opened' | 'merged' | 'closed'): number =>
-    data.mrs.filter((m) => (k === 'draft' ? m.snapshot.info.draft : !m.snapshot.info.draft && m.snapshot.info.state === k)).length
-  const [mrSort, setMrSort] = useState<{ key: MrSortKey; dir: 'asc' | 'desc' } | null>(() => {
+  useAvatars(r.people)
+  const [mrSort, setMrSort] = useState(() => {
     try {
-      const v = JSON.parse(localStorage.getItem('codediff:mrSort') ?? 'null') as { key: MrSortKey; dir: 'asc' | 'desc' } | null
-      return v && MR_COLUMNS.some((c) => c.key === v.key) && (v.dir === 'asc' || v.dir === 'desc') ? v : null
+      return parseStoredMrSort(localStorage.getItem('codediff:mrSort'))
     } catch {
-      return null
+      return DEFAULT_MR_SORT
     }
   })
   /** A click sorts ascending, a second click descending, a third click returns to the order of the review. */
@@ -115,7 +118,124 @@ function Screen(props: { onHome: () => void }): React.JSX.Element {
       /* the sort then lasts until the window closes */
     }
   }
-  const sortedMrs = mrSort ? [...data.mrs].sort((a, b) => compareMrs(a, b, mrSort.key) * (mrSort.dir === 'asc' ? 1 : -1)) : data.mrs
+  const [filters, setFiltersState] = useState<MrFilters>(loadFilters)
+  const setFilters = (next: MrFilters): void => {
+    setFiltersState(next)
+    try {
+      localStorage.setItem('codediff:mrFilters', JSON.stringify(next))
+    } catch {
+      /* the toggles then last until the window closes */
+    }
+  }
+  const [busy, setBusy] = useState<Record<string, string>>({})
+  const [errors, setErrors] = useState<Record<string, string>>({})
+  const without = (o: Record<string, string>, keys: string[]): Record<string, string> =>
+    Object.fromEntries(Object.entries(o).filter(([k]) => !keys.includes(k)))
+  const act = async (key: string, action: RowAction): Promise<void> => {
+    setBusy((b) => ({ ...b, [key]: BUSY_TEXT[action] }))
+    setErrors((e) => without(e, [key]))
+    const res = await api.review.submit({
+      slug: r.slug,
+      approve: action === 'approve' ? [key] : [],
+      unapprove: action === 'revoke' ? [key] : [],
+      requestChanges: [],
+      summaries: {},
+      ready: action === 'mark-ready' ? [key] : [],
+      draft: action === 'mark-draft' ? [key] : []
+    })
+    const error = res.ok ? res.value[key] : res.error
+    if (!error) return r.reload()
+    setBusy((b) => without(b, [key]))
+    setErrors((e) => ({ ...e, [key]: error }))
+  }
+  const approveAll = async (keys: string[]): Promise<void> => {
+    setBusy((b) => ({ ...b, ...Object.fromEntries(keys.map((k) => [k, BUSY_TEXT.approve])) }))
+    setErrors((e) => without(e, keys))
+    const res = await api.review.submit({ slug: r.slug, approve: keys, unapprove: [], requestChanges: [], summaries: {}, ready: [], draft: [] })
+    const failed: Record<string, string> = res.ok ? res.value : Object.fromEntries(keys.map((k) => [k, res.error]))
+    if (Object.keys(failed).length === 0) return r.reload()
+    setBusy((b) => without(b, keys))
+    setErrors((e) => ({ ...e, ...failed }))
+    r.approveInPlace(keys.filter((k) => !failed[k]))
+  }
+  const stacks = stackInfo(
+    data.mrs.map((m) => ({
+      key: m.key,
+      iid: m.snapshot.info.ref.iid,
+      title: m.snapshot.info.title,
+      repo: m.repo,
+      sourceBranch: m.snapshot.info.sourceBranch,
+      targetBranch: m.snapshot.info.targetBranch,
+      state: m.snapshot.info.state,
+      defaultBranch: m.defaultBranch
+    }))
+  )
+  const rows = data.mrs.map((m) => {
+    const i = m.snapshot.info
+    const a = m.snapshot.approvals
+    const review = yourReview({
+      state: i.state,
+      draft: i.draft,
+      author: i.author,
+      viewer: r.viewer,
+      viewerState: m.snapshot.viewerState,
+      userCanApprove: a.userCanApprove,
+      userHasApproved: a.userHasApproved
+    })
+    const comments = commentsCell(m.snapshot.threads, Object.values(r.drafts).filter((d) => d.mr === m.key).length)
+    const sort: MrSortRow = {
+      iid: i.ref.iid,
+      stackRank: stacks[m.key].rank,
+      title: i.title,
+      repo: m.repo,
+      authorName: r.people[i.author]?.name || i.author,
+      approverCount: a.approvedBy.length,
+      pipelineStatus: i.pipeline?.status ?? null,
+      reviewOrder: review.order,
+      commentsSort: comments.sort,
+      createdAt: i.createdAt,
+      updatedAt: i.updatedAt,
+      mergedAt: i.mergedAt,
+      state: i.state,
+      draft: i.draft
+    }
+    return {
+      m,
+      stack: stacks[m.key],
+      review,
+      comments,
+      sort,
+      visible: mrVisible({ state: i.state, draft: i.draft, approverCount: a.approvedBy.length }, filters)
+    }
+  })
+  const stateCount = (k: MrStateKey): number => rows.filter((x) => mrStateKey(x.m.snapshot.info) === k).length
+  const approvedCount = rows.filter((x) => x.sort.approverCount > 0).length
+  const hiddenCount = rows.filter((x) => !x.visible).length
+  const canApproveCount = rows.filter((x) => x.m.snapshot.info.state === 'opened' && x.m.snapshot.approvals.userCanApprove).length
+  const approveAllNow = approveAllCandidates(
+    rows.map((x) => ({
+      key: x.m.key,
+      iid: x.sort.iid,
+      repo: x.m.repo,
+      state: x.m.snapshot.info.state,
+      author: x.m.snapshot.info.author,
+      userCanApprove: x.m.snapshot.approvals.userCanApprove,
+      userHasApproved: x.m.snapshot.approvals.userHasApproved
+    })),
+    r.viewer
+  )
+  const anyBusy = Object.keys(busy).length > 0
+  const shownRows = (
+    mrSort ? [...rows].sort((x, y) => compareValues(mrSortValue(x.sort, mrSort.key), mrSortValue(y.sort, mrSort.key)) * (mrSort.dir === 'asc' ? 1 : -1)) : rows
+  ).filter((x) => x.visible)
+  const visibleKey = useCallback(
+    (key: string): boolean => {
+      const m = rows.find((x) => x.m.key === key)
+      return !m || m.visible
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [data, filters]
+  )
   const repoCount = new Set(data.mrs.map((m) => m.repo)).size
   const threadsAll = data.mrs.flatMap((m) => m.snapshot.threads.filter((t) => t.resolvable))
   const threadTotal = threadsAll.length
@@ -146,7 +266,16 @@ function Screen(props: { onHome: () => void }): React.JSX.Element {
   }, [])
   // An Open card of the review chat shows the Diff tab.
   useEffect(() => {
-    if (r.nav) setTab('diff')
+    if (!r.nav) return
+    const info = r.mrByKey(r.nav.mr)?.snapshot.info
+    if (info && !visibleKey(r.nav.mr)) {
+      const approved = (r.mrByKey(r.nav.mr)?.snapshot.approvals.approvedBy.length ?? 0) > 0
+      setFilters({
+        states: { ...filters.states, [mrStateKey(info)]: true },
+        approvals: { ...filters.approvals, [approved ? 'approved' : 'notApproved']: true }
+      })
+    }
+    setTab('diff')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [r.nav?.nonce])
 
@@ -233,7 +362,7 @@ function Screen(props: { onHome: () => void }): React.JSX.Element {
         ))}
       </div>
 
-      {tab === 'diff' && <DiffTab />}
+      {tab === 'diff' && <DiffTab visible={visibleKey} />}
       {tab !== 'diff' && (
         <div className="tabpane">
           {tab === 'issues' && (
@@ -244,12 +373,56 @@ function Screen(props: { onHome: () => void }): React.JSX.Element {
           {tab === 'ac' && <AcTab />}
           {tab === 'mrs' && (
             <div className="panelcard">
-              <div className="cardhead" data-testid="mrs-summary">
-                <strong>Code changes</strong>
+              <div className="cardhead mrhead" data-testid="mrs-summary">
+                <strong>Merge requests</strong>
                 <span className="muted">
                   {stateCount('draft')} draft · {stateCount('opened')} open · {stateCount('merged')} merged · {stateCount('closed')} closed
-                  {data.skipped.length > 0 && ` · ${data.skipped.length} hidden`}
+                  {hiddenCount > 0 && `, ${hiddenCount} hidden`}
                 </span>
+                {canApproveCount > 0 ? (
+                  <span className="okline">{canApproveCount} you can approve</span>
+                ) : (
+                  <span className="muted">none for you to approve</span>
+                )}
+                <span className="grow" />
+                <div className="mrtools">
+                  {approveAllNow.keys.length > 0 && (
+                    <button className="primary" title={approveAllNow.tooltip} disabled={anyBusy} onClick={() => void approveAll(approveAllNow.keys)}>
+                      {anyBusy ? 'Approving…' : `Approve all (${approveAllNow.keys.length})`}
+                    </button>
+                  )}
+                  <div className="seg toggles" role="group" aria-label="Show MRs by state">
+                    {(['draft', 'opened', 'merged', 'closed'] as MrStateKey[]).map((k) => (
+                      <button
+                        key={k}
+                        className={filters.states[k] ? 'on' : ''}
+                        aria-pressed={filters.states[k]}
+                        title={`Show or hide the ${STATE_TEXT[k].toLowerCase()} MRs`}
+                        onClick={() => setFilters({ ...filters, states: { ...filters.states, [k]: !filters.states[k] } })}
+                      >
+                        {STATE_TEXT[k]} <small>{stateCount(k)}</small>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="seg toggles" role="group" aria-label="Show MRs by approval">
+                    {(
+                      [
+                        ['approved', 'Approved', approvedCount, 'approved'],
+                        ['notApproved', 'Not approved', rows.length - approvedCount, 'not approved']
+                      ] as const
+                    ).map(([k, label, count, word]) => (
+                      <button
+                        key={k}
+                        className={filters.approvals[k] ? 'on' : ''}
+                        aria-pressed={filters.approvals[k]}
+                        title={`Show or hide the ${word} MRs`}
+                        onClick={() => setFilters({ ...filters, approvals: { ...filters.approvals, [k]: !filters.approvals[k] } })}
+                      >
+                        {label} <small>{count}</small>
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
               <table className="reviews">
                 <thead>
@@ -262,76 +435,180 @@ function Screen(props: { onHome: () => void }): React.JSX.Element {
                         </button>
                       </th>
                     ))}
-                    <th />
                   </tr>
                 </thead>
                 <tbody>
-                  {sortedMrs.map((m) => {
+                  {shownRows.length === 0 && (
+                    <tr>
+                      <td colSpan={MR_COLUMNS.length} className="muted">
+                        No MR has the states and approvals turned on. Turn more on above to see the review's {rows.length} MRs.
+                      </td>
+                    </tr>
+                  )}
+                  {shownRows.map(({ m, stack, review, comments }) => {
                     const i = m.snapshot.info
-                    const open = m.snapshot.threads.filter((t) => t.resolvable && !t.resolved).length
-                    const canReview = i.state === 'opened' && i.author !== r.viewer
-                    const conversation = conversationThreads(m.snapshot.threads).filter((t) => !(r.hideResolved && t.resolved))
-                    const drafts = Object.values(r.drafts).filter((d) => d.mr === m.key && d.path === null)
-                    return [
+                    const branch = branchStatus(i)
+                    const created = formatMrDate(i.createdAt)
+                    const updated = formatMrDate(i.updatedAt)
+                    const merged = formatMrDate(i.mergedAt)
+                    const key = mrStateKey(i)
+                    const dates = (
+                      [
+                        ['created', created],
+                        ['updated', updated],
+                        ['merged', merged]
+                      ] as const
+                    ).map(([name, d]) => (
+                      <td key={name} className="small muted" title={d.title}>
+                        {d.text}
+                      </td>
+                    ))
+                    return (
                       <tr key={m.key} data-testid={`mr-${m.key}`}>
                         <td className="mono strong">
-                          <a href={i.url} title={m.key} onClick={(e) => (e.preventDefault(), void api.system.openExternal(i.url))}>
+                          <a href={i.url} title={m.key} onClick={(e) => openOutside(e, i.url)}>
                             !{i.ref.iid}
                           </a>
                         </td>
-                        <td className="titlecell" title={i.title}>
+                        <td>
+                          {stack.pill ? (
+                            <span className="stackpill" title={stack.tooltip ?? undefined}>
+                              {stack.pill}
+                            </span>
+                          ) : (
+                            '–'
+                          )}
+                        </td>
+                        <td className="titlecell">
                           <div>{i.title}</div>
                           <div className="mono muted small">
                             {i.sourceBranch} → {i.targetBranch}
+                            {(branch.kind === 'level' || branch.kind === 'behind') && (
+                              <span className={`branchbadge ${branch.kind}`} data-testid={`branch-${m.key}`} data-kind={branch.kind} title={branch.title}>
+                                {branch.label}
+                              </span>
+                            )}
                           </div>
                         </td>
-                        <td className="mono small">{m.repo}</td>
+                        <td className="mono muted small">{m.repo}</td>
+                        <td>
+                          {i.pipeline ? (
+                            <div className="pipeline">
+                              {i.pipeline.url ? (
+                                <a className={`pipechip ${i.pipeline.status}`} href={i.pipeline.url} onClick={(e) => openOutside(e, i.pipeline!.url!)}>
+                                  {i.pipeline.status}
+                                </a>
+                              ) : (
+                                <span className={`pipechip ${i.pipeline.status}`}>{i.pipeline.status}</span>
+                              )}
+                              <span className="pipestages">
+                                {pipelineStages(m.snapshot.jobs).map((st) => (
+                                  <button
+                                    key={st.stage}
+                                    className={`stage ${st.status}`}
+                                    aria-label={st.ariaLabel}
+                                    title={st.tooltip}
+                                    disabled={!st.url}
+                                    onClick={() => void api.system.openExternal(st.url!)}
+                                  >
+                                    {STAGE_GLYPH[st.status] ?? '•'}
+                                  </button>
+                                ))}
+                              </span>
+                            </div>
+                          ) : (
+                            '–'
+                          )}
+                        </td>
+                        <td>
+                          <Avatar user={i.author} people={r.people} viewer={r.viewer} />
+                        </td>
+                        <td data-testid={`approvals-${m.key}`}>
+                          {m.snapshot.approvals.approvedBy.length === 0 ? (
+                            '–'
+                          ) : (
+                            <div className="avatars">
+                              {m.snapshot.approvals.approvedBy.map((u) => (
+                                <Avatar key={u} user={u} people={r.people} viewer={r.viewer} />
+                              ))}
+                            </div>
+                          )}
+                        </td>
+                        <td>
+                          <div className="yourreview">
+                            {busy[m.key] ? (
+                              <span>
+                                <span className="spin">◐ </span>
+                                {busy[m.key]}
+                              </span>
+                            ) : (
+                              <>
+                                <span className={review.tone} title={review.tooltip ?? undefined}>
+                                  {review.text}
+                                </span>
+                                <span className="actions">
+                                  {review.actions.map((a) => (
+                                    <button
+                                      key={a}
+                                      className={a === 'submit' ? 'primary' : ''}
+                                      data-testid={a === 'submit' ? `submit-${m.key}` : undefined}
+                                      title={
+                                        a === 'mark-ready'
+                                          ? 'Removes the Draft prefix from the title'
+                                          : a === 'mark-draft'
+                                            ? 'Adds Draft: to the title'
+                                            : undefined
+                                      }
+                                      onClick={() => (a === 'submit' ? setSubmitFor(m.key) : void act(m.key, a))}
+                                    >
+                                      {
+                                        {
+                                          submit: 'Submit review',
+                                          approve: 'Approve',
+                                          revoke: 'Revoke approval',
+                                          'mark-ready': 'Mark as ready',
+                                          'mark-draft': 'Mark as draft'
+                                        }[a]
+                                      }
+                                    </button>
+                                  ))}
+                                </span>
+                                {errors[m.key] && <span className="err">{errors[m.key]}</span>}
+                              </>
+                            )}
+                          </div>
+                        </td>
+                        <td className="small">
+                          {comments.chip && (
+                            <span className={`threadchip ${comments.tone}`} title={comments.chipTitle ?? undefined}>
+                              💬 {comments.chip}
+                            </span>
+                          )}{' '}
+                          <span className="muted">{comments.detail === 'No threads' || comments.chip ? comments.detail : ''}</span>
+                          {comments.drafts && (
+                            <>
+                              {' · '}
+                              <span className="tdrafts" title={comments.drafts.title}>
+                                {comments.drafts.count}
+                              </span>{' '}
+                              <span className="muted">{comments.drafts.label}</span>
+                            </>
+                          )}
+                        </td>
+                        {dates}
                         <td data-testid={`state-${m.key}`}>
-                          <span className={`statepill ${i.draft ? 'draft' : i.state}`}>
-                            {STATE_WORD[i.state]}
-                            {i.draft ? ', draft' : ''}
-                            {m.noDiff ? ' (no diff)' : ''}
-                          </span>
+                          <span className={`statepill ${key}`}>{STATE_TEXT[key]}</span>
+                          {i.autoMerge.enabled && (
+                            <span
+                              className="automerge"
+                              title={`Auto-merge is on, set by ${i.autoMerge.by ?? 'unknown'}. GitLab merges this MR when the pipeline succeeds.`}
+                            >
+                              Auto-merge
+                            </span>
+                          )}
                         </td>
-                        <td>{i.pipeline ? <span className={`pipechip ${i.pipeline.status}`}>{i.pipeline.status}</span> : '–'}</td>
-                        <td>
-                          <span className="person">
-                            <span className="avatar">{initials(i.author)}</span>
-                            {i.author}
-                          </span>
-                        </td>
-                        <td data-testid={`approvals-${m.key}`}>{m.snapshot.approvals.approvedBy.join(', ') || '–'}</td>
-                        <td className="mono small">
-                          <span className="tthreads">
-                            💬 {open}/{m.snapshot.threads.filter((t) => t.resolvable).length}
-                          </span>{' '}
-                          <span className="muted">{open === 0 && m.snapshot.threads.length > 0 ? 'all resolved' : ''}</span>
-                        </td>
-                        <td className="small muted">{when(i.updatedAt)}</td>
-                        <td>
-                          <button
-                            data-testid={`submit-${m.key}`}
-                            disabled={!canReview}
-                            title={canReview ? undefined : 'Only an open change by someone else can take a review'}
-                            onClick={() => setSubmitFor(m.key)}
-                          >
-                            Submit review
-                          </button>
-                        </td>
-                      </tr>,
-                      (conversation.length > 0 || drafts.length > 0) && (
-                        <tr key={`${m.key}-conv`} className="extra">
-                          <td colSpan={10}>
-                            {conversation.map((t) => (
-                              <ThreadCard key={t.id} mrKey={m.key} thread={t} mrOpen={i.state === 'opened'} />
-                            ))}
-                            {drafts.map((d) => (
-                              <DraftCard key={d.id} draft={d} />
-                            ))}
-                          </td>
-                        </tr>
-                      )
-                    ]
+                      </tr>
+                    )
                   })}
                 </tbody>
               </table>

@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent
+} from 'react'
 import type { CommitInfo } from '@shared/commits'
 import { FILE_KINDS, fileKind, type FileKind } from '@shared/file-kinds'
 import { newCommentId, type PendingComment } from '@shared/comments'
@@ -6,6 +15,7 @@ import type { FileObject, LevelName, LineObj } from '@shared/diff'
 import type { DiffRefs } from '@shared/provider'
 import type { BuildResult } from '@shared/review'
 import { draftAtLine, fileThreads, isFileDraft, positionMatchesLine, threadCounts, threadOnFile, threadsAtLine } from '@shared/threads'
+import { clampTreeWidth, nextTreeWidth, parseStoredTreeWidth, treeWidthFromPointer } from '@shared/tree-width'
 import { api } from '../api'
 import { useReview } from './review-context'
 import { SubmitDialog, reviewable } from './SubmitDialog'
@@ -157,9 +167,13 @@ function buildTree(entries: Entry[]): TreeNode[] {
   return repos
 }
 
+/** The tooltip of a name: the full name, and under it the path or the title of the change when there is one. */
+const nameTip = (n: TreeNode): string => (n.tip && n.tip !== n.name ? `${n.name}\n${n.tip}` : n.name)
+
 const filesOf = (n: TreeNode): Entry[] => (n.entry ? [n.entry] : n.children.flatMap(filesOf))
 
-export function DiffTab(): React.JSX.Element {
+/** `visible` tells which MRs the toggles of the Code changes tab show. */
+export function DiffTab(props: { visible?: (mrKey: string) => boolean }): React.JSX.Element {
   const r = useReview()
   const result = r.data
   const hasCombined = result.combined.length > 0
@@ -179,6 +193,57 @@ export function DiffTab(): React.JSX.Element {
   // The commit chosen in the open file. It belongs to that file only.
   const [commitSel, setCommitSel] = useState<{ id: string; sha: string } | null>(null)
   useEffect(() => save('codediff:layout', layout), [layout])
+  const layoutRef = useRef<HTMLDivElement>(null)
+  const [areaWidth, setAreaWidth] = useState(0)
+  const [rawTreeWidth, setRawTreeWidth] = useState(() => {
+    try {
+      return parseStoredTreeWidth(localStorage.getItem('codediff:side'))
+    } catch {
+      return parseStoredTreeWidth(null)
+    }
+  })
+  const [dragging, setDragging] = useState(false)
+  const treeWidth = areaWidth > 0 ? clampTreeWidth(rawTreeWidth, areaWidth) : rawTreeWidth
+  const treeWidthRef = useRef(treeWidth)
+  treeWidthRef.current = treeWidth
+  useLayoutEffect(() => {
+    const box = layoutRef.current
+    if (!box) {
+      return
+    }
+    const measure = (): void => setAreaWidth(box.getBoundingClientRect().width)
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(box)
+    return () => observer.disconnect()
+  }, [])
+  const onSplitterPointerDown = (e: ReactPointerEvent<HTMLDivElement>): void => {
+    e.preventDefault()
+    e.currentTarget.setPointerCapture(e.pointerId)
+    setDragging(true)
+  }
+  const onSplitterPointerMove = (e: ReactPointerEvent<HTMLDivElement>): void => {
+    const box = layoutRef.current
+    if (dragging && box) {
+      const rect = box.getBoundingClientRect()
+      setRawTreeWidth(treeWidthFromPointer(e.clientX, rect.left, rect.width))
+    }
+  }
+  const onSplitterPointerUp = (e: ReactPointerEvent<HTMLDivElement>): void => {
+    if (dragging) {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+      setDragging(false)
+      save('codediff:side', treeWidthRef.current)
+    }
+  }
+  const onSplitterKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>): void => {
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      e.preventDefault()
+      const next = nextTreeWidth(treeWidth, e.key, areaWidth)
+      setRawTreeWidth(next)
+      save('codediff:side', next)
+    }
+  }
   const [submitOpen, setSubmitOpen] = useState(false)
 
   useEffect(() => save('codediff:view', view), [view])
@@ -188,7 +253,8 @@ export function DiffTab(): React.JSX.Element {
   useEffect(() => {
     if (view === 'flow' && !r.flow.flow) setView('mr')
   }, [view, r.flow.flow])
-  const all = useMemo(() => entriesOf(result, view), [result, view])
+  const { visible: mrShown } = props
+  const all = useMemo(() => entriesOf(result, view).filter((e) => !mrShown || (e.mrKey ? mrShown(e.mrKey) : e.partMrs.some(mrShown))), [result, view, mrShown])
   // A file is noise at a level when it is not binary and has no hunk at that level (file 02 section 2.1).
   const isNoise = (e: Entry): boolean => !e.file.binary && e.file.levels[level].hunks.length === 0
   const shown = useMemo(() => all.filter((e) => !isNoise(e)), [all, level]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -312,7 +378,7 @@ export function DiffTab(): React.JSX.Element {
     const on = (e: KeyboardEvent): void => {
       const t = e.target as HTMLElement | null
       if (e.ctrlKey || e.metaKey || e.altKey) return
-      if (t?.closest('input, textarea, select, [contenteditable], .rightcard, .modal-back, .chatpanel, .aibox')) return
+      if (t?.closest('input, textarea, select, [contenteditable], .rightcard, .modal-back, .chatpanel, .aibox, .splitter')) return
       const i = flat.findIndex((x) => x.node.key === focusKey)
       const here = i < 0 ? null : flat[i]
       let handled = true
@@ -341,6 +407,8 @@ export function DiffTab(): React.JSX.Element {
     return () => window.removeEventListener('keydown', on)
   }, [flat, focusKey, filter, view]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  const toggleNode = (key: string): void => setClosed((c) => (c.has(key) ? new Set([...c].filter((k) => k !== key)) : new Set(c).add(key)))
+
   const row = (n: TreeNode, depth: number): React.ReactNode => {
     const entries = filesOf(n)
     const add = entries.reduce((s, e) => s + e.file.levels[level].add, 0)
@@ -348,7 +416,7 @@ export function DiffTab(): React.JSX.Element {
     const allViewed = entries.length > 0 && entries.every((e) => viewed.has(e.id))
     const someViewed = entries.some((e) => viewed.has(e.id))
     const isOpen = isOpenNode(n)
-    const pad = { paddingLeft: 8 + 14 * depth }
+    const pad = { '--depth': depth } as React.CSSProperties
     if (n.kind === 'file' && n.entry) {
       const f = n.entry.file
       const mr = n.entry.mrKey ? r.mrByKey(n.entry.mrKey) : undefined
@@ -374,7 +442,9 @@ export function DiffTab(): React.JSX.Element {
             <span className={`badge ${f.status}`} title={STATUS_WORD[f.status]}>
               {f.status}
             </span>
-            <span className="tname">{n.name}</span>
+            <span className="tname" title={nameTip(n)}>
+              {n.name}
+            </span>
             {tc.total > 0 && (
               <span className={`chip ${tc.open > 0 ? 'openchip' : 'resolved'}`} title={`${tc.open} open of ${tc.total} thread(s)`} data-testid="thread-chip">
                 💬 {tc.open}/{tc.total}
@@ -400,6 +470,7 @@ export function DiffTab(): React.JSX.Element {
           style={pad}
           title={n.tip}
           onClick={() => setFocusKey(n.key)}
+          onDoubleClick={() => toggleNode(n.key)}
         >
           <input
             type="checkbox"
@@ -409,15 +480,14 @@ export function DiffTab(): React.JSX.Element {
               if (el) el.indeterminate = !allViewed && someViewed
             }}
             onChange={(e) => toggleViewed(entries, e.target.checked)}
+            onDoubleClick={(e) => e.stopPropagation()}
           />
-          <button
-            className="chev"
-            aria-label={isOpen ? 'Fold' : 'Open'}
-            onClick={() => setClosed((c) => (c.has(n.key) ? new Set([...c].filter((k) => k !== n.key)) : new Set(c).add(n.key)))}
-          >
+          <button className="chev" aria-label={isOpen ? 'Fold' : 'Open'} onClick={() => toggleNode(n.key)} onDoubleClick={(e) => e.stopPropagation()}>
             {isOpen ? '▾' : '▸'}
           </button>
-          <span className={`tname ${n.kind === 'group' ? 'mono lead' : ''}`}>{n.name}</span>
+          <span className={`tname ${n.kind === 'group' ? 'mono lead' : ''}`} title={nameTip(n)}>
+            {n.name}
+          </span>
           {n.chip && <span className="statechip small">{n.chip}</span>}
           <span className="counts">
             <span className="plus">+{add}</span> <span className="minus">−{del}</span>
@@ -601,7 +671,7 @@ export function DiffTab(): React.JSX.Element {
           comments
         </label>
       </div>
-      <div className="difflayout">
+      <div ref={layoutRef} className={dragging ? 'difflayout dragging' : 'difflayout'} style={{ '--tree-width': `${treeWidth}px` } as React.CSSProperties}>
         <aside className="filetree" hidden={view === 'flow'}>
           <input aria-label="Filter files" placeholder="Filter files" value={filter} onChange={(e) => setFilter(e.target.value)} />
           <div className="progress" title={`${doneCount} of ${shown.length} files viewed`}>
@@ -632,6 +702,24 @@ export function DiffTab(): React.JSX.Element {
             </div>
           )}
         </aside>
+
+        {view !== 'flow' && (
+          <div
+            className="splitter"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize the file tree"
+            aria-valuenow={treeWidth}
+            aria-valuemin={200}
+            aria-valuemax={Math.max(200, Math.floor(areaWidth * 0.6))}
+            tabIndex={0}
+            onPointerDown={onSplitterPointerDown}
+            onPointerMove={onSplitterPointerMove}
+            onPointerUp={onSplitterPointerUp}
+            onPointerCancel={onSplitterPointerUp}
+            onKeyDown={onSplitterKeyDown}
+          />
+        )}
 
         <section className="rightcard">
           <div className="rightscroll">

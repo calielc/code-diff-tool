@@ -75,6 +75,7 @@ test('the renderer has no require and no ipcRenderer (check 6)', async () => {
       'launch',
       'llm',
       'notes',
+      'people',
       'review',
       'reviews',
       'system',

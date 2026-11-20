@@ -7,6 +7,7 @@ export const CH = {
   setRoot: 'app:setRoot',
   copyText: 'app:copyText',
   openExternal: 'app:openExternal',
+  peopleAvatars: 'people:avatars',
   reviewsList: 'reviews:list',
   reviewsCheck: 'reviews:check',
   reviewsCreate: 'reviews:create',

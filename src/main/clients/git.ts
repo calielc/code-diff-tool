@@ -27,6 +27,12 @@ export async function hasCommit(cwd: string, sha: string): Promise<boolean> {
   return (await git(cwd, ['cat-file', '-e', `${sha}^{commit}`], true)).code === 0
 }
 
+/** The default branch of a clone from origin/HEAD, null when it cannot be read. */
+export async function defaultBranch(cwd: string): Promise<string | null> {
+  const r = await git(cwd, ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'], true)
+  return r.code === 0 && r.stdout.startsWith('origin/') ? r.stdout.slice('origin/'.length) : null
+}
+
 /** `git merge-base --is-ancestor <a> <b>` */
 export async function isAncestor(cwd: string, a: string, b: string): Promise<boolean> {
   assertSha(a)

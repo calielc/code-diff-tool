@@ -89,6 +89,8 @@ if (!app.requestSingleInstanceLock()) {
   receiveLaunch(parseLaunchRequest(process.argv.slice(1)))
 
   app.whenReady().then(() => {
+    // A development run takes its Dock icon from the Electron app in node_modules, so it is set here. A packaged app has its own.
+    if (process.platform === 'darwin' && !app.isPackaged && !hideWindow) app.dock?.setIcon(join(app.getAppPath(), 'build', 'icon.png'))
     installCredentialStore()
     registerAppHandlers()
     registerAccessHandlers()

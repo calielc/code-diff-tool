@@ -59,7 +59,8 @@ export interface AppState {
 /** The typed api exposed on window.codeDiff by the preload script. */
 export interface CodeDiffApi {
   app: {
-    checkTools(): Promise<ToolStatus>
+    /** `fresh: false` may reuse a scan of the workspace that is less than 30 seconds old. */
+    checkTools(fresh?: boolean): Promise<ToolStatus>
     getState(): Promise<AppState>
     findRootCandidate(): Promise<string | null>
     chooseRoot(): Promise<Result<string> | null>

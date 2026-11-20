@@ -19,7 +19,7 @@ async function validateRoot(path: string): Promise<Result<string>> {
 }
 
 export function registerAppHandlers(): void {
-  handle(CH.checkTools, null, async () => checkTools((await readAppState()).workspaceRoot))
+  handle(CH.checkTools, z.boolean().optional(), async (fresh) => checkTools((await readAppState()).workspaceRoot, fresh !== false))
   handle(CH.getState, null, () => readAppState())
   handle(CH.findRootCandidate, null, () => findRootCandidate())
 

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PrereqRow, RowState, ToolStatus } from '@shared/types'
 import { TOOL_NAMES, type LlmConfig, type ToolId } from '@shared/llm'
 import { api } from '../api'
+import { tokenHelp } from '@shared/token-help'
 
 const ICON: Record<RowState | 'checking', { glyph: string; cls: string }> = {
   ready: { glyph: '✓', cls: 'ok' },
@@ -68,14 +69,21 @@ export function Prerequisites(props: { onDone: () => void; onContinueAnyway: () 
   const [candidate, setCandidate] = useState<string | null>(null)
   const [rootError, setRootError] = useState<string | null>(null)
   const last = useRef(0)
+  const latest = useRef(0)
 
-  const check = useCallback(async () => {
+  // Only the newest check may change the screen, so a slow older one cannot overwrite a newer result. `fresh: false` reuses a recent scan of the workspace.
+  const check = useCallback(async (fresh = true) => {
+    const mine = ++latest.current
+    last.current = Date.now()
     setChecking(true)
     try {
-      setStatus(await api.app.checkTools())
+      const result = await api.app.checkTools(fresh)
+      if (mine === latest.current) setStatus(result)
     } finally {
-      last.current = Date.now()
-      setChecking(false)
+      if (mine === latest.current) {
+        last.current = Date.now()
+        setChecking(false)
+      }
     }
   }, [])
 
@@ -87,7 +95,7 @@ export function Prerequisites(props: { onDone: () => void; onContinueAnyway: () 
   // Check again when the window gets focus, at most once every 2 seconds (file 07 section 3.5).
   useEffect(() => {
     const onFocus = (): void => {
-      if (Date.now() - last.current >= 2000) void check()
+      if (Date.now() - last.current >= 2000) void check(false)
     }
     window.addEventListener('focus', onFocus)
     return () => window.removeEventListener('focus', onFocus)
@@ -107,6 +115,8 @@ export function Prerequisites(props: { onDone: () => void; onContinueAnyway: () 
   }
 
   const rows = status?.rows ?? []
+  // A re-check keeps the rows and their forms on screen, so typed text and open panels survive it.
+  const firstCheck = checking && status === null
   return (
     <div className="page">
       <header>
@@ -118,10 +128,10 @@ export function Prerequisites(props: { onDone: () => void; onContinueAnyway: () 
       <p className="muted">The app needs these tools. Items marked Required must be ready.</p>
 
       {rows.map((row) => (
-        <Row key={row.id} row={row} checking={checking}>
-          {row.access && !checking && <AccessForm row={row} onChanged={() => void check()} />}
-          {row.ai && !checking && <AiToolForm row={row} onChanged={() => void check()} />}
-          {row.id === 'root' && !checking && (
+        <Row key={row.id} row={row} checking={firstCheck}>
+          {row.access && !firstCheck && <AccessForm row={row} onChanged={() => void check()} />}
+          {row.ai && !firstCheck && <AiToolForm row={row} onChanged={() => void check()} />}
+          {row.id === 'root' && !firstCheck && (
             <div className="actions">
               {row.state !== 'ready' && candidate && <button onClick={() => void applyCandidate()}>Use this folder ({candidate})</button>}
               <button onClick={() => void chooseRoot()}>{row.state === 'ready' ? 'Change folder…' : 'Choose folder…'}</button>
@@ -157,6 +167,7 @@ function AccessForm(props: { row: PrereqRow; onChanged: () => void }): React.JSX
   const [error, setError] = useState<string | null>(null)
   const jira = access.kind === 'jira'
   const label = props.row.name
+  const help = tokenHelp(access.kind, host)
 
   const save = async (): Promise<void> => {
     setBusy(true)
@@ -205,6 +216,49 @@ function AccessForm(props: { row: PrereqRow; onChanged: () => void }): React.JSX
             {jira ? 'API token' : 'Personal access token'}
             <input aria-label={`${label} token`} type="password" autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)} />
           </label>
+          <details open className="tokenhelp" data-testid={`token-help-${access.kind}`}>
+            <summary>How to create a token</summary>
+            <p>{help.intro}</p>
+            {help.options.map((option, n) => (
+              <div key={option.label} className="tokenoption">
+                <strong>{option.label}</strong>
+                <ol>
+                  {option.steps.map((step) => (
+                    <li key={step}>{step}</li>
+                  ))}
+                </ol>
+                <ul>
+                  {option.permissions.map((p) => (
+                    <li key={p.name}>
+                      <strong>{p.name}</strong>: {p.why}
+                    </li>
+                  ))}
+                </ul>
+                <div className="actions">
+                  <button
+                    type="button"
+                    data-testid={`token-page-${access.kind}-${n}`}
+                    data-url={option.pageUrl ?? ''}
+                    disabled={!option.pageUrl}
+                    aria-label={`${option.pageLabel}: ${option.label}`}
+                    onClick={() => option.pageUrl && void api.system.openExternal(option.pageUrl)}
+                  >
+                    {option.pageLabel}
+                  </button>
+                  {!option.pageUrl && (
+                    <span className="bad-text" role="status">
+                      Check the host name above.
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+            <ul>
+              {help.notes.map((note) => (
+                <li key={note}>{note}</li>
+              ))}
+            </ul>
+          </details>
           <span className="muted small">The token is checked, then saved encrypted by your operating system. It is never shown again.</span>
           {error && (
             <div className="bad-text small" data-testid={`access-error-${access.kind}`}>

@@ -1227,3 +1227,25 @@ button.ask {
   border: 1px dashed var(--line);
   border-radius: 6px;
 }
+.tokenhelp {
+  max-width: 560px;
+  margin-top: 6px;
+  padding: 6px 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 12px;
+}
+.tokenhelp summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.tokenoption {
+  margin-top: 8px;
+}
+.tokenoption ol,
+.tokenoption ul,
+.tokenhelp > ul {
+  margin: 4px 0;
+  padding-left: 20px;
+}

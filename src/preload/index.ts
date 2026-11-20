@@ -5,7 +5,7 @@ import type { CodeDiffApi } from '../shared/types'
 // Only typed functions are exposed. No raw ipcRenderer, no way to start a process.
 const api: CodeDiffApi = {
   app: {
-    checkTools: () => ipcRenderer.invoke(CH.checkTools),
+    checkTools: (fresh) => ipcRenderer.invoke(CH.checkTools, fresh),
     getState: () => ipcRenderer.invoke(CH.getState),
     findRootCandidate: () => ipcRenderer.invoke(CH.findRootCandidate),
     chooseRoot: () => ipcRenderer.invoke(CH.chooseRoot),

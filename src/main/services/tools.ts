@@ -147,7 +147,7 @@ async function checkAi(): Promise<PrereqRow> {
   return row({ ...base, state: 'ready', version, detail: version })
 }
 
-async function checkRoot(root: string | undefined): Promise<{ row: PrereqRow; clones: Clone[] }> {
+async function checkRoot(root: string | undefined, fresh: boolean): Promise<{ row: PrereqRow; clones: Clone[] }> {
   const base: Base = { id: 'root', name: 'Workspace root', required: true }
   const choose = 'Choose the folder that holds your repo clones.'
   if (!root) {
@@ -156,7 +156,7 @@ async function checkRoot(root: string | undefined): Promise<{ row: PrereqRow; cl
   if (!(await isDirectory(root))) {
     return { row: row({ ...base, state: 'missing', detail: `The workspace root ${root} was not found. ${choose}` }), clones: [] }
   }
-  const clones = await scanClones(root, true)
+  const clones = await scanClones(root, fresh)
   if (clones.length === 0) {
     return {
       row: row({ ...base, state: 'not-set-up', detail: `No git repositories with an origin remote were found in ${root}. ${choose}` }),
@@ -170,8 +170,8 @@ async function checkRoot(root: string | undefined): Promise<{ row: PrereqRow; cl
 }
 
 /** Run every check at the same time (file 07 section 3.5). */
-export async function checkTools(root: string | undefined): Promise<ToolStatus> {
-  const rootCheck = await checkRoot(root)
+export async function checkTools(root: string | undefined, fresh = true): Promise<ToolStatus> {
+  const rootCheck = await checkRoot(root, fresh)
   const cwd = rootCheck.clones[0]?.dir ?? null // the git identity is checked in the first clone
   const [git, ai] = await Promise.all([checkGit(cwd), checkAi()])
   const rows = [git, accessRow('gitlab'), accessRow('github'), accessRow('jira'), ai, rootCheck.row]

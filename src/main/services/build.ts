@@ -11,7 +11,7 @@ import { withLock } from './lock'
 import { readReviewFile } from './reviews'
 import { readIssues, rememberIssues, toRow } from './issues'
 import { startSession } from './session'
-import { findClone, scanClones, type Clone } from './workspace'
+import { locateClone, scanClones, type Clone } from './workspace'
 
 type Emit = (p: BuildProgress) => void
 
@@ -136,7 +136,7 @@ async function runBuild(job: Job): Promise<Result<BuildResult>> {
     const located: { ref: ChangeRef; clone: Clone }[] = []
     for (const m of review.value.mrs) {
       const ref: ChangeRef = { provider: m.provider, host: m.host, project: m.projectPath, iid: m.iid }
-      const clone = findClone(clones, ref)
+      const clone = await locateClone(root, clones, ref, true)
       if (!clone) {
         throw new BuildError(`${ref.project} has no local clone in ${root}. Clone it there, then retry.`, 'clones')
       }

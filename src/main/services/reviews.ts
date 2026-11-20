@@ -21,7 +21,7 @@ import {
 } from '@shared/review'
 import type { Result } from '@shared/types'
 import { readInfo } from '../clients/forge'
-import { findClone, scanClones } from './workspace'
+import { locateClone, scanClones } from './workspace'
 
 /** All state lives in the workspace root under `.code-diff/`, which git can ignore. */
 export const stateDir = (root: string): string => join(root, '.code-diff')
@@ -146,7 +146,7 @@ export async function checkReview(root: string, input: CheckInput, onProgress?: 
     } catch (e) {
       return { ok: false, error: `${urlOf(ref)}: ${e instanceof Error ? e.message : String(e)}` }
     }
-    const clone = findClone(clones, ref)
+    const clone = await locateClone(root, clones, ref)
     mrs.push({
       key: `${clone?.name ?? ref.project}!${ref.iid}`,
       url: info.url,

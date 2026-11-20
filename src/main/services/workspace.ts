@@ -1,5 +1,5 @@
 import { readdir, stat } from 'node:fs/promises'
-import { join, relative } from 'node:path'
+import { basename, join, relative } from 'node:path'
 import type { ChangeRef } from '@shared/provider'
 import { run } from '../processes/run'
 
@@ -26,10 +26,15 @@ export function parseRemote(remote: string): { host: string; project: string } |
   return { host: m[1].toLowerCase(), project: m[2] }
 }
 
+/** How many levels below the chosen folder the normal scan looks. */
+const SCAN_DEPTH = 4
+/** How many levels the second search looks, for a repo that the normal scan missed. */
+const DEEP_DEPTH = 8
+
 const SKIP_DIRS = new Set(['node_modules', 'out', 'dist', 'build', 'target', 'vendor', '$RECYCLE.BIN', 'System Volume Information'])
 
-/** Walk the root, depth-limited, and return every folder that holds `.git`. A repo is not entered. */
-export async function findRepoDirs(root: string, maxDepth = 3): Promise<string[]> {
+/** Walk the root, depth-limited, and return every folder that holds `.git`. The root itself is entered even when it is a repo. A repo below the root is not entered. */
+export async function findRepoDirs(root: string, maxDepth = SCAN_DEPTH): Promise<string[]> {
   const found: string[] = []
   const walk = async (dir: string, depth: number): Promise<void> => {
     let entries
@@ -40,7 +45,7 @@ export async function findRepoDirs(root: string, maxDepth = 3): Promise<string[]
     }
     if (entries.some((e) => e.name === '.git')) {
       found.push(dir)
-      return
+      if (depth > 0) return // below the chosen folder a repo is not entered, but the chosen folder itself may hold the clones, as a meta repo does
     }
     if (depth >= maxDepth) return
     await Promise.all(
@@ -53,32 +58,43 @@ export async function findRepoDirs(root: string, maxDepth = 3): Promise<string[]
   return found.sort()
 }
 
+type Origin = { host: string; project: string } | null
+
+/** Remotes already read, so a deeper scan only reads the folders the normal scan did not see. A fresh scan reads them again. */
+const origins = new Map<string, Origin>()
+
 /** The origin remote of a clone, or null when it has none. */
-async function originOf(dir: string): Promise<{ host: string; project: string } | null> {
+async function originOf(dir: string, fresh: boolean): Promise<Origin> {
+  if (!fresh && origins.has(dir)) return origins.get(dir) ?? null
   const r = await run('git', ['remote', 'get-url', 'origin'], { cwd: dir, timeoutMs: 15_000 })
-  return r.code === 0 ? parseRemote(r.stdout.trim()) : null
+  const origin = r.code === 0 ? parseRemote(r.stdout.trim()) : null
+  origins.set(dir, origin)
+  return origin
 }
 
-let cache: { root: string; at: number; clones: Clone[] } | null = null
+const cache = new Map<string, { at: number; clones: Clone[] }>()
 const TTL_MS = 30_000
 
-/** All clones of the workspace. Cached for 30 seconds, `fresh` forces a new scan. */
-export async function scanClones(root: string, fresh = false): Promise<Clone[]> {
-  if (!fresh && cache && cache.root === root && Date.now() - cache.at < TTL_MS) return cache.clones
-  const dirs = await findRepoDirs(root)
+/** All clones of the workspace down to `maxDepth` levels. Cached for 30 seconds, `fresh` forces a new scan. */
+export async function scanClones(root: string, fresh = false, maxDepth = SCAN_DEPTH): Promise<Clone[]> {
+  const key = `${root}|${maxDepth}`
+  const hit = cache.get(key)
+  if (!fresh && hit && Date.now() - hit.at < TTL_MS) return hit.clones
+  const dirs = await findRepoDirs(root, maxDepth)
   const clones: Clone[] = []
   // Read remotes a few at a time so a big workspace does not start hundreds of processes at once.
   for (let i = 0; i < dirs.length; i += 8) {
-    const batch = await Promise.all(dirs.slice(i, i + 8).map(async (dir) => ({ dir, origin: await originOf(dir) })))
+    const batch = await Promise.all(dirs.slice(i, i + 8).map(async (dir) => ({ dir, origin: await originOf(dir, fresh) })))
     for (const { dir, origin } of batch) {
-      if (origin) clones.push({ dir, name: relative(root, dir).split(/[\\/]/).join('/'), ...origin })
+      if (origin) clones.push({ dir, name: relative(root, dir).split(/[\\/]/).join('/') || basename(root), ...origin })
     }
   }
-  cache = { root, at: Date.now(), clones }
+  cache.set(key, { at: Date.now(), clones })
   return clones
 }
 export const resetWorkspaceCache = (): void => {
-  cache = null
+  cache.clear()
+  origins.clear()
 }
 
 /** Find the clone of a change's project. The project path must match without regard to letter case. */
@@ -94,4 +110,9 @@ export async function isDirectory(path: string): Promise<boolean> {
   } catch {
     return false
   }
+}
+
+/** Find the clone of a change's project. When the normal scan misses it, search deeper before giving up. `fresh` also reads the deep search again. */
+export async function locateClone(root: string, clones: Clone[], ref: Pick<ChangeRef, 'host' | 'project'>, fresh = false): Promise<Clone | null> {
+  return findClone(clones, ref) ?? findClone(await scanClones(root, fresh, DEEP_DEPTH), ref)
 }

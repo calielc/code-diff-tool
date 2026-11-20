@@ -21,6 +21,9 @@ import { setAppOrigins } from './ipc/guard'
 import { installCredentialStore } from './services/credentials'
 
 app.setName('Code Diff Tool')
+// Test runs keep the window hidden and out of the Dock, so they never take over the screen.
+const hideWindow = process.env['CODEDIFF_HIDE_WINDOW'] === '1'
+if (hideWindow) app.dock?.hide()
 // Tests point the app at a throw-away data folder.
 if (process.env['CODEDIFF_USER_DATA']) app.setPath('userData', process.env['CODEDIFF_USER_DATA'])
 
@@ -45,10 +48,13 @@ if (!app.requestSingleInstanceLock()) {
         preload: join(__dirname, '../preload/index.js'),
         contextIsolation: true,
         nodeIntegration: false,
-        sandbox: true
+        sandbox: true,
+        backgroundThrottling: !hideWindow
       }
     })
-    win.once('ready-to-show', () => win.show())
+    win.once('ready-to-show', () => {
+      if (!hideWindow) win.show()
+    })
 
     // No navigation away from the app page. Links open in the system browser, https only.
     win.webContents.on('will-navigate', (e, url) => {
@@ -66,7 +72,7 @@ if (!app.requestSingleInstanceLock()) {
 
   // A second start of the app, or a codediff:// link, hands its request to this instance (file 05 section 6.6).
   app.on('second-instance', (_e, argv) => {
-    if (main) {
+    if (main && !hideWindow) {
       if (main.isMinimized()) main.restore()
       main.focus()
     }

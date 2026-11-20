@@ -1248,3 +1248,27 @@ table.diff td.ln:first-child {
 .threadchip.blue {
   color: var(--accent);
 }
+
+/* the ready and draft icons of the table actions */
+.actions button .ico {
+  margin-right: 4px;
+  vertical-align: -2px;
+}
+.actions button .ico.ready {
+  color: var(--ok);
+}
+.actions button .ico.draft {
+  color: var(--note-fg);
+}
+
+/* the characters that changed inside a modified line */
+table.diff tr.add td.code .chg,
+table.diff.side td.code.add .chg {
+  background: color-mix(in srgb, var(--ok) 38%, var(--bg));
+  border-radius: 2px;
+}
+table.diff tr.del td.code .chg,
+table.diff.side td.code.del .chg {
+  background: color-mix(in srgb, var(--bad) 38%, var(--bg));
+  border-radius: 2px;
+}

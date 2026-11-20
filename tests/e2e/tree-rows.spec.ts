@@ -213,8 +213,8 @@ for (const view of ['By MR', 'Combined per repo']) {
         expect(r.toRight, `row ${r.kind} ${r.name}: numbers not at the right edge`).toBeLessThanOrEqual(8)
         expect(r.gap, `row ${r.kind} ${r.name}: numbers glued to the name`).toBeGreaterThanOrEqual(6)
         expect(r.titled, `row ${r.kind} ${r.name} has no tooltip with its full name`).toBe(true)
-        expect(r.spanLeft, `row ${r.kind} ${r.name} does not start at the left of the tree`).toBe(0)
-        expect(r.spanRight, `row ${r.kind} ${r.name} does not reach the right of the tree`).toBe(0)
+        expect(Math.abs(r.spanLeft), `row ${r.kind} ${r.name} does not start at the left of the tree`).toBe(0)
+        expect(Math.abs(r.spanRight), `row ${r.kind} ${r.name} does not reach the right of the tree`).toBe(0)
       }
       await app.close()
     })

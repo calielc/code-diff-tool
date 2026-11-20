@@ -65,6 +65,21 @@ function compareValues(x: string | number | null, y: string | number | null): nu
 
 const STAGE_GLYPH: Record<string, string> = { success: '✓', failed: '✕', warning: '!', running: '▶', pending: '…', canceled: '⊘', skipped: '»', manual: '▷' }
 const STATE_TEXT: Record<MrStateKey, string> = { draft: 'Draft', opened: 'Open', merged: 'Merged', closed: 'Closed' }
+/** Small icons of the actions in the table. Ready is a circle with a check, draft is a pencil on a dashed circle. */
+const ACTION_ICON: Partial<Record<'mark-ready' | 'mark-draft', React.JSX.Element>> = {
+  'mark-ready': (
+    <svg className="ico ready" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" data-testid="icon-mark-ready">
+      <circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M5.2 8.3l2 2 3.7-4.2" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ),
+  'mark-draft': (
+    <svg className="ico draft" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" data-testid="icon-mark-draft">
+      <circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" strokeWidth="1.3" strokeDasharray="2.2 2" />
+      <path d="M5.4 10.8l.5-2 3.6-3.6 1.5 1.5-3.6 3.6z" fill="currentColor" />
+    </svg>
+  )
+}
 const BUSY_TEXT = { approve: 'Approving…', revoke: 'Revoking…', 'mark-ready': 'Marking as ready…', 'mark-draft': 'Marking as draft…' } as const
 type RowAction = keyof typeof BUSY_TEXT
 
@@ -561,6 +576,7 @@ function Screen(props: { onHome: () => void }): React.JSX.Element {
                                       }
                                       onClick={() => (a === 'submit' ? setSubmitFor(m.key) : void act(m.key, a))}
                                     >
+                                      {a === 'mark-ready' || a === 'mark-draft' ? ACTION_ICON[a] : null}
                                       {
                                         {
                                           submit: 'Submit review',

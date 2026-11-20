@@ -10,6 +10,7 @@ import {
 } from 'react'
 import type { CommitInfo } from '@shared/commits'
 import { FILE_KINDS, fileKind, type FileKind } from '@shared/file-kinds'
+import { intraLine, type Seg } from '@shared/intraline'
 import { newCommentId, type PendingComment } from '@shared/comments'
 import type { FileObject, LevelName, LineObj } from '@shared/diff'
 import type { DiffRefs } from '@shared/provider'
@@ -186,10 +187,13 @@ export function DiffTab(props: { visible?: (mrKey: string) => boolean }): React.
   const { viewed, setViewed } = r
   const [noiseOpen, setNoiseOpen] = useState(false)
   const [layout, setLayout] = useState<LayoutName>(() => store<LayoutName>('codediff:layout', 'inline'))
-  const [statuses, setStatuses] = useState<Set<'A' | 'M' | 'D'>>(new Set(['A', 'M', 'D']))
-  const [kinds, setKinds] = useState<Set<FileKind>>(new Set(FILE_KINDS.map((k) => k.id)))
+  // The Files, Types and Comments filters narrow the files only when a button is on. With none on, every file shows.
+  const [statuses, setStatuses] = useState<Set<'A' | 'M' | 'D'>>(new Set())
+  const [kinds, setKinds] = useState<Set<FileKind>>(new Set())
   const [hideViewed, setHideViewed] = useState(false)
   const [onlyComments, setOnlyComments] = useState(false)
+  // The Comments filter: files with open threads, files with resolved threads, both, or none (no filter)
+  const [commentFilter, setCommentFilter] = useState<Set<'open' | 'resolved'>>(new Set())
   // The commit chosen in the open file. It belongs to that file only.
   const [commitSel, setCommitSel] = useState<{ id: string; sha: string } | null>(null)
   useEffect(() => save('codediff:layout', layout), [layout])
@@ -266,12 +270,35 @@ export function DiffTab(props: { visible?: (mrKey: string) => boolean }): React.
     const threads = mr ? threadCounts(mr.snapshot.threads, e.file.path, e.file.oldPath).total : 0
     return threads > 0 || (e.mrKey !== null && Object.values(r.drafts).some((d) => d.mr === e.mrKey && d.path === e.file.path))
   }
+  /** The open and the resolved threads of a file. */
+  const threadsOf = (e: Entry): { open: number; resolved: number } => {
+    const mr = e.mrKey ? r.mrByKey(e.mrKey) : undefined
+    const c = mr ? threadCounts(mr.snapshot.threads, e.file.path, e.file.oldPath) : { open: 0, total: 0 }
+    return { open: c.open, resolved: c.total - c.open }
+  }
+  const matchesComments = (e: Entry): boolean => {
+    if (commentFilter.size === 0) return true
+    const t = threadsOf(e)
+    return (commentFilter.has('open') && t.open > 0) || (commentFilter.has('resolved') && t.resolved > 0)
+  }
   const facetted = useMemo(
     () =>
       shown.filter(
-        (e) => statuses.has(statusOf(e)) && kinds.has(fileKind(e.file.path)) && !(hideViewed && viewed.has(e.id)) && (!onlyComments || hasComments(e))
+        (e) =>
+          (statuses.size === 0 || statuses.has(statusOf(e))) &&
+          (kinds.size === 0 || kinds.has(fileKind(e.file.path))) &&
+          !(hideViewed && viewed.has(e.id)) &&
+          (!onlyComments || hasComments(e)) &&
+          matchesComments(e)
       ),
-    [shown, statuses, kinds, hideViewed, onlyComments, viewed, r.drafts, result] // eslint-disable-line react-hooks/exhaustive-deps
+    [shown, statuses, kinds, hideViewed, onlyComments, commentFilter, viewed, r.drafts, result] // eslint-disable-line react-hooks/exhaustive-deps
+  )
+  const threadTotals = shown.reduce(
+    (t, e) => {
+      const x = threadsOf(e)
+      return { open: t.open + x.open, resolved: t.resolved + x.resolved }
+    },
+    { open: 0, resolved: 0 }
   )
   const statusCount = (st: 'A' | 'M' | 'D'): number => shown.filter((e) => statusOf(e) === st).length
   const kindCount = (k: FileKind): number => shown.filter((e) => fileKind(e.file.path) === k).length
@@ -658,6 +685,28 @@ export function DiffTab(props: { visible?: (mrKey: string) => boolean }): React.
             ))}
           </span>
         </div>
+        <div className="fgroup" role="group" aria-label="Comments">
+          <span className="glabel">Comments</span>
+          <span className="seg toggles">
+            {(
+              [
+                ['open', 'Open'],
+                ['resolved', 'Resolved']
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                className={commentFilter.has(id) ? 'on' : ''}
+                aria-pressed={commentFilter.has(id)}
+                data-testid={'comments-' + id}
+                title={id === 'open' ? 'Files and threads with open comments' : 'Files and threads with resolved comments'}
+                onClick={() => setCommentFilter((o) => (o.has(id) ? new Set([...o].filter((x) => x !== id)) : new Set(o).add(id)))}
+              >
+                {label} <small>{threadTotals[id]}</small>
+              </button>
+            ))}
+          </span>
+        </div>
       </div>
       <div className="checkrow">
         <label>
@@ -744,6 +793,7 @@ export function DiffTab(props: { visible?: (mrKey: string) => boolean }): React.
                     onViewed={(on) => toggleViewed([current], on)}
                     focusLine={focusLine}
                     layout={layout}
+                    commentFilter={commentFilter}
                     commit={commit}
                     onCommit={(sha) => setCommitSel(sha && current ? { id: current.id, sha } : null)}
                   />
@@ -809,6 +859,8 @@ function FileBody(props: {
   onViewed: (on: boolean) => void
   focusLine: number | null
   layout: LayoutName
+  /** Which threads show: open ones, resolved ones, or all when it is empty. */
+  commentFilter: Set<'open' | 'resolved'>
   /** The commit whose change to the file is shown, or null for HEAD. */
   commit: string | null
   onCommit(sha: string | null): void
@@ -842,6 +894,46 @@ function FileBody(props: {
   // The file as the chosen commit changed it, or the whole change at HEAD
   const file = commitReady ? atCommit.file! : entry.file
   const lv = file.levels[level]
+  // The characters that really changed in a removed line and the added line that replaces it, found for each pair of a run
+  const intraMap = useMemo(() => {
+    const out = new Map<LineObj, Seg[]>()
+    for (const h of lv.hunks) {
+      let i = 0
+      while (i < h.length) {
+        if (h[i].t === ' ') {
+          i++
+          continue
+        }
+        const dels: LineObj[] = []
+        const adds: LineObj[] = []
+        while (i < h.length && h[i].t === '-') dels.push(h[i++])
+        while (i < h.length && h[i].t === '+') adds.push(h[i++])
+        for (let k = 0; k < Math.min(dels.length, adds.length); k++) {
+          const r = intraLine(dels[k].x, adds[k].x)
+          if (r) {
+            out.set(dels[k], r.old)
+            out.set(adds[k], r.new)
+          }
+        }
+      }
+    }
+    return out
+  }, [lv])
+  /** The text of a line, with the changed characters of a modified line marked. */
+  const codeOf = (l: LineObj): React.ReactNode => {
+    const segs = intraMap.get(l)
+    return segs
+      ? segs.map((g, i) =>
+          g.changed ? (
+            <span key={i} className="chg">
+              {g.text}
+            </span>
+          ) : (
+            g.text
+          )
+        )
+      : l.x
+  }
   // A commit is viewed by its own mark, or because HEAD is: marking HEAD flags every commit before it
   const commitKey = (sha: string): string => entry.id + '@' + sha
   const commitViewed = (sha: string): boolean => props.viewed || r.viewed.has(commitKey(sha))
@@ -924,17 +1016,19 @@ function FileBody(props: {
     return err
   }
 
+  const threadShown = (t: { resolved: boolean }): boolean =>
+    !(r.hideResolved && t.resolved) && (props.commentFilter.size === 0 || props.commentFilter.has(t.resolved ? 'resolved' : 'open'))
   const visibleThreads = (mrKey: string, path: string, oldPath: string, line: { o: number | null; n: number | null }): ReturnType<typeof threadsAtLine> => {
     const m = r.mrByKey(mrKey)
-    return m ? threadsAtLine(m.snapshot.threads, path, oldPath, line).filter((t) => !(r.hideResolved && t.resolved)) : []
+    return m ? threadsAtLine(m.snapshot.threads, path, oldPath, line).filter(threadShown) : []
   }
 
   // Threads on lines that the noise level hides, and threads on the whole file (file 02 section 8.1).
   const mr = entry.mrKey ? r.mrByKey(entry.mrKey) : undefined
   const shownLines = lv.hunks.flat()
   const fileThreadsAll = mr ? mr.snapshot.threads.filter((t) => threadOnFile(t, file.path, file.oldPath)) : []
-  const hidden = fileThreadsAll.filter((t) => !shownLines.some((l) => positionMatchesLine(t.position!, l)) && !(r.hideResolved && t.resolved))
-  const wholeFile = mr ? fileThreads(mr.snapshot.threads, file.path).filter((t) => !(r.hideResolved && t.resolved)) : []
+  const hidden = fileThreadsAll.filter((t) => !shownLines.some((l) => positionMatchesLine(t.position!, l)) && threadShown(t))
+  const wholeFile = mr ? fileThreads(mr.snapshot.threads, file.path).filter(threadShown) : []
   const wholeFileDrafts = entry.mrKey ? Object.values(r.drafts).filter((d) => isFileDraft(d, entry.mrKey!, file.path)) : []
 
   const header = `${STATUS_WORD[file.status]}${file.status === 'R' ? ` · renamed from ${file.oldPath}` : ''} · ${entry.mrKey ? `!${iidOf(entry.mrKey)} · ${entry.repo}` : entry.scope}`
@@ -1130,13 +1224,13 @@ function FileBody(props: {
                         {a && gutter(a.l, idA)}
                         {a?.l.o}
                       </td>
-                      <td className={'code' + (a ? ' del' : ' empty')}>{a?.l.x}</td>
+                      <td className={'code' + (a ? ' del' : ' empty')}>{a && codeOf(a.l)}</td>
                       <td className="ln">
                         {b && gutter(b.l, idB)}
                         {b?.l.n}
                       </td>
                       <td className="sign">{b ? '+' : ''}</td>
-                      <td className={'code' + (b ? ' add' : ' empty')}>{b?.l.x}</td>
+                      <td className={'code' + (b ? ' add' : ' empty')}>{b && codeOf(b.l)}</td>
                     </tr>
                   )
                   if (a) rows.push(...extraRows(a.l, idA, 5))
@@ -1199,7 +1293,7 @@ function FileBody(props: {
                     </td>
                     <td className="ln">{l.n ?? ''}</td>
                     <td className="sign">{l.t === '+' ? '+' : l.t === '-' ? '−' : ''}</td>
-                    <td className="code">{l.x}</td>
+                    <td className="code">{codeOf(l)}</td>
                   </tr>,
                   ...extraRows(l, id, 4)
                 ]

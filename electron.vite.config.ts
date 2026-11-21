@@ -18,6 +18,8 @@ export default defineConfig({
   preload: { plugins: [externalizeDepsPlugin()], resolve: { alias: { '@shared': resolve('src/shared') } } },
   renderer: {
     resolve: { alias: { '@shared': resolve('src/shared') } },
+    // The worker that colours code loads each grammar when it needs it, so it is built as a module with code splitting.
+    worker: { format: 'es' },
     plugins: [
       react(),
       {

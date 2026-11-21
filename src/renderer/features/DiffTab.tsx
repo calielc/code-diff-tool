@@ -9,7 +9,7 @@ import {
   type PointerEvent as ReactPointerEvent
 } from 'react'
 import type { CommitInfo } from '@shared/commits'
-import { FILE_KINDS, fileKind, type FileKind } from '@shared/file-kinds'
+import { countKinds, fileKind, visibleKinds, type FileKind } from '@shared/file-kinds'
 import { intraLine, type Seg } from '@shared/intraline'
 import { newCommentId, type PendingComment } from '@shared/comments'
 import type { FileObject, LevelName, LineObj } from '@shared/diff'
@@ -288,7 +288,7 @@ export function DiffTab(props: { visible?: (mrKey: string) => boolean }): React.
       shown.filter(
         (e) =>
           (statuses.size === 0 || statuses.has(statusOf(e))) &&
-          (kinds.size === 0 || kinds.has(fileKind(e.file.path))) &&
+          (kinds.size === 0 || kinds.has(fileKind(e.file.path, e.file.binary))) &&
           !(hideViewed && viewed.has(e.id)) &&
           (!onlyComments || hasComments(e)) &&
           matchesComments(e)
@@ -303,7 +303,8 @@ export function DiffTab(props: { visible?: (mrKey: string) => boolean }): React.
     { open: 0, resolved: 0 }
   )
   const statusCount = (st: 'A' | 'M' | 'D'): number => shown.filter((e) => statusOf(e) === st).length
-  const kindCount = (k: FileKind): number => shown.filter((e) => fileKind(e.file.path) === k).length
+  // The counts of the Types filter come from the shown files, as the counts of the Files filter do. Only the options with files show, and an option that is on stays.
+  const kindOptions = useMemo(() => visibleKinds(countKinds(shown.map((e) => ({ path: e.file.path, binary: e.file.binary }))), kinds), [shown, kinds])
   const visible = useMemo(() => {
     const q = filter.trim().toLowerCase()
     return q ? facetted.filter((e) => e.file.path.toLowerCase().includes(q)) : facetted
@@ -671,22 +672,24 @@ export function DiffTab(props: { visible?: (mrKey: string) => boolean }): React.
             ))}
           </span>
         </div>
-        <div className="fgroup" role="group" aria-label="Types">
-          <span className="glabel">Types</span>
-          <span className="seg toggles">
-            {FILE_KINDS.map((k) => (
-              <button
-                key={k.id}
-                className={kinds.has(k.id) ? 'on' : ''}
-                aria-pressed={kinds.has(k.id)}
-                data-testid={'kind-' + k.id}
-                onClick={() => setKinds((o) => (o.has(k.id) ? new Set([...o].filter((x) => x !== k.id)) : new Set(o).add(k.id)))}
-              >
-                {k.label} <small>{kindCount(k.id)}</small>
-              </button>
-            ))}
-          </span>
-        </div>
+        {kindOptions.length > 0 && (
+          <div className="fgroup" role="group" aria-label="Types">
+            <span className="glabel">Types</span>
+            <span className="seg toggles">
+              {kindOptions.map((k) => (
+                <button
+                  key={k.id}
+                  className={kinds.has(k.id) ? 'on' : ''}
+                  aria-pressed={kinds.has(k.id)}
+                  data-testid={'kind-' + k.id}
+                  onClick={() => setKinds((o) => (o.has(k.id) ? new Set([...o].filter((x) => x !== k.id)) : new Set(o).add(k.id)))}
+                >
+                  {k.label} <small>{k.count}</small>
+                </button>
+              ))}
+            </span>
+          </div>
+        )}
         <div className="fgroup" role="group" aria-label="Comments">
           <span className="glabel">Comments</span>
           <span className="seg toggles">

@@ -100,7 +100,14 @@ const base = { 'src/a.txt': 'one\ntwo\nthree\n', 'ws.txt': 'x\n  y\nz\n', 'img.b
 test('shows files with git line numbers, binary and spaced paths, and the noise levels', async () => {
   const s = setup(
     {
-      mr1: { 'src/a.txt': 'one\nTWO\nthree\nfour\n', 'with space/new file.txt': 'hello\n', 'img.bin': Buffer.from([0, 9, 9]), 'ws.txt': 'x\ny\nz\n' }
+      mr1: {
+        'src/a.txt': 'one\nTWO\nthree\nfour\n',
+        'with space/new file.txt': 'hello\n',
+        'img.bin': Buffer.from([0, 9, 9]),
+        'ws.txt': 'x\ny\nz\n',
+        'assets/logo.png': Buffer.from([137, 80, 78, 71, 0, 1]),
+        'assets/icon.svg': '<svg>\n</svg>\n'
+      }
     },
     base
   )
@@ -124,6 +131,28 @@ test('shows files with git line numbers, binary and spaced paths, and the noise 
   // binary: no lines
   await page.getByTestId('file-img.bin').click()
   await expect(page.getByText('Binary file, no text diff.')).toBeVisible()
+  // an image that git flags as binary shows the same note, and an SVG is text, so it shows its lines
+  await page.getByTestId('file-assets/logo.png').click()
+  await expect(page.getByText('Binary file, no text diff.')).toBeVisible()
+  await page.getByTestId('file-assets/icon.svg').click()
+  await expect(page.locator('table.diff tr.add td.code').first()).toHaveText('<svg>')
+  // the Types filter shows only the types that have files: Code, Tests and Config have none here
+  await expect(page.getByTestId('kind-images')).toContainText('2')
+  await expect(page.getByTestId('kind-binary')).toContainText('1')
+  await expect(page.getByTestId('kind-docs')).toContainText('2')
+  for (const none of ['code', 'tests', 'config']) await expect(page.getByTestId('kind-' + none)).toHaveCount(0)
+  await page.getByTestId('kind-images').click()
+  await expect(page.getByTestId('file-assets/logo.png')).toBeVisible()
+  await expect(page.getByTestId('file-assets/icon.svg')).toBeVisible()
+  await expect(page.getByTestId('file-img.bin')).toHaveCount(0)
+  await expect(page.getByTestId('file-src/a.txt')).toHaveCount(0)
+  await page.getByTestId('kind-images').click()
+  await page.getByTestId('kind-binary').click()
+  await expect(page.getByTestId('file-img.bin')).toBeVisible()
+  await expect(page.getByTestId('file-assets/logo.png')).toHaveCount(0)
+  await page.getByTestId('kind-binary').click()
+  await expect(page.getByTestId('file-src/a.txt')).toBeVisible()
+  await page.getByTestId('file-img.bin').click()
   // "Everything" shows the whitespace-only file
   await page.getByRole('button', { name: 'Everything' }).click()
   await expect(page.getByTestId('file-ws.txt')).toBeVisible()

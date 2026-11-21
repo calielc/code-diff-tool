@@ -78,6 +78,11 @@ The tree groups the files by repo, change and folder. A box on each row marks th
 The header shows the path, the state of the change, the commits of the file and the Viewed button. The body shows the diff in the layout that you chose. A line has a gutter with a `+` button to comment, and a button to ask the AI about the line.
 
 - **Marks inside a line.** When a line changed by a few characters, the changed characters are marked more strongly than the rest of the line. The app compares the two lines word by word, and compares the characters only inside a changed word. A line that changed almost completely gets no marks. Inline and side by side show the marks.
+- **Syntax colours.** The code has colours by its language in the Inline, Side by side and Full file layouts, and in the code blocks of the chat. The app picks the language from the name of the file, for example `.ts`, `.tsx`, `.cs`, `.py`, `.csproj`, `.tf`, `Dockerfile` and `Makefile`. A file in an unknown language stays plain.
+  - A removed line takes its colours from the whole old file. An added or unchanged line takes them from the whole new file. A comment or a string over several lines then has the right colour on each line. A file with no whole text, such as a generated file, gets its colours one hunk at a time, so a comment that starts above a hunk can have a wrong colour. The text is always right.
+  - The text shows at once and the colours follow a moment later, because a worker colours the file in the background. The marks inside a changed line stay visible over the colours.
+  - A file with more than 8,000 lines, more than 600,000 characters or a line longer than 1,500 characters stays plain, and the file header says why.
+  - The Colours box in the file header turns the colours off for every file, and the app remembers the choice. Each theme has its own colours for the code. They have a contrast of 4.5 or more on the plain, the added and the removed backgrounds and on the marks inside a changed line.
 - **Full file** shows the whole new file with the added lines marked.
 - **Commits.** The chips in the header list the commits of the change that touched the file. Choose one to see only what it changed, compared with its parent. A banner says which commit it is. Choose HEAD to go back. Comments and threads show at HEAD only, because the lines of a commit are not the lines of HEAD.
 - **Viewed.** The Viewed button marks the file as viewed. With a commit chosen, it marks that commit. Each commit chip has its own box. Marking HEAD as viewed marks every commit before it. With a commit chosen, `v` and Shift+V mark and unmark that commit only.
@@ -105,7 +110,7 @@ Each issue lists its criteria. **Validate ACs** asks the AI tool to check each c
 ![The AI review box](docs/images/ai-review.png)
 
 - **AI review.** The AI button opens a box. Choose a skill and a model, then start the review. A skill is a markdown file with review rules. One skill is built in. You can point the app at a folder of skill files whose front matter says they are for a code review. The run reads the review context, which is a folder of files that the app writes. It takes a few minutes, and it keeps going when you close the window. Each finding becomes a draft comment that starts with a robot mark, the lens and the severity. A finding with no line becomes a comment on the change.
-- **Chat.** The button at the bottom right opens a chat about the whole review. A chat on one line is available from the gutter. The AI answers with the code of the repos at hand. It can propose comments, open a file or mark files as viewed, as cards that you apply or not.
+- **Chat.** The button at the bottom right opens a chat about the whole review. A chat on one line is available from the gutter. The AI answers with the code of the repos at hand. A code block of an answer has syntax colours when its fence names a known language, as in three backticks and `ts`. It can propose comments, open a file or mark files as viewed, as cards that you apply or not.
 - **Tools.** Claude Code is the default. Codex and a custom command also work. The Prerequisites screen shows the choice. A custom command can use the placeholders `{prompt}`, `{instructions}`, `{model}`, `{effort}`, `{dir}` and `{session}`.
 - The AI tools run with read-only tools. They cannot change a file, and nothing they write reaches a host without your action.
 
@@ -115,7 +120,7 @@ The first screen shows what the app needs. `git` and a workspace folder are requ
 
 ## 11. Themes
 
-The Theme menu lists System, Tokyo Night, Dracula, Nord, Gruvbox Dark, Solarized Dark and Paper. A tick marks the current theme, and the app saves the choice. System follows the colour scheme of the computer.
+The Theme menu lists System, Tokyo Night, Dracula, Nord, Gruvbox Dark, Solarized Dark and Paper. A tick marks the current theme, and the app saves the choice. System follows the colour scheme of the computer. Every theme also sets the colours of the code tokens. See "Syntax colours" in the section about the file panel.
 
 ## 12. Keys
 

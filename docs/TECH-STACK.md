@@ -9,6 +9,7 @@ This file describes how the app is built. The product features are in `docs/FEAT
 - `electron-vite` builds the three parts. `vite` serves the renderer in development.
 - `zod` checks every message that crosses the IPC boundary and every file that the app reads.
 - `yaml` reads the front matter of AI skill files.
+- `lowlight` and `highlight.js` colour code (syntax colours). Section 11 gives the choice and the rules.
 - IBM Plex Sans and Mono, bundled with `@fontsource`, so the app needs no network for its type.
 - `vitest` runs the unit tests. Playwright (`_electron`) runs the end-to-end tests.
 - ESLint (flat config, `typescript-eslint`, the hooks rules of React) and Prettier. Husky and `lint-staged` check the staged files before a commit.
@@ -31,6 +32,8 @@ This file describes how the app is built. The product features are in `docs/FEAT
 - `src/main/processes`: the AI tools. `llm.ts` is the facade. `claude.ts`, `codex.ts` and `custom.ts` are the adapters. `run.ts` starts a process, limits its output and time, and kills its whole tree when a build or a run is cancelled.
 - `src/main/ipc`: one file for each area. Each handler checks the sender, checks its arguments with `zod` and calls a service.
 - `src/renderer/features`: the screens. `review-context.tsx` holds the data of the open review and shares it with the tabs.
+- `src/renderer/highlight`: the syntax colours. `engine.ts` colours a whole text with one grammar and cuts the answer into lines. `loaders.ts` holds one lazy import for each grammar, and `hcl.ts` is the grammar of Terraform files that the app defines itself. `highlight.worker.ts` runs the engine off the page thread, and `client.ts` talks to the worker, keeps the cache and stops a worker that is too slow. `useFileHighlight.ts` is the hook of the file panel, `Code.tsx` draws a line, a code block and the switch, and `settings.ts` keeps the switch. `src/renderer/highlight.css` holds the colours of the System look.
+- `src/shared/syntax-language.ts` picks a grammar from a file name or a code fence. `syntax-tokens.ts` has the token kinds, the cutting of a tree into lines, the join of tokens with the marks of changed characters, and the size limits. `syntax-plan.ts` says which texts of a file to colour and where the colours of each line come from. `themes.ts` also holds the token colours of each theme.
 - `tests`: the unit tests (`*.test.ts`), the end-to-end tests (`e2e/*.spec.ts`) and the fakes (`fakes/`).
 - `scripts`: the version rules, the release scripts, the icon and the screenshot scripts.
 
@@ -64,6 +67,7 @@ Channel names are in `src/shared/channels.ts`, the types of the bridge in `src/s
 - A token is validated before it is saved, stored encrypted per host, and never sent to the renderer or written to a log. A request sends the token only to its own host. A test hook can change the base URL, and it works only when `CODEDIFF_TEST=1`.
 - The page never holds a file path. A spec file is chosen in a main-process dialog, and the page gets a one-time token and the file names.
 - The export of a commit reads the tar stream itself and refuses a path that leaves the folder and any link.
+- The code of a repository is drawn as React elements and as text, never as HTML. The grammar library gives a tree, the app turns it into plain tokens, and React escapes the text. The grammars and the worker are files of the app, so the colours need no network. The worker loads under the same content security policy, because `script-src 'self'` covers it.
 - The AI tools get a read-only tool list. The text of issues, changes, threads and diffs is data for them, and the instructions say so.
 - A request from outside the app only fills in a form. It never creates a review or posts anything.
 - Tests never reach a real AI tool or a real remote. The test environment points at fakes, and the hooks that allow it work only under the test flag.
@@ -71,7 +75,7 @@ Channel names are in `src/shared/channels.ts`, the types of the bridge in `src/s
 ## 7. Build and run
 
 - `npm run dev` starts `electron-vite dev`. The renderer reloads on a change. A change in the main process restarts the app.
-- `npm run build` writes `out/main`, `out/preload` and `out/renderer`.
+- `npm run build` writes `out/main`, `out/preload` and `out/renderer`. The renderer build makes a module worker for the syntax colours (`worker.format` is `es` in `electron.vite.config.ts`) and one small file for each grammar, which the worker loads when a file needs it.
 - `npm run pack:dir` makes an unpacked app in `release/`. `npm run dist` makes the installer with a draft version. `npm run dist:release` makes the installer with the version in `package.json`.
 - The icon is `build/icon.svg`. `npm run icon` draws `build/icon.png` and `build/icon.ico` with an offscreen Electron window.
 
@@ -89,6 +93,7 @@ Channel names are in `src/shared/channels.ts`, the types of the bridge in `src/s
 - The fake forge answers a table of `METHOD endpoint` keys. An array gives one answer for each call in order. An entry can wait or fail.
 - Test hooks (`CODEDIFF_FAKE_<TOOL>`, `CODEDIFF_TEST_PICK_FILES`, `CODEDIFF_TEST_FLOW` and more) work only when `CODEDIFF_TEST=1`.
 - The windows of the tests stay hidden unless `CODEDIFF_SHOW_WINDOW=1`.
+- The syntax colours have unit tests for the language of a name (`syntax-language`), the cutting into lines, the join with the marks and the size limit (`syntax-tokens`), the plan of a file (`syntax-plan`), every grammar and the multi-line cases (`syntax-highlight`), and the contrast of every theme (`syntax-themes`). The contrast test reads `highlight.css` and checks it against `themes.ts` and `styles.css`. `tests/e2e/highlight.spec.ts` shares one app and checks the colour classes and the real colours in the three layouts, the mark over a token, an unknown file and the switch.
 - `tests/e2e/screenshots.spec.ts` takes the pictures of the documentation. It runs only when `SHOTS` names a folder. `npm run screenshots` sets it.
 - `tests/e2e/phase10.spec.ts` starts a packaged app. It runs only when the app exists. The installer workflow uses it as a smoke test.
 - Lessons: a test that asserts the side effect, and not only the reply, finds more. Wait for a state on the page, not for a time.
@@ -145,3 +150,15 @@ The workflow `.github/workflows/release.yml` gives each merge to `main` a versio
 - Changes go through pull requests and are squash merged. The title of the pull request is the commit message, and its type chooses the version. This gives one commit for each change and a version rule that needs no extra file.
 - Each merge makes a release, and the installers are built only for a major release or on demand, because the build costs a Windows and a macOS runner.
 - The version lives in the tag and not in `package.json`. A bot must not commit to a protected `main`, so the build sets the number for itself.
+
+### 11.1 Syntax colours
+
+- **The library is `lowlight` on top of `highlight.js`.** The four candidates were compared. Shiki gives the most exact colours, because it uses the grammars of VS Code, but it needs a regular expression engine of its own (WebAssembly or a JavaScript port) and bigger grammars, and its tokens carry theme colours that the app would have to override for seven themes. Prism is small and permissive, but it registers each grammar as a global side effect and its tree is meant to become HTML. `highlight.js` alone covers every requested language with one small file for each, so the app loads only the grammars it needs. It needs no network, and its licence is BSD-3-Clause. But it returns HTML strings, which the app must not inject. `lowlight` (MIT) runs the same grammars and returns a tree of nodes. The app turns the tree into tokens and draws them as React elements. It does not parse HTML and it never injects any. The cost is that the grammars are rule based and not exact like those of VS Code. The colours are right for most code and can be wrong for rare syntax.
+- **The language comes from the name of the file.** The extension decides, and a few whole names decide too (`Dockerfile`, `Makefile`, `Gemfile`, `.env`, `.gitignore`). A file that matches nothing stays plain, because guessing the language wastes time and often guesses wrong. A code fence in the chat names its language, and a fence with no known name stays plain. Project files such as `.csproj` and `.props` use the XML grammar, `.sln` and TOML use the INI grammar, and `.gradle` has its own. `highlight.js` has no HCL grammar, so `hcl.ts` defines a small one for `.tf` files.
+- **The whole file is coloured, then cut into lines.** A removed line reads the old file, and an added or unchanged line reads the new file, both by line number. Colouring each diff line alone breaks every multi-line comment and string. When a file has no whole text (a generated file, or an old side where nothing was removed), each hunk is coloured by itself with its own lines. This can give a wrong colour for a token that starts above the hunk, and it never changes the text. When the tokens of a line do not join to the text of that line, the line shows as plain text.
+- **A worker does the work.** The page never waits for the colours. The first render shows plain text, and the page draws again when the worker answers. A worker that goes 8 seconds without any answer is stopped and the files it was colouring stay plain. The cache keeps the answers by language, line count and a hash of the text, so a file that comes back is coloured at once. It holds the 48 last texts. A measure on 7,500 lines in the Full file layout, with 21,000 coloured elements, gave the colours 60 ms after the table was drawn, and a switch off or on cost about 150 ms.
+- **The size limit is 8,000 lines, 600,000 characters or a line of more than 1,500 characters.** Above it, the file stays plain and the file header says why. A long line is minified or generated code, where a grammar is slow and the colours help little. The limits are in `syntax-tokens.ts`.
+- **The marks and the colours work together.** A changed character has the class `chg` and its token has the class `tk-<kind>`, on the same element. The mark sets the background and the token sets the text colour, so both show. The mark is stronger than the line, so a token inside a mark has its own colour (`--tok-<kind>-chg`), moved further for the contrast.
+- **Each theme has a colour for twelve kinds of token.** A theme lists the wanted colours. `tokensOf` moves each one toward white (dark themes) or black (light themes) in small steps until it has a contrast of 4.5 (WCAG AA) on the page, the panel, the added line and the removed line, and a second colour for the marks. A test checks all seven looks (the six themes and the light and dark looks of System). System keeps its values in `highlight.css`, and a test checks that they match `themes.ts` and `styles.css`.
+- **The switch is a box in the file header, kept in the browser storage like the other choices of the Diff tab.** It is not in the toolbar, to stay away from the toolbar work, and not in the native Theme menu, because that needs a new message between the processes for a small gain.
+- **Not coloured.** Text of comments and threads, the Critical thinking boxes and the other screens have no code. The code of the `DevReader` screen is raw data for developers.

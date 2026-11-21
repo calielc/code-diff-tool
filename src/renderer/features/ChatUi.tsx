@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { newCommentId, type PendingComment } from '@shared/comments'
+import { languageForFence } from '@shared/syntax-language'
+import { CodeBlock } from '../highlight/Code'
 import { cardHeader, parseActions, splitActions, type Card, type ReviewFacts } from '@shared/prompts'
 import { MODEL_OPTIONS, type ChatMessage, type Model } from './useChat'
 import { useReview } from './review-context'
@@ -13,7 +15,8 @@ export function ChatMarkdown({ text }: { text: string }): React.JSX.Element {
       {parts.map((p, i) =>
         i % 2 === 1 ? (
           <pre key={i} className="codeblock">
-            {p.replace(/^[^\n]*\n/, '')}
+            {/* A fence that is still open stays plain, so a streaming answer does not start a job for each piece */}
+            <CodeBlock text={p.replace(/^[^\n]*\n/, '')} lang={i === parts.length - 1 ? null : languageForFence(p.split('\n', 1)[0])} />
           </pre>
         ) : p.trim() ? (
           <Markdown key={i} text={p} />

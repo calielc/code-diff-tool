@@ -1,0 +1,136 @@
+/*
+ * The colours of the code tokens. A theme sets the same variables from `src/shared/themes.ts`. System uses the values
+ * below, one set for the light scheme and one for the dark scheme. Each kind has a colour for the lines and a further
+ * moved colour `-chg` for the strong marks inside a changed line. `tests/syntax-themes.test.ts` checks that the values
+ * are those of SYSTEM_LIGHT and SYSTEM_DARK, and that every colour reads (contrast of 4.5 or more) on its backgrounds.
+ */
+
+:root {
+  --tok-kw: #7246c4;
+  --tok-kw-chg: #573595;
+  --tok-str: #0a7044;
+  --tok-str-chg: #085534;
+  --tok-num: #a74107;
+  --tok-num-chg: #7f3105;
+  --tok-cm: #5c646c;
+  --tok-cm-chg: #464c52;
+  --tok-fn: #0a5fc7;
+  --tok-fn-chg: #084897;
+  --tok-ty: #0d6b84;
+  --tok-ty-chg: #0a5164;
+  --tok-va: #953800;
+  --tok-va-chg: #833100;
+  --tok-at: #796000;
+  --tok-at-chg: #5c4900;
+  --tok-tg: #a0111f;
+  --tok-tg-chg: #93101d;
+  --tok-mt: #9a3d7a;
+  --tok-mt-chg: #752e5d;
+  --tok-sy: #6e5494;
+  --tok-sy-chg: #544070;
+  --tok-lt: #0550ae;
+  --tok-lt-chg: #044699;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --tok-kw: #ff7b72;
+    --tok-kw-chg: #ffaba5;
+    --tok-str: #a5d6ff;
+    --tok-str-chg: #a5d6ff;
+    --tok-num: #79c0ff;
+    --tok-num-chg: #84c5ff;
+    --tok-cm: #9098a2;
+    --tok-cm-chg: #bcc1c7;
+    --tok-fn: #d2a8ff;
+    --tok-fn-chg: #d6afff;
+    --tok-ty: #ffa657;
+    --tok-ty-chg: #ffad64;
+    --tok-va: #f0b37e;
+    --tok-va-chg: #f0b37e;
+    --tok-at: #7ee787;
+    --tok-at-chg: #7ee787;
+    --tok-tg: #ff9bce;
+    --tok-tg-chg: #ffa3d2;
+    --tok-mt: #e3b341;
+    --tok-mt-chg: #e5b950;
+    --tok-sy: #a5a5ff;
+    --tok-sy-chg: #b7b7ff;
+    --tok-lt: #56d4dd;
+    --tok-lt-chg: #56d4dd;
+  }
+}
+
+.tk-kw {
+  color: var(--tok-kw);
+}
+.tk-str {
+  color: var(--tok-str);
+}
+.tk-num {
+  color: var(--tok-num);
+}
+.tk-cm {
+  color: var(--tok-cm);
+}
+.tk-fn {
+  color: var(--tok-fn);
+}
+.tk-ty {
+  color: var(--tok-ty);
+}
+.tk-va {
+  color: var(--tok-va);
+}
+.tk-at {
+  color: var(--tok-at);
+}
+.tk-tg {
+  color: var(--tok-tg);
+}
+.tk-mt {
+  color: var(--tok-mt);
+}
+.tk-sy {
+  color: var(--tok-sy);
+}
+.tk-lt {
+  color: var(--tok-lt);
+}
+
+/* A token inside the strong mark of a changed character keeps its kind, with the colour that reads on the mark */
+.tk-kw.chg {
+  color: var(--tok-kw-chg);
+}
+.tk-str.chg {
+  color: var(--tok-str-chg);
+}
+.tk-num.chg {
+  color: var(--tok-num-chg);
+}
+.tk-cm.chg {
+  color: var(--tok-cm-chg);
+}
+.tk-fn.chg {
+  color: var(--tok-fn-chg);
+}
+.tk-ty.chg {
+  color: var(--tok-ty-chg);
+}
+.tk-va.chg {
+  color: var(--tok-va-chg);
+}
+.tk-at.chg {
+  color: var(--tok-at-chg);
+}
+.tk-tg.chg {
+  color: var(--tok-tg-chg);
+}
+.tk-mt.chg {
+  color: var(--tok-mt-chg);
+}
+.tk-sy.chg {
+  color: var(--tok-sy-chg);
+}
+.tk-lt.chg {
+  color: var(--tok-lt-chg);
+}

@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
+import { SECTIONS_PROMPT_VERSION } from '../../src/shared/sections'
 import { forgeEnv, startFakeForge, type FakeForge, type Fixture } from '../fakes/fake-forge'
 
 // Takes screenshots of the main screens, to compare them with the design. Runs only with SHOTS=<folder>.
@@ -195,7 +196,7 @@ test('screenshots of the main screens', async () => {
     restText: 'Two documents and a test class with an empty method. They hold no logic, so a quick look is enough.'
   }
   writeFileSync(join(pageDir, 'sections.json'), JSON.stringify(page104))
-  writeFileSync(join(pageDir, 'sections-basis.json'), JSON.stringify({ issues: ['APP-101'], heads: { [K]: head } }))
+  writeFileSync(join(pageDir, 'sections-basis.json'), JSON.stringify({ issues: ['APP-101'], heads: { [K]: head }, version: SECTIONS_PROMPT_VERSION }))
   const rdir = join(root, '.code-diff', 'reviews', 'APP-101')
   mkdirSync(rdir, { recursive: true })
   writeFileSync(
@@ -244,11 +245,11 @@ test('screenshots of the main screens', async () => {
   await expect(page.getByTestId('diff-table').locator('[class*="tk-"]').first()).toBeVisible()
   await shot('diff')
 
+  await page.setViewportSize({ width: 1600, height: 1500 }) // a tall window, so that the picture shows the index and several sections
   await page.getByTestId('view-summarised').click()
   await expect(page.getByTestId('sections-view')).toBeVisible()
-  await page.getByTestId('accept-tools').click()
-  await expect(page.getByTestId('section-tools')).toHaveAttribute('data-accepted', 'true')
-  await page.setViewportSize({ width: 1600, height: 2300 }) // a tall window, so the picture shows several sections
+  await page.getByTestId('accept-tools').click() // an accepted section is collapsed to its header
+  await expect(page.getByTestId('section-tools')).toHaveAttribute('data-collapsed', 'true')
   await expect(page.getByTestId('section-thread-ci').getByTestId('thread')).toBeVisible()
   await shot('summarised')
   await page.setViewportSize({ width: 1600, height: 1000 })

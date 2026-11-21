@@ -15,7 +15,7 @@ The picture shows made-up data. `docs/FEATURES.md` describes every feature with 
 - Filters by file status, file type and comments (open or resolved). A filter with no button on shows everything.
 - You can pick one commit of a change and see only what it changed, and mark files and commits as viewed. Marking HEAD as viewed marks the commits before it.
 - Comments, replies and review submissions go to GitLab or GitHub. Your comments stay as drafts until you post them.
-- Critical thinking is a view that an AI tool writes. It shows the chain of code to follow across the repos, the order to read the files in and the files that you can skip.
+- Summarised is a page that an AI tool writes. It shows the parts of the change that matter, in reading order, each with one paragraph, the code, its files and its own thread. Accept a section to mark its files as viewed.
 - The Acceptance criteria tab checks each criterion of the issues against the code, and can suggest a comment for a criterion that is not met.
 - The AI review reads the whole review and leaves draft comments for you to read first. A chat panel answers questions about the change. Claude Code is the default AI tool. Codex and a custom command also work.
 - Themes: System, Tokyo Night, Dracula, Nord, Gruvbox Dark, Solarized Dark and Paper.

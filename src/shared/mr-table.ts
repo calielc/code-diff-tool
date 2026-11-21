@@ -109,7 +109,7 @@ export function yourReview(i: YourReviewInput): YourReview {
       'closed',
       'Closed, not in the diff',
       'muted',
-      'A closed MR is listed here only: its files are not in the tree, the diffs or Critical thinking.'
+      'A closed MR is listed here only: its files are not in the tree, the diffs or the Summarised page.'
     )
   }
   if (!i.userCanApprove) return status(5, 'ineligible', 'Not an eligible approver', 'muted')

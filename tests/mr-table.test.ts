@@ -296,7 +296,7 @@ describe('yourReview', () => {
       id: 'closed',
       text: 'Closed, not in the diff',
       tone: 'muted',
-      tooltip: 'A closed MR is listed here only: its files are not in the tree, the diffs or Critical thinking.',
+      tooltip: 'A closed MR is listed here only: its files are not in the tree, the diffs or the Summarised page.',
       actions: []
     })
   })

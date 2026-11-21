@@ -220,7 +220,7 @@ export function NewReview(props: { initial?: LaunchRequest | null; onClose: () =
             <div className="modal narrow">
               <h2>Replace review {slug}?</h2>
               <p>
-                A review named "{slug}" exists. Creating it again replaces its list of changes and issues. Its comments, Critical thinking and Claude results
+                A review named "{slug}" exists. Creating it again replaces its list of changes and issues. Its comments, the Summarised page and Claude results
                 stay.
               </p>
               <footer>

@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { setLlmConfig } from '../src/main/processes/llm'
 import { startBuild } from '../src/main/services/build'
-import { flowStateOf, resetFlowMemory, startFlow } from '../src/main/services/flow'
+import { resetSectionsMemory, sectionsStateOf, startSections } from '../src/main/services/sections'
 import { reviewDir } from '../src/main/services/reviews'
 import { sessionOf } from '../src/main/services/session'
 import { resetWorkspaceCache } from '../src/main/services/workspace'
@@ -18,6 +18,7 @@ let root: string
 let forge: FakeForge
 let log: string
 let dir: string
+let head: string
 
 const git = (cwd: string, ...a: string[]): string => execFileSync('git', ['-c', 'core.autocrlf=false', ...a], { cwd, encoding: 'utf8' }).trim()
 const calls = (): { args: string[]; cwd: string }[] =>
@@ -29,21 +30,18 @@ const calls = (): { args: string[]; cwd: string }[] =>
     .filter((c) => c.args)
 const arg = (a: string[], flag: string): string => a[a.indexOf(flag) + 1]
 
-/** A flow that passes the checker for the one changed file: line 2 holds the change. */
+/** A page that passes the checker for the one changed file: line 2 holds the change. */
 const GOOD = JSON.stringify({
   summary: 'A user sees the change.',
-  lanes: ['backend/x'],
-  steps: [{ id: 's1', mr: 'backend/x!12', path: 'a.txt', lines: [[2, 2]], title: 'The change', kind: 'changed', text: 'It changes line two.' }],
-  review: [{ mr: 'backend/x!12', path: 'a.txt', line: 2, why: 'Check the new value.' }],
-  skip: []
+  sections: [{ id: 's1', title: 'The change', text: 'It changes line two.', snippets: [{ mr: 'backend/x!12', path: 'a.txt', lines: [2, 2] }], files: [] }]
 })
 
 const waitDone = async (): Promise<void> => {
-  await expect.poll(() => flowStateOf('R-1').pending, { timeout: 20_000 }).toBe(false)
+  await expect.poll(() => sectionsStateOf('R-1').pending, { timeout: 20_000 }).toBe(false)
 }
 
 beforeEach(async () => {
-  root = mkdtempSync(join(tmpdir(), 'codediff-flow-'))
+  root = mkdtempSync(join(tmpdir(), 'codediff-sections-'))
   const repo = join(root, 'backend', 'x')
   mkdirSync(repo, { recursive: true })
   git(repo, 'init', '-q')
@@ -58,6 +56,7 @@ beforeEach(async () => {
   writeFileSync(join(repo, 'a.txt'), 'one\nTWO\nthree\n')
   git(repo, 'commit', '-qam', 'change')
   const b = git(repo, 'rev-parse', 'HEAD')
+  head = b
   forge = await useFakeForge({
     'GET user': { json: { username: 'me' } },
     [`GET projects/${P}/merge_requests/12`]: {
@@ -82,7 +81,7 @@ beforeEach(async () => {
   process.env.FAKE_CLAUDE_ANSWER = GOOD
   setLlmConfig({ tool: 'claude' })
   resetWorkspaceCache()
-  resetFlowMemory()
+  resetSectionsMemory()
   dir = reviewDir(root, 'R-1')
   mkdirSync(dir, { recursive: true })
   writeFileSync(
@@ -97,33 +96,33 @@ afterEach(async () => {
   await stopFakeForge(forge)
 })
 
-describe('a flow run (file 04 section 5.2)', () => {
-  it('writes flow.json and the issue list, with opus at medium effort and 80 turns in the context folder', async () => {
-    await startFlow(sessionOf('R-1')!)
+describe('a sections run', () => {
+  it('writes sections.json and its basis, with opus at medium effort and 80 turns in the context folder', async () => {
+    await startSections(sessionOf('R-1')!)
     await waitDone()
-    expect(flowStateOf('R-1').flow?.summary).toBe('A user sees the change.')
-    expect(JSON.parse(readFileSync(join(dir, 'flow.json'), 'utf8')).steps[0].id).toBe('s1')
-    expect(JSON.parse(readFileSync(join(dir, 'flow-issues.json'), 'utf8'))).toEqual([])
+    expect(sectionsStateOf('R-1').document?.summary).toBe('A user sees the change.')
+    expect(JSON.parse(readFileSync(join(dir, 'sections.json'), 'utf8')).sections[0].id).toBe('s1')
+    expect(JSON.parse(readFileSync(join(dir, 'sections-basis.json'), 'utf8'))).toEqual({ issues: [], heads: { 'backend/x!12': head } })
     const c = calls()[0]
     expect(arg(c.args, '--model')).toBe('opus')
     expect(arg(c.args, '--effort')).toBe('medium')
     expect(arg(c.args, '--max-turns')).toBe('80')
     expect(c.args).toContain('--add-dir')
     expect(c.cwd.replace(/\\/g, '/')).toMatch(/context\/\d{8}-\d{6}-\d{3}$/)
-    expect(c.args[c.args.indexOf('--append-system-prompt') + 1]).toMatch(/^You write the Critical thinking flow/)
+    expect(c.args[c.args.indexOf('--append-system-prompt') + 1]).toMatch(/^You write the Summarised page/)
   })
 
-  it('withholds the flow while a run is pending', async () => {
+  it('withholds the page while a run is pending', async () => {
     process.env.FAKE_CLAUDE_SLEEP_MS = '600'
-    await startFlow(sessionOf('R-1')!)
-    expect(flowStateOf('R-1')).toMatchObject({ pending: true, flow: null })
+    await startSections(sessionOf('R-1')!)
+    expect(sectionsStateOf('R-1')).toMatchObject({ pending: true, document: null })
     await waitDone()
-    expect(flowStateOf('R-1').flow).not.toBeNull()
+    expect(sectionsStateOf('R-1').document).not.toBeNull()
   })
 
   it('sends the problems back in the same session with the exact prompt, then accepts the good answer', async () => {
     process.env.FAKE_CLAUDE_BAD_FIRST = '1'
-    await startFlow(sessionOf('R-1')!)
+    await startSections(sessionOf('R-1')!)
     await waitDone()
     expect(calls()).toHaveLength(2)
     const [first, second] = calls()
@@ -132,67 +131,98 @@ describe('a flow run (file 04 section 5.2)', () => {
     expect(second.args.at(-1)).toBe(
       'The answer has these problems. Fix every one, and answer with the whole JSON document again, nothing else:\n- The answer holds no JSON object.'
     )
-    expect(flowStateOf('R-1').flow).not.toBeNull()
+    expect(sectionsStateOf('R-1').document).not.toBeNull()
   })
 
-  it('fails after three bad answers, writes flow-error.txt and leaves flow.json alone (acceptance check 3)', async () => {
+  it('fails after three bad answers, writes sections-error.txt and leaves sections.json alone (acceptance check 3)', async () => {
     process.env.FAKE_CLAUDE_ANSWER = 'no json here'
-    await startFlow(sessionOf('R-1')!)
+    await startSections(sessionOf('R-1')!)
     await waitDone()
     expect(calls()).toHaveLength(3)
     const message = 'The answer still had 1 problem(s) after 3 answers:\nThe answer holds no JSON object.'
-    expect(readFileSync(join(dir, 'flow-error.txt'), 'utf8')).toBe(message)
-    expect(flowStateOf('R-1')).toMatchObject({ pending: false, error: message, flow: null })
-    expect(existsSync(join(dir, 'flow.json'))).toBe(false)
+    expect(readFileSync(join(dir, 'sections-error.txt'), 'utf8')).toBe(message)
+    expect(sectionsStateOf('R-1')).toMatchObject({ pending: false, error: message, document: null })
+    expect(existsSync(join(dir, 'sections.json'))).toBe(false)
   })
 
   it('writes the install message when the tool is missing', async () => {
     process.env.CODEDIFF_FAKE_CLAUDE = JSON.stringify(['definitely-not-a-real-program-xyz'])
-    await startFlow(sessionOf('R-1')!)
+    await startSections(sessionOf('R-1')!)
     await waitDone()
-    expect(flowStateOf('R-1').error).toMatch(/^'claude' not found — install it first/)
-    expect(readFileSync(join(dir, 'flow-error.txt'), 'utf8')).toMatch(/^'claude' not found/)
+    expect(sectionsStateOf('R-1').error).toMatch(/^'claude' not found — install it first/)
+    expect(readFileSync(join(dir, 'sections-error.txt'), 'utf8')).toMatch(/^'claude' not found/)
   })
 })
 
-describe('a saved flow (file 04 section 5.1)', () => {
-  const save = (flow: unknown, issues: string[] = []): void => {
-    writeFileSync(join(dir, 'flow.json'), JSON.stringify(flow))
-    writeFileSync(join(dir, 'flow-issues.json'), JSON.stringify(issues))
+describe('a saved page', () => {
+  const save = (page: unknown, basis: { issues: string[]; heads: Record<string, string> } = { issues: [], heads: { 'backend/x!12': head } }): void => {
+    writeFileSync(join(dir, 'sections.json'), JSON.stringify(page))
+    writeFileSync(join(dir, 'sections-basis.json'), JSON.stringify(basis))
   }
 
   it('is used as it is when it still matches, and no run starts', async () => {
     save(JSON.parse(GOOD))
-    await startFlow(sessionOf('R-1')!)
-    expect(flowStateOf('R-1')).toMatchObject({ pending: false, problems: [] })
-    expect(flowStateOf('R-1').flow?.steps).toHaveLength(1)
+    await startSections(sessionOf('R-1')!)
+    expect(sectionsStateOf('R-1')).toMatchObject({ pending: false, problems: [] })
+    expect(sectionsStateOf('R-1').document?.sections).toHaveLength(1)
     expect(calls()).toHaveLength(0)
   })
 
-  it('is replaced by a new run when a changed line moved, and the old one is not shown (acceptance check 2)', async () => {
+  it('is replaced by a new run when a changed line moved, and the old one is not shown', async () => {
     const stale = JSON.parse(GOOD)
-    stale.steps[0].lines = [[99, 99]] // the change is no longer on that line
+    stale.sections[0].snippets[0].lines = [99, 99] // the change is no longer on that line
     save(stale)
     process.env.FAKE_CLAUDE_SLEEP_MS = '500'
-    await startFlow(sessionOf('R-1')!)
-    expect(flowStateOf('R-1')).toMatchObject({ pending: true, flow: null })
-    expect(flowStateOf('R-1').problems).toEqual(['step s1: lines 99-99 of a.txt hold no change'])
+    await startSections(sessionOf('R-1')!)
+    expect(sectionsStateOf('R-1')).toMatchObject({ pending: true, document: null })
+    expect(sectionsStateOf('R-1').problems).toEqual([
+      "section 's1': lines 99-99 of a.txt on the new side hold no change",
+      'backend/x!12 a.txt: the change at lines 2-2 is in no snippet'
+    ])
     await waitDone()
-    expect(flowStateOf('R-1').flow?.steps[0].lines).toEqual([[2, 2]])
+    expect(sectionsStateOf('R-1').document?.sections[0].snippets[0].lines).toEqual([2, 2])
   })
 
-  it('is replaced when the issues of the review changed (acceptance check 4)', async () => {
-    save(JSON.parse(GOOD), ['LX-1'])
-    await startFlow(sessionOf('R-1')!)
+  it('is replaced when a file of the review is in no section', async () => {
+    const stale = JSON.parse(GOOD)
+    stale.sections[0].snippets = []
+    stale.sections[0].files = []
+    save(stale)
+    process.env.FAKE_CLAUDE_SLEEP_MS = '500'
+    await startSections(sessionOf('R-1')!)
+    expect(sectionsStateOf('R-1').problems).toContain('backend/x!12 a.txt is in no section. Show it in a snippet, or list it in the leftover section')
     await waitDone()
     expect(calls()).toHaveLength(1)
-    expect(JSON.parse(readFileSync(join(dir, 'flow-issues.json'), 'utf8'))).toEqual([])
+  })
+
+  it('is replaced when the change got new commits, even when every line still matches', async () => {
+    save(JSON.parse(GOOD), { issues: [], heads: { 'backend/x!12': '0'.repeat(40) } })
+    process.env.FAKE_CLAUDE_SLEEP_MS = '500'
+    await startSections(sessionOf('R-1')!)
+    expect(sectionsStateOf('R-1')).toMatchObject({ pending: true, document: null, problems: ['backend/x!12 has new commits since the page was written.'] })
+    await waitDone()
+    expect(JSON.parse(readFileSync(join(dir, 'sections-basis.json'), 'utf8')).heads).toEqual({ 'backend/x!12': head })
+  })
+
+  it('is replaced when the issues of the review changed', async () => {
+    save(JSON.parse(GOOD), { issues: ['LX-1'], heads: { 'backend/x!12': head } })
+    await startSections(sessionOf('R-1')!)
+    await waitDone()
+    expect(calls()).toHaveLength(1)
+    expect(JSON.parse(readFileSync(join(dir, 'sections-basis.json'), 'utf8')).issues).toEqual([])
+  })
+
+  it('is replaced when it has no basis, as a page of an older version has none', async () => {
+    writeFileSync(join(dir, 'sections.json'), GOOD)
+    await startSections(sessionOf('R-1')!)
+    await waitDone()
+    expect(calls()).toHaveLength(1)
   })
 
   it('does not start a second run while one is in progress', async () => {
     process.env.FAKE_CLAUDE_SLEEP_MS = '600'
-    await startFlow(sessionOf('R-1')!)
-    await startFlow(sessionOf('R-1')!)
+    await startSections(sessionOf('R-1')!)
+    await startSections(sessionOf('R-1')!)
     await waitDone()
     expect(calls()).toHaveLength(1)
   })

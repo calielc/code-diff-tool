@@ -61,12 +61,12 @@ const api: CodeDiffApi = {
       return () => ipcRenderer.removeListener(CH.chatEvent, listener)
     }
   },
-  flow: {
-    get: (slug) => ipcRenderer.invoke(CH.flowGet, slug),
+  sections: {
+    get: (slug) => ipcRenderer.invoke(CH.sectionsGet, slug),
     onState: (cb) => {
       const listener = (_e: unknown, m: Parameters<typeof cb>[0]): void => cb(m)
-      ipcRenderer.on(CH.flowState, listener)
-      return () => ipcRenderer.removeListener(CH.flowState, listener)
+      ipcRenderer.on(CH.sectionsState, listener)
+      return () => ipcRenderer.removeListener(CH.sectionsState, listener)
     }
   },
   ai: {

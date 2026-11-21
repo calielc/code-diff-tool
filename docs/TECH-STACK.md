@@ -27,7 +27,7 @@ This file describes how the app is built. The product features are in `docs/FEAT
 - `src/shared`: code and types that both sides use, with no dependency on Electron or the DOM. The diff model, the thread rules, the comparison of two lines, the file kinds, the themes, the prompts of the AI tools, the checks of their answers, the launch request, the version helpers of the review and the types of the IPC.
 - `src/main/clients`: one module for each outside system. `rest-api.ts` and `forge-api.ts` make the calls, `gitlab.ts` and `github.ts` map them to the neutral model, `jira.ts` reads issues, `git.ts` runs `git`, and `writes.ts` posts comments, approvals and state changes.
 - `src/main/diff`: the diff engine. It is pure TypeScript with no `git` dependency except the reading of blobs. `myers.ts` makes the line diff, `noise.ts` finds the three noise levels, `file-diff.ts` builds a file with its hunks, `mr-files.ts` builds the files of a change, and `combined.ts` builds the combined view of a repo.
-- `src/main/services`: the build of a review, the session, the issues and their summaries, the review context folder, the exports of commits, the watcher, the AI runs, the flow, the commits of a file, the credentials and the state of the app.
+- `src/main/services`: the build of a review, the session, the issues and their summaries, the review context folder, the exports of commits, the watcher, the AI runs, the sections of the Summarised page, the commits of a file, the credentials and the state of the app.
 - `src/main/processes`: the AI tools. `llm.ts` is the facade. `claude.ts`, `codex.ts` and `custom.ts` are the adapters. `run.ts` starts a process, limits its output and time, and kills its whole tree when a build or a run is cancelled.
 - `src/main/ipc`: one file for each area. Each handler checks the sender, checks its arguments with `zod` and calls a service.
 - `src/renderer/features`: the screens. `review-context.tsx` holds the data of the open review and shares it with the tabs.
@@ -47,7 +47,7 @@ The app keeps its files in two places.
 - `reviews/<name>/specs/`: the copies of spec files.
 - `reviews/<name>/issue-briefs.json`: the AI summaries of the issues, keyed by the Jira `updated` time.
 - `reviews/<name>/context/<time>/`: the review context for the AI tools. `index.md` lists everything, and each change has a folder with its description, diff, threads, history and files. The repos are exported read-only with `git archive`.
-- `reviews/<name>/flow.json` and `flow-issues.json`: the Critical thinking flow and the issues it was written for. `flow-error.txt` holds the reason when three tries failed.
+- `reviews/<name>/sections.json` and `sections-basis.json`: the Summarised page, and what it was written for (the issue keys and the head commit of each change). `sections-error.txt` holds the reason when three tries failed. A review from an older version may hold `flow.json` and `flow-issues.json`. The app ignores them.
 - `reviews/<name>/review-run.json` and `ac-run.json`: the record of the last AI review and of the last acceptance check. A record that says `running` when the app starts is rewritten as stopped.
 - `settings.json`: the choice of skill and model, shared by all reviews.
 
@@ -55,7 +55,7 @@ The neutral model is in `src/shared/provider.ts`: `ChangeRef` (provider, host, p
 
 ## 5. IPC
 
-Channel names are in `src/shared/channels.ts`, the types of the bridge in `src/shared/types.ts`, and the handlers in `src/main/ipc`. A channel is a request with a reply (`invoke`), or a push from the main process to the renderer (the build progress, the watcher events, the chat stream, the flow state, the AI run state, the theme and the launch request). Every request returns a result object with `ok`, so an error never throws through the bridge.
+Channel names are in `src/shared/channels.ts`, the types of the bridge in `src/shared/types.ts`, and the handlers in `src/main/ipc`. A channel is a request with a reply (`invoke`), or a push from the main process to the renderer (the build progress, the watcher events, the chat stream, the sections state, the AI run state, the theme and the launch request). Every request returns a result object with `ok`, so an error never throws through the bridge.
 
 ## 6. Security
 
@@ -84,10 +84,10 @@ Channel names are in `src/shared/channels.ts`, the types of the bridge in `src/s
 
 ## 8. Tests
 
-- **Unit tests** (`tests/*.test.ts`) cover the pure code: the diff engine, the thread and comment rules, the comparison of two lines, the file kinds, the themes, the checks of AI answers, the flow checker, the launch request, the version rules, the REST clients against a fake HTTP server, and the services against temporary folders and repos.
+- **Unit tests** (`tests/*.test.ts`) cover the pure code: the diff engine, the thread and comment rules, the comparison of two lines, the file kinds, the themes, the checks of AI answers, the sections checker and the Accept rules, the launch request, the version rules, the REST clients against a fake HTTP server, and the services against temporary folders and repos.
 - **End-to-end tests** (`tests/e2e`) start the real app with Playwright. Each test makes a temporary workspace with real git repos, starts a fake forge server (`tests/fakes/fake-forge.ts`) and fake AI tools (`fake-claude.mjs`, `fake-codex.mjs`, `fake-custom.mjs`), and drives the window. `forgeEnv` sets the environment that points the app at them.
 - The fake forge answers a table of `METHOD endpoint` keys. An array gives one answer for each call in order. An entry can wait or fail.
-- Test hooks (`CODEDIFF_FAKE_<TOOL>`, `CODEDIFF_TEST_PICK_FILES`, `CODEDIFF_TEST_FLOW` and more) work only when `CODEDIFF_TEST=1`.
+- Test hooks (`CODEDIFF_FAKE_<TOOL>`, `CODEDIFF_TEST_PICK_FILES`, `CODEDIFF_TEST_SECTIONS` and more) work only when `CODEDIFF_TEST=1`.
 - The windows of the tests stay hidden unless `CODEDIFF_SHOW_WINDOW=1`.
 - `tests/e2e/screenshots.spec.ts` takes the pictures of the documentation. It runs only when `SHOTS` names a folder. `npm run screenshots` sets it.
 - `tests/e2e/phase10.spec.ts` starts a packaged app. It runs only when the app exists. The installer workflow uses it as a smoke test.
@@ -137,7 +137,7 @@ The workflow `.github/workflows/release.yml` gives each merge to `main` a versio
 - One neutral model for GitLab and GitHub. The rest of the code, and the tests, do not depend on the host.
 - AI tools run as child processes behind one facade. The app does not link any vendor library. A new tool is one more adapter, and a custom command needs none.
 - The AI tools only read. The app turns their answers into drafts that the reviewer reads first. A wrong answer then costs a deleted draft, not a wrong comment on a real change.
-- The answers of the AI tools are checked against the real data, and a wrong answer goes back to the tool up to three times. A flow or a finding that points at a line that does not exist never reaches the screen.
+- The answers of the AI tools are checked against the real data, and a wrong answer goes back to the tool up to three times. A page of sections or a finding that points at a line that does not exist never reaches the screen.
 - The marks inside a line compare words first and characters only inside a changed word. A pure character comparison scatters marks inside a word that changed fully.
 - Viewed marks and the choice of tab stay in the browser storage of the window, per review. They belong to the reader and not to the review.
 - ESLint and Prettier, with TypeScript pinned below 7. `typescript-eslint` needs the JavaScript API of the compiler, which version 7 does not have.
@@ -145,3 +145,18 @@ The workflow `.github/workflows/release.yml` gives each merge to `main` a versio
 - Changes go through pull requests and are squash merged. The title of the pull request is the commit message, and its type chooses the version. This gives one commit for each change and a version rule that needs no extra file.
 - Each merge makes a release, and the installers are built only for a major release or on demand, because the build costs a Windows and a macOS runner.
 - The version lives in the tag and not in `package.json`. A bot must not commit to a protected `main`, so the build sets the number for itself.
+
+### 11.1 The Summarised page
+
+The code is in `src/shared/sections.ts` (document, check, excerpts, Accept rules, thread rules), `src/main/services/sections.ts` (the run), `src/renderer/features/SectionsView.tsx` (the page), and `tests/sections.test.ts`, `tests/sections-service.test.ts` and `tests/e2e/phase8.spec.ts`. The page reuses the machinery of the AI features: the review context folder, the AI facade with a read-only tool list, the three tries with the problems sent back in the same session, the banner and the running state, and the test hook `CODEDIFF_TEST_SECTIONS`.
+
+- **The document.** `{ summary, sections[] }`. A section has `id`, `title`, `text` (one paragraph), `snippets[]`, `files[]` and an optional `leftover`. A snippet is `{ mr, path, lines: [from, to], side? }`. Its lines are lines of the new file, or of the old file with `side: "old"`, because a removed line has no new number. A file entry is `{ mr, path }`, or `{ mr, pattern }`, which the checker expands to the files it matches. The saved document holds paths only. The leftover section moves to the end.
+- **The checks** (`checkSections`). All problems are collected, so one retry can fix all of them. The file and the lines of each snippet must exist, and the range must hold a changed line on its side, in the diff that shows everything. At most 12 snippets of at most 120 lines. Titles and ids are unique, and the text is one paragraph. A section names at least one file, and there is at most one leftover section. Every changed file must be in a snippet or in a file entry of some section. Every run of changed lines at the Code only level must have a line inside a snippet of its file, unless a section lists the file with no snippet. Only the leftover section may list a file that has code changes with no snippet. A file that is binary, generated or only noise at the Code only level may be listed by any section.
+- **Why runs and not hunks.** Git joins two changes that are 6 lines apart into one hunk. A hunk that holds two changes would count as shown when a snippet shows one of them. A run is a block of changed lines with no unchanged line inside, so each separate change must be shown.
+- **Why Code only.** A change that is only an import, a comment or white space does not need a section. The Code only level of the diff engine already finds those, so the checker asks for the code that matters, and the retry loop does not fight over noise.
+- **Out of date.** At each build, the saved page is checked again against the new diffs, and `sections-basis.json` is compared with the issue keys and the head commit of each change. Any difference hides the page and starts a run. A check against the line numbers alone would miss a new commit that changes the text of a line.
+- **The excerpt.** `excerptOf` takes the hunks of the Noise level that the reader chose. Each run with a line inside the range comes whole, with two lines of code around it, and a cap of 80 rows. A range that is only noise at that level shows a note.
+- **Accept.** The state is two things. `accepted` maps a section id to the files it had when it was accepted, and it is kept in the browser storage per review, like the viewed marks. The viewed marks keep their own set, with the same ids as the Linear view (`mr:<change>|<path>`), so the tree, its counter, Hide viewed, the HEAD rule and the keys work with no change. Accept marks a file only when every section that shows it is accepted. Un-accept removes the mark of every file of the section. A section shows as accepted when it is in `accepted` with the same files, and each of its files is viewed or waits for a section that is not accepted. So a mark that the reader removes in the tree takes the sections out, and a section that waits for another one stays accepted. The pure functions `acceptSection`, `unacceptSection` and `isAccepted` hold these rules, and the unit tests cover a file in two sections.
+- **Not the Stacked view.** Accept marks the ids of the Linear view only. The Stacked view has its own ids, as it had before this change.
+- **The thread of a section.** The comment goes to the host through the same write as every comment on a whole change (no path, no line), so the host, the Code changes tab and Submit review need no new code. The first line, `**Section: <title>**`, links the comment to the section. A title is matched after the emphasis marks and line breaks are removed. It is visible on the host, so a person there sees the link, and the app needs no hidden marker. The thread shows on the section by that first line, on any change of the review. The target is the open change with the most files of the section. A draft is a pending comment with no path and the same first line. The form offers Save draft, and the draft card posts, edits and deletes as for every draft. The resolve and the reopen use the existing thread card.
+- **The leftover section.** The checker guarantees that no file is missed, so the leftover section is the one place where a model may say "skip this". It is explicit and visible, and its paragraph has to say why. The page also computes the files that no section names at render time, and shows a warning if there are any. A valid page has none.

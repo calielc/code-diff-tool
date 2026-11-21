@@ -19,6 +19,7 @@ import {
 import { reviewDir } from '../src/main/services/reviews'
 import { sessionOf } from '../src/main/services/session'
 import { resetWorkspaceCache } from '../src/main/services/workspace'
+import { SECTIONS_PROMPT_VERSION } from '../src/shared/sections'
 import type { FakeForge } from './fakes/fake-forge'
 import { stopFakeForge, useFakeForge } from './fakes/use-fake-forge'
 
@@ -123,11 +124,11 @@ describe('a build', () => {
 
   it('shows a saved page that still matches, and holds back one that is out of date, with no run in both cases', async () => {
     writeFileSync(join(dir, 'sections.json'), GOOD)
-    writeFileSync(join(dir, 'sections-basis.json'), JSON.stringify({ issues: [], heads: { 'backend/x!12': head } }))
+    writeFileSync(join(dir, 'sections-basis.json'), JSON.stringify({ version: SECTIONS_PROMPT_VERSION, issues: [], heads: { 'backend/x!12': head } }))
     await loadSections(sessionOf('R-1')!)
     expect(sectionsStateOf('R-1')).toMatchObject({ pending: false, problems: [] })
     expect(sectionsStateOf('R-1').document?.sections).toHaveLength(1)
-    writeFileSync(join(dir, 'sections-basis.json'), JSON.stringify({ issues: [], heads: { 'backend/x!12': '0'.repeat(40) } }))
+    writeFileSync(join(dir, 'sections-basis.json'), JSON.stringify({ version: SECTIONS_PROMPT_VERSION, issues: [], heads: { 'backend/x!12': '0'.repeat(40) } }))
     await loadSections(sessionOf('R-1')!)
     expect(sectionsStateOf('R-1')).toMatchObject({ pending: false, document: null, problems: ['backend/x!12 has new commits since the page was written.'] })
     expect(calls()).toHaveLength(0)
@@ -139,7 +140,11 @@ describe('opening the Summarised view', () => {
     await requestSections('R-1')
     expect(sectionsStateOf('R-1').document?.summary).toBe('A user sees the change.')
     expect(JSON.parse(readFileSync(join(dir, 'sections.json'), 'utf8')).sections[0].id).toBe('s1')
-    expect(JSON.parse(readFileSync(join(dir, 'sections-basis.json'), 'utf8'))).toEqual({ issues: [], heads: { 'backend/x!12': head } })
+    expect(JSON.parse(readFileSync(join(dir, 'sections-basis.json'), 'utf8'))).toEqual({
+      version: SECTIONS_PROMPT_VERSION,
+      issues: [],
+      heads: { 'backend/x!12': head }
+    })
     const c = calls()[0]
     expect([SECTIONS_MODEL, SECTIONS_EFFORT, SECTIONS_MAX_TURNS, SECTIONS_TRIES]).toEqual(['sonnet', 'medium', 80, 3]) // the choice of the owner, named in one place
     expect(arg(c.args, '--model')).toBe('sonnet')
@@ -234,6 +239,41 @@ describe('opening the Summarised view', () => {
     expect(sectionsStateOf('R-1').document).not.toBeNull()
   })
 
+  it('keeps the first 9 sections when the tool still writes too many after the last try, and says so in the page', async () => {
+    process.env.FAKE_CLAUDE_ANSWER = JSON.stringify({
+      summary: 'Many points.',
+      sections: Array.from({ length: 11 }, (_, i) => ({
+        id: 's' + i,
+        title: 'Idea ' + (i + 1),
+        text: 'It changes line two.',
+        snippets: [{ mr: 'backend/x!12', path: 'a.txt', lines: [2, 2] }]
+      }))
+    })
+    await requestSections('R-1')
+    expect(calls()).toHaveLength(3) // the problem went back to the tool twice
+    expect(calls()[1].args.at(-1)).toContain('The page has 11 sections, and the limit is 9')
+    const doc = sectionsStateOf('R-1').document!
+    expect(sectionsStateOf('R-1').error).toBeNull()
+    expect(doc.sections).toHaveLength(9)
+    expect(doc.restText).toContain('The tool wrote 11 points, and the page keeps the first 9.')
+    expect(JSON.parse(readFileSync(join(dir, 'sections.json'), 'utf8')).sections).toHaveLength(9)
+  })
+
+  it('accepts 9 sections at once', async () => {
+    process.env.FAKE_CLAUDE_ANSWER = JSON.stringify({
+      summary: 'Many points.',
+      sections: Array.from({ length: 9 }, (_, i) => ({
+        id: 's' + i,
+        title: 'Idea ' + (i + 1),
+        text: 'It changes line two.',
+        snippets: [{ mr: 'backend/x!12', path: 'a.txt', lines: [2, 2] }]
+      }))
+    })
+    await requestSections('R-1')
+    expect(calls()).toHaveLength(1)
+    expect(sectionsStateOf('R-1').document?.sections).toHaveLength(9)
+  })
+
   it('writes the install message when the tool is missing', async () => {
     process.env.CODEDIFF_FAKE_CLAUDE = JSON.stringify(['definitely-not-a-real-program-xyz'])
     await requestSections('R-1')
@@ -243,7 +283,14 @@ describe('opening the Summarised view', () => {
 })
 
 describe('a saved page, when the view is opened', () => {
-  const save = (page: unknown, basis: { issues: string[]; heads: Record<string, string> } = { issues: [], heads: { 'backend/x!12': head } }): void => {
+  const save = (
+    page: unknown,
+    basis: { version?: number; issues: string[]; heads: Record<string, string> } = {
+      version: SECTIONS_PROMPT_VERSION,
+      issues: [],
+      heads: { 'backend/x!12': head }
+    }
+  ): void => {
     writeFileSync(join(dir, 'sections.json'), JSON.stringify(page))
     writeFileSync(join(dir, 'sections-basis.json'), JSON.stringify(basis))
   }
@@ -269,7 +316,7 @@ describe('a saved page, when the view is opened', () => {
   })
 
   it('is replaced when the change got new commits, even when every line still matches', async () => {
-    save(JSON.parse(GOOD), { issues: [], heads: { 'backend/x!12': '0'.repeat(40) } })
+    save(JSON.parse(GOOD), { version: SECTIONS_PROMPT_VERSION, issues: [], heads: { 'backend/x!12': '0'.repeat(40) } })
     process.env.FAKE_CLAUDE_SLEEP_MS = '500'
     await begin()
     expect(sectionsStateOf('R-1')).toMatchObject({ pending: true, document: null, problems: ['backend/x!12 has new commits since the page was written.'] })
@@ -278,10 +325,19 @@ describe('a saved page, when the view is opened', () => {
   })
 
   it('is replaced when the issues of the review changed', async () => {
-    save(JSON.parse(GOOD), { issues: ['LX-1'], heads: { 'backend/x!12': head } })
+    save(JSON.parse(GOOD), { version: SECTIONS_PROMPT_VERSION, issues: ['LX-1'], heads: { 'backend/x!12': head } })
     await requestSections('R-1')
     expect(calls()).toHaveLength(1)
     expect(JSON.parse(readFileSync(join(dir, 'sections-basis.json'), 'utf8')).issues).toEqual([])
+  })
+
+  it('is replaced when it was written with an older version of the prompt, so the owner gets the new rules at once', async () => {
+    save(JSON.parse(GOOD), { version: SECTIONS_PROMPT_VERSION - 1, issues: [], heads: { 'backend/x!12': head } })
+    process.env.FAKE_CLAUDE_SLEEP_MS = '500'
+    await begin()
+    expect(sectionsStateOf('R-1').problems).toEqual(['The page was written with an older version of the rules, so it is written again.'])
+    await waitDone()
+    expect(JSON.parse(readFileSync(join(dir, 'sections-basis.json'), 'utf8')).version).toBe(SECTIONS_PROMPT_VERSION)
   })
 
   it('is replaced when it has no basis, as a page of an older version has none', async () => {

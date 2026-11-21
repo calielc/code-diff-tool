@@ -1,0 +1,428 @@
+diff --git a/src/renderer/features/DiffTab.tsx b/src/renderer/features/DiffTab.tsx
+index 2fb5b44..d2d8cb0 100644
+--- a/src/renderer/features/DiffTab.tsx
++++ b/src/renderer/features/DiffTab.tsx
+@@ -9,7 +9,7 @@ import {
+   type PointerEvent as ReactPointerEvent
+ } from 'react'
+ import type { CommitInfo } from '@shared/commits'
+-import { FILE_KINDS, fileKind, type FileKind } from '@shared/file-kinds'
++import { countKinds, fileKind, visibleKinds, type FileKind } from '@shared/file-kinds'
+ import { intraLine, type Seg } from '@shared/intraline'
+ import { newCommentId, type PendingComment } from '@shared/comments'
+ import type { FileObject, LevelName, LineObj } from '@shared/diff'
+@@ -288,7 +288,7 @@ export function DiffTab(props: { visible?: (mrKey: string) => boolean }): React.
+       shown.filter(
+         (e) =>
+           (statuses.size === 0 || statuses.has(statusOf(e))) &&
+-          (kinds.size === 0 || kinds.has(fileKind(e.file.path))) &&
++          (kinds.size === 0 || kinds.has(fileKind(e.file.path, e.file.binary))) &&
+           !(hideViewed && viewed.has(e.id)) &&
+           (!onlyComments || hasComments(e)) &&
+           matchesComments(e)
+@@ -303,7 +303,8 @@ export function DiffTab(props: { visible?: (mrKey: string) => boolean }): React.
+     { open: 0, resolved: 0 }
+   )
+   const statusCount = (st: 'A' | 'M' | 'D'): number => shown.filter((e) => statusOf(e) === st).length
+-  const kindCount = (k: FileKind): number => shown.filter((e) => fileKind(e.file.path) === k).length
++  // The counts of the Types filter come from the shown files, as the counts of the Files filter do. Only the options with files show, and an option that is on stays.
++  const kindOptions = useMemo(() => visibleKinds(countKinds(shown.map((e) => ({ path: e.file.path, binary: e.file.binary }))), kinds), [shown, kinds])
+   const visible = useMemo(() => {
+     const q = filter.trim().toLowerCase()
+     return q ? facetted.filter((e) => e.file.path.toLowerCase().includes(q)) : facetted
+@@ -671,22 +672,24 @@ export function DiffTab(props: { visible?: (mrKey: string) => boolean }): React.
+             ))}
+           </span>
+         </div>
+-        <div className="fgroup" role="group" aria-label="Types">
+-          <span className="glabel">Types</span>
+-          <span className="seg toggles">
+-            {FILE_KINDS.map((k) => (
+-              <button
+-                key={k.id}
+-                className={kinds.has(k.id) ? 'on' : ''}
+-                aria-pressed={kinds.has(k.id)}
+-                data-testid={'kind-' + k.id}
+-                onClick={() => setKinds((o) => (o.has(k.id) ? new Set([...o].filter((x) => x !== k.id)) : new Set(o).add(k.id)))}
+-              >
+-                {k.label} <small>{kindCount(k.id)}</small>
+-              </button>
+-            ))}
+-          </span>
+-        </div>
++        {kindOptions.length > 0 && (
++          <div className="fgroup" role="group" aria-label="Types">
++            <span className="glabel">Types</span>
++            <span className="seg toggles">
++              {kindOptions.map((k) => (
++                <button
++                  key={k.id}
++                  className={kinds.has(k.id) ? 'on' : ''}
++                  aria-pressed={kinds.has(k.id)}
++                  data-testid={'kind-' + k.id}
++                  onClick={() => setKinds((o) => (o.has(k.id) ? new Set([...o].filter((x) => x !== k.id)) : new Set(o).add(k.id)))}
++                >
++                  {k.label} <small>{k.count}</small>
++                </button>
++              ))}
++            </span>
++          </div>
++        )}
+         <div className="fgroup" role="group" aria-label="Comments">
+           <span className="glabel">Comments</span>
+           <span className="seg toggles">
+diff --git a/src/shared/file-kinds.ts b/src/shared/file-kinds.ts
+index 0c0b81b..e05aa06 100644
+--- a/src/shared/file-kinds.ts
++++ b/src/shared/file-kinds.ts
+@@ -1,11 +1,13 @@
+ // The kind of a changed file, for the Types filter of the Diff tab.
+ 
+-export type FileKind = 'code' | 'tests' | 'config' | 'docs'
++export type FileKind = 'code' | 'tests' | 'config' | 'docs' | 'images' | 'binary'
+ export const FILE_KINDS: { id: FileKind; label: string }[] = [
+   { id: 'code', label: 'Code' },
+   { id: 'tests', label: 'Tests' },
+   { id: 'config', label: 'Config' },
+-  { id: 'docs', label: 'Docs' }
++  { id: 'docs', label: 'Docs' },
++  { id: 'images', label: 'Images' },
++  { id: 'binary', label: 'Binary' }
+ ]
+ 
+ const DOCS = /\.(md|mdx|txt|rst|adoc)$/i
+@@ -14,10 +16,85 @@ const CONFIG_NAME = /(^|\/)(\.[\w.-]+|Dockerfile|Makefile|package-lock\.json|Dir
+ const CONFIG_DIR = /(^|\/)(\.config|\.github|\.gitlab|\.vscode|config|configs)\//i
+ const TESTS = /(^|\/)(tests?|__tests__|specs?|e2e)(\/|$)|[.-](test|spec)\.[a-z]+$|Tests?\.[a-z]+$/i
+ 
+-/** Docs first, then tests, then config, and everything else is code. */
+-export function fileKind(path: string): FileKind {
++/** The extensions of image files. SVG is here too. It is text, so the diff shows its lines, but it is an image to the reader. */
++export const IMAGE_EXTENSIONS: ReadonlySet<string> = new Set([
++  'png',
++  'apng',
++  'jpg',
++  'jpeg',
++  'jpe',
++  'jfif',
++  'gif',
++  'webp',
++  'bmp',
++  'ico',
++  'cur',
++  'svg',
++  'avif',
++  'tif',
++  'tiff',
++  'heic',
++  'heif',
++  'jxl',
++  'psd'
++])
++
++/** The extensions of files that are binary and not images. A file with one of them counts as Binary even when git did not flag it. */
++export const BINARY_EXTENSIONS: ReadonlySet<string> = new Set([
++  // archives and packages
++  ...['zip', 'gz', 'tgz', 'bz2', 'xz', 'zst', 'lz4', '7z', 'rar', 'tar', 'jar', 'war', 'ear', 'aar', 'apk', 'ipa', 'whl', 'egg'],
++  ...['nupkg', 'snupkg', 'vsix', 'deb', 'rpm', 'msi', 'dmg', 'iso', 'img', 'asar'],
++  // compiled code and libraries
++  ...['exe', 'dll', 'so', 'dylib', 'a', 'lib', 'o', 'obj', 'pdb', 'class', 'pyc', 'pyo', 'wasm', 'node', 'dex', 'bin'],
++  // documents
++  ...['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'odt', 'ods', 'odp'],
++  // fonts
++  ...['ttf', 'otf', 'woff', 'woff2', 'eot'],
++  // audio and video
++  ...['mp3', 'mp4', 'm4a', 'wav', 'ogg', 'flac', 'avi', 'mov', 'mkv', 'webm'],
++  // data and keys
++  ...['sqlite', 'sqlite3', 'db', 'lockb', 'pkl', 'npy', 'onnx', 'pt', 'pth', 'p12', 'pfx', 'jks', 'keystore']
++])
++
++/** The lower-case extension of the file name, without the dot. A name with no dot, a dotfile such as `.gitignore` and a name that ends in a dot have none. */
++export function extensionOf(path: string): string {
++  const name = path.slice(Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\')) + 1)
++  const dot = name.lastIndexOf('.')
++  return dot <= 0 || dot === name.length - 1 ? '' : name.slice(dot + 1).toLowerCase()
++}
++
++/**
++ * The one kind of a file. The checks run in this order, and the first that matches wins:
++ * 1. Images, by extension. An image is never Binary, even when git flagged it as binary.
++ * 2. Binary, when git flagged the file as binary or the extension is a known binary one.
++ * 3. Docs.
++ * 4. Tests.
++ * 5. Config.
++ * 6. Code, for everything else.
++ * So a PNG in a `tests` folder is an image, and a `Tests.dll` is binary.
++ */
++export function fileKind(path: string, binary = false): FileKind {
++  const ext = extensionOf(path)
++  if (IMAGE_EXTENSIONS.has(ext)) return 'images'
++  if (binary || BINARY_EXTENSIONS.has(ext)) return 'binary'
+   if (DOCS.test(path)) return 'docs'
+   if (TESTS.test(path)) return 'tests'
+   if (CONFIG_DIR.test(path) || CONFIG_EXT.test(path) || CONFIG_NAME.test(path)) return 'config'
+   return 'code'
+ }
++
++/** How many files each kind has. Every kind is a key, so a kind with no file has 0. */
++export function countKinds(files: { path: string; binary?: boolean }[]): Record<FileKind, number> {
++  const counts: Record<FileKind, number> = { code: 0, tests: 0, config: 0, docs: 0, images: 0, binary: 0 }
++  for (const f of files) counts[fileKind(f.path, f.binary)]++
++  return counts
++}
++
++/**
++ * The options that the Types filter shows, in the fixed order of FILE_KINDS.
++ * An option shows when it has files. An option that is on shows even when it has none, so the reader can see why the list is empty and turn it off.
++ * When the result is empty, the Types filter does not show at all.
++ */
++export function visibleKinds(counts: Record<FileKind, number>, selected: ReadonlySet<FileKind>): { id: FileKind; label: string; count: number }[] {
++  return FILE_KINDS.filter((k) => counts[k.id] > 0 || selected.has(k.id)).map((k) => ({ ...k, count: counts[k.id] }))
++}
+diff --git a/tests/e2e/phase4.spec.ts b/tests/e2e/phase4.spec.ts
+index 4844b94..47e348d 100644
+--- a/tests/e2e/phase4.spec.ts
++++ b/tests/e2e/phase4.spec.ts
+@@ -100,7 +100,14 @@ const base = { 'src/a.txt': 'one\ntwo\nthree\n', 'ws.txt': 'x\n  y\nz\n', 'img.b
+ test('shows files with git line numbers, binary and spaced paths, and the noise levels', async () => {
+   const s = setup(
+     {
+-      mr1: { 'src/a.txt': 'one\nTWO\nthree\nfour\n', 'with space/new file.txt': 'hello\n', 'img.bin': Buffer.from([0, 9, 9]), 'ws.txt': 'x\ny\nz\n' }
++      mr1: {
++        'src/a.txt': 'one\nTWO\nthree\nfour\n',
++        'with space/new file.txt': 'hello\n',
++        'img.bin': Buffer.from([0, 9, 9]),
++        'ws.txt': 'x\ny\nz\n',
++        'assets/logo.png': Buffer.from([137, 80, 78, 71, 0, 1]),
++        'assets/icon.svg': '<svg>\n</svg>\n'
++      }
+     },
+     base
+   )
+@@ -124,6 +131,28 @@ test('shows files with git line numbers, binary and spaced paths, and the noise
+   // binary: no lines
+   await page.getByTestId('file-img.bin').click()
+   await expect(page.getByText('Binary file, no text diff.')).toBeVisible()
++  // an image that git flags as binary shows the same note, and an SVG is text, so it shows its lines
++  await page.getByTestId('file-assets/logo.png').click()
++  await expect(page.getByText('Binary file, no text diff.')).toBeVisible()
++  await page.getByTestId('file-assets/icon.svg').click()
++  await expect(page.locator('table.diff tr.add td.code').first()).toHaveText('<svg>')
++  // the Types filter shows only the types that have files: Code, Tests and Config have none here
++  await expect(page.getByTestId('kind-images')).toContainText('2')
++  await expect(page.getByTestId('kind-binary')).toContainText('1')
++  await expect(page.getByTestId('kind-docs')).toContainText('2')
++  for (const none of ['code', 'tests', 'config']) await expect(page.getByTestId('kind-' + none)).toHaveCount(0)
++  await page.getByTestId('kind-images').click()
++  await expect(page.getByTestId('file-assets/logo.png')).toBeVisible()
++  await expect(page.getByTestId('file-assets/icon.svg')).toBeVisible()
++  await expect(page.getByTestId('file-img.bin')).toHaveCount(0)
++  await expect(page.getByTestId('file-src/a.txt')).toHaveCount(0)
++  await page.getByTestId('kind-images').click()
++  await page.getByTestId('kind-binary').click()
++  await expect(page.getByTestId('file-img.bin')).toBeVisible()
++  await expect(page.getByTestId('file-assets/logo.png')).toHaveCount(0)
++  await page.getByTestId('kind-binary').click()
++  await expect(page.getByTestId('file-src/a.txt')).toBeVisible()
++  await page.getByTestId('file-img.bin').click()
+   // "Everything" shows the whitespace-only file
+   await page.getByRole('button', { name: 'Everything' }).click()
+   await expect(page.getByTestId('file-ws.txt')).toBeVisible()
+diff --git a/tests/file-kinds.test.ts b/tests/file-kinds.test.ts
+index b3b67ac..112904c 100644
+--- a/tests/file-kinds.test.ts
++++ b/tests/file-kinds.test.ts
+@@ -1,5 +1,5 @@
+ import { describe, expect, it } from 'vitest'
+-import { fileKind } from '../src/shared/file-kinds'
++import { countKinds, extensionOf, fileKind, FILE_KINDS, visibleKinds, type FileKind } from '../src/shared/file-kinds'
+ 
+ describe('fileKind', () => {
+   it.each([
+@@ -22,4 +22,186 @@ describe('fileKind', () => {
+   ])('%s is %s', (path, kind) => {
+     expect(fileKind(path)).toBe(kind)
+   })
++
++  it.each([
++    ['logo.png', 'images'],
++    ['assets/photo.jpg', 'images'],
++    ['assets/photo.jpeg', 'images'],
++    ['a/b/anim.gif', 'images'],
++    ['a/pic.webp', 'images'],
++    ['a/pic.bmp', 'images'],
++    ['favicon.ico', 'images'],
++    ['icon.svg', 'images'],
++    ['a/pic.avif', 'images'],
++    ['a/scan.tiff', 'images'],
++    ['a/scan.tif', 'images'],
++    ['a/phone.heic', 'images']
++  ])('the image %s is %s', (path, kind) => {
++    expect(fileKind(path)).toBe(kind)
++  })
++
++  it.each([
++    ['dist/app.zip', 'binary'],
++    ['lib/Api.dll', 'binary'],
++    ['tools/setup.exe', 'binary'],
++    ['docs/manual.pdf', 'binary'],
++    ['fonts/Plex.woff2', 'binary'],
++    ['fonts/Plex.ttf', 'binary'],
++    ['libs/app.jar', 'binary'],
++    ['wasm/engine.wasm', 'binary'],
++    ['obj/Api.pdb', 'binary'],
++    ['build/Main.class', 'binary'],
++    ['backup.tar.gz', 'binary'],
++    ['bun.lockb', 'binary']
++  ])('the binary file %s is %s', (path, kind) => {
++    expect(fileKind(path)).toBe(kind)
++  })
++
++  it('treats a file that git flags as binary as Binary, whatever its name', () => {
++    expect(fileKind('data/blob', true)).toBe('binary')
++    expect(fileKind('src/a.ts', true)).toBe('binary')
++    expect(fileKind('README.md', true)).toBe('binary')
++    expect(fileKind('tests/e2e/a.spec.ts', true)).toBe('binary')
++  })
++
++  it('never makes an image Binary, even when git flags it', () => {
++    expect(fileKind('logo.png', true)).toBe('images')
++    expect(fileKind('logo.png', false)).toBe('images')
++    expect(fileKind('icon.svg', true)).toBe('images')
++  })
++
++  it('puts an image before the tests, config and docs rules', () => {
++    expect(fileKind('tests/fixtures/shot.png')).toBe('images')
++    expect(fileKind('.github/banner.png')).toBe('images')
++    expect(fileKind('docs/images/diff.png')).toBe('images')
++    expect(fileKind('src/a.test.svg')).toBe('images')
++  })
++
++  it('puts a binary file before the tests, config and docs rules', () => {
++    expect(fileKind('tests/Api.Tests.dll')).toBe('binary')
++    expect(fileKind('.github/tool.exe')).toBe('binary')
++    expect(fileKind('docs/guide.pdf')).toBe('binary')
++  })
++
++  it('ignores the case of an extension', () => {
++    expect(fileKind('LOGO.PNG')).toBe('images')
++    expect(fileKind('Photo.JpEg')).toBe('images')
++    expect(fileKind('Setup.EXE')).toBe('binary')
++    expect(fileKind('README.MD')).toBe('docs')
++  })
++
++  it('uses the last extension of a name with several dots', () => {
++    expect(fileKind('dist/app.min.js')).toBe('code')
++    expect(fileKind('src/types.d.ts')).toBe('code')
++    expect(fileKind('src/app.test.min.js')).toBe('code')
++    expect(fileKind('pic.png.md')).toBe('docs')
++    expect(fileKind('pic.svg.png')).toBe('images')
++    expect(fileKind('archive.tar.gz')).toBe('binary')
++    expect(fileKind('map.js.map')).toBe('code')
++  })
++
++  it('handles a name with no extension', () => {
++    expect(fileKind('Dockerfile')).toBe('config')
++    expect(fileKind('Makefile')).toBe('config')
++    expect(fileKind('bin/run')).toBe('code')
++    expect(fileKind('LICENSE')).toBe('code')
++    expect(fileKind('png')).toBe('code')
++  })
++
++  it('handles a dotfile, which has no extension', () => {
++    expect(fileKind('.png')).toBe('config')
++    expect(fileKind('.gitignore')).toBe('config')
++    expect(fileKind('src/.env')).toBe('config')
++    expect(fileKind('.DS_Store', true)).toBe('binary')
++  })
++
++  it('handles a name that ends in a dot, and a dot in a folder name', () => {
++    expect(fileKind('weird.')).toBe('code')
++    expect(fileKind('v1.2.png/readme')).toBe('code')
++    expect(fileKind('v1.zip/readme.md')).toBe('docs')
++  })
++
++  it('handles Windows separators', () => {
++    expect(fileKind('assets\\logo.png')).toBe('images')
++    expect(fileKind('bin\\tool.exe')).toBe('binary')
++  })
++
++  it('keeps svg as an image, because the app shows its text diff', () => {
++    expect(fileKind('logo.svg', false)).toBe('images')
++  })
++})
++
++describe('extensionOf', () => {
++  it.each([
++    ['a.png', 'png'],
++    ['a/b.c/d.TXT', 'txt'],
++    ['a.tar.gz', 'gz'],
++    ['noext', ''],
++    ['.gitignore', ''],
++    ['dir.d/noext', ''],
++    ['end.', '']
++  ])('%s has the extension "%s"', (path, ext) => {
++    expect(extensionOf(path)).toBe(ext)
++  })
++})
++
++describe('countKinds', () => {
++  it('counts each file once, and gives every kind a number', () => {
++    const counts = countKinds([
++      { path: 'a.ts' },
++      { path: 'b.ts' },
++      { path: 'logo.png', binary: true },
++      { path: 'x.zip', binary: true },
++      { path: 'blob', binary: true }
++    ])
++    expect(counts).toEqual({ code: 2, tests: 0, config: 0, docs: 0, images: 1, binary: 2 })
++  })
++
++  it('counts nothing for no files', () => {
++    expect(Object.values(countKinds([])).every((n) => n === 0)).toBe(true)
++  })
++})
++
++describe('visibleKinds', () => {
++  const none = new Set<FileKind>()
++  const ids = (counts: Parameters<typeof visibleKinds>[0], selected = none): string[] => visibleKinds(counts, selected).map((k) => k.id)
++
++  it('shows only the options that have files, in the fixed order, with their counts', () => {
++    const counts = { code: 3, tests: 0, config: 0, docs: 1, images: 2, binary: 0 }
++    expect(visibleKinds(counts, none)).toEqual([
++      { id: 'code', label: 'Code', count: 3 },
++      { id: 'docs', label: 'Docs', count: 1 },
++      { id: 'images', label: 'Images', count: 2 }
++    ])
++  })
++
++  it('also hides Code, Tests, Config and Docs when they have no file', () => {
++    expect(ids({ code: 0, tests: 0, config: 0, docs: 0, images: 1, binary: 1 })).toEqual(['images', 'binary'])
++  })
++
++  it('shows no option when no file has a kind, so the group is not shown', () => {
++    expect(visibleKinds(countKinds([]), none)).toEqual([])
++  })
++
++  it('shows every option when every kind has files', () => {
++    expect(ids({ code: 1, tests: 1, config: 1, docs: 1, images: 1, binary: 1 })).toEqual(FILE_KINDS.map((k) => k.id))
++  })
++
++  it('keeps an option that is on when its count falls to 0, so the reader can turn it off', () => {
++    const counts = { code: 2, tests: 0, config: 0, docs: 0, images: 0, binary: 0 }
++    expect(visibleKinds(counts, new Set<FileKind>(['images']))).toEqual([
++      { id: 'code', label: 'Code', count: 2 },
++      { id: 'images', label: 'Images', count: 0 }
++    ])
++  })
++
++  it('keeps the group when the only option that is on has no file', () => {
++    const counts = countKinds([])
++    expect(ids(counts, new Set<FileKind>(['binary']))).toEqual(['binary'])
++  })
++
++  it('hides the option again after it is turned off', () => {
++    const counts = { code: 2, tests: 0, config: 0, docs: 0, images: 0, binary: 0 }
++    expect(ids(counts, new Set<FileKind>())).toEqual(['code'])
++  })
+ })

@@ -3,6 +3,8 @@ import type { PendingComment } from '../src/shared/comments'
 import type { LineObj } from '../src/shared/diff'
 import type { Thread } from '../src/shared/provider'
 import {
+  MAX_AI_SECTIONS,
+  MAX_SECTIONS_TOTAL,
   REST_ID,
   REST_TITLE,
   acceptSection,
@@ -29,6 +31,13 @@ import {
   viewedId,
   waitingFor,
   withRest,
+  collapseOnAcceptChange,
+  isCollapsed,
+  parseCollapsed,
+  sectionState,
+  setAllCollapsed,
+  discussionOf,
+  snippetRows,
   type Accepted,
   type FileFacts,
   type SectionFacts,
@@ -192,18 +201,50 @@ describe('the checks that stay', () => {
     expect(p).toContain("section 'hook': the text must be one paragraph, with no blank line")
     expect(p).toContain("section 'empty' has an empty text")
   })
-  it('the name of the section that the app adds is kept, and the page has at most 12 sections', () => {
+  it('the name of the section that the app adds is kept', () => {
     const d = good()
     d.sections[0].title = 'Everything else'
     d.sections[1].id = REST_ID
     const p = check(d).problems
     expect(p).toContain(`section 'hook': the title "${REST_TITLE}" is kept for the section that the app adds. Leave it out`)
     expect(p).toContain(`section '${REST_ID}': the id is kept for the section that the app adds. Leave "${REST_TITLE}" out`)
-    const many = good()
-    many.sections = Array.from({ length: 13 }, (_, i) => ({ ...good().sections[0], id: `s${i}`, title: `Idea ${i}` }))
-    expect(check(many).problems).toEqual([
-      'The page has 13 sections, and the limit is 12. Keep only what a reviewer must think about. The rest goes to "Everything else"'
+  })
+  const sectionsOf = (n: number): Record<string, any> => ({
+    ...good(),
+    sections: Array.from({ length: n }, (_, i) => ({ ...good().sections[0], id: `s${i}`, title: `Idea ${i + 1}` }))
+  })
+  it('a page never has more than 10 sections with Everything else, so the tool may write 9', () => {
+    expect([MAX_SECTIONS_TOTAL, MAX_AI_SECTIONS]).toEqual([10, 9])
+    const nine = check(sectionsOf(MAX_AI_SECTIONS))
+    expect(nine.problems).toEqual([])
+    expect(nine.document?.sections).toHaveLength(9)
+    // with the section that the app adds, the page has 10 and no more
+    const page = withRest(nine.document!, restOf(nine.document!, facts()))
+    expect(page.sections.length).toBeLessThanOrEqual(MAX_SECTIONS_TOTAL)
+  })
+  it('10 sections of the tool fail, and the message names the number and says to merge or drop', () => {
+    const ten = check(sectionsOf(MAX_AI_SECTIONS + 1))
+    expect(ten.document).toBeNull()
+    expect(ten.problems).toEqual([
+      'The page has 10 sections, and the limit is 9, because the app adds "Everything else" as the 10th. Merge related points into one section, or drop the least important ones. What you drop goes to "Everything else"'
     ])
+  })
+  it('a page that is too long is offered cut to its first 9 sections, with a note, for the last try only', () => {
+    const r = check(sectionsOf(12))
+    expect(r.document).toBeNull() // the checker never accepts it
+    expect(r.overflow?.sections.map((s) => s.title)).toEqual(Array.from({ length: 9 }, (_, i) => `Idea ${i + 1}`))
+    expect(r.overflow?.restText).toContain('The tool wrote 12 points, and the page keeps the first 9. The changes of the others are in Everything else.')
+    expect(check(sectionsOf(9)).overflow).toBeUndefined()
+    // another problem in the first 9 sections means there is nothing to offer
+    const bad = sectionsOf(11)
+    bad.sections[2].text = ''
+    expect(check(bad).overflow).toBeUndefined()
+  })
+  it('a saved page with too many sections fails the check, so it is written again', () => {
+    const saved = JSON.stringify(sectionsOf(MAX_AI_SECTIONS + 2))
+    const r = checkSections(saved, facts())
+    expect(r.document).toBeNull()
+    expect(r.problems[0]).toMatch(/^The page has 11 sections, and the limit is 9/)
   })
 })
 
@@ -221,13 +262,23 @@ describe('Everything else, computed from the real diffs', () => {
     const d = good()
     d.sections[1].snippets.splice(1, 1) // the change at line 40 of A.cs is no longer shown
     const rest = restOf(check(d).document!, facts())
-    expect(rest.find((e) => e.path === 'src/A.cs')).toEqual({ mr: 'backend/x!1', path: 'src/A.cs', whole: false, runs: [{ new: [40], old: [] }] })
+    expect(rest.find((e) => e.path === 'src/A.cs')).toMatchObject({
+      mr: 'backend/x!1',
+      path: 'src/A.cs',
+      whole: false,
+      runs: [{ new: [40], old: [] }],
+      keys: ['+40']
+    })
     expect(rest.some((e) => e.path === 'src/Gone.cs')).toBe(false) // shown in full
   })
   it('counts a change as shown when a snippet has one of its lines, on the side of the snippet', () => {
     const d = good()
-    d.sections[1].snippets[0].lines = [11, 11] // the run at lines 10 and 11
+    d.sections[1].snippets[0].lines = [10, 11] // the whole run at lines 10 and 11
     expect(restOf(check(d).document!, facts()).some((e) => e.path === 'src/A.cs')).toBe(false)
+    // a snippet that picks only line 11 leaves line 10 of the same run to Everything else, because only the picked lines are drawn
+    const part = good()
+    part.sections[1].snippets[0].lines = [11, 11]
+    expect(restOf(check(part).document!, facts()).find((e) => e.path === 'src/A.cs')).toMatchObject({ whole: false, keys: ['+10'] })
     const e = good()
     e.sections[1].snippets[2] = { mr: 'backend/x!1', path: 'src/Gone.cs', lines: [5, 5] } // new side: a removal is not shown by it
     // the snippet is refused by the check, so test the computation on the document directly
@@ -301,8 +352,15 @@ describe('the retry prompt and the built facts', () => {
     ])
     const a = f.files.get(fileKey('r!1', 'a.ts'))!
     expect(a.runs).toEqual([
-      { new: [2], old: [2] },
-      { new: [4], old: [] }
+      {
+        new: [2],
+        old: [2],
+        lines: [
+          { t: '-', n: null, o: 2 },
+          { t: '+', n: 2, o: null }
+        ]
+      },
+      { new: [4], old: [], lines: [{ t: '+', n: 4, o: null }] }
     ])
     expect([...a.rawNew]).toEqual([2, 4])
     expect([...a.rawOld]).toEqual([2])
@@ -533,5 +591,140 @@ describe('the thread of a section', () => {
     expect(threadTarget(s, () => true)).toBe('r!2')
     expect(threadTarget(s, (k) => k === 'r!1')).toBe('r!1')
     expect(threadTarget(s, () => false)).toBeNull()
+  })
+})
+
+describe('collapse', () => {
+  it('is open by default, and closed by default only for a section that is accepted', () => {
+    expect(isCollapsed({}, 'a', false)).toBe(false)
+    expect(isCollapsed({}, 'a', true)).toBe(true)
+    expect(isCollapsed({ a: false }, 'a', true)).toBe(false) // the reader opened it after the Accept
+    expect(isCollapsed({ a: true }, 'a', false)).toBe(true)
+  })
+  it('Accept collapses a section and un-accept opens it, and a section that did not change keeps its state', () => {
+    const none = new Set<string>()
+    const a = new Set(['a'])
+    expect(collapseOnAcceptChange(none, a, {})).toEqual({ a: true })
+    expect(collapseOnAcceptChange(a, none, { a: true })).toEqual({ a: false })
+    // the reader opened a after the Accept: nothing changes while a stays accepted
+    const opened = { a: false }
+    expect(collapseOnAcceptChange(a, a, opened)).toBe(opened)
+    // a change in the tree that accepts one section and un-accepts another does both
+    expect(collapseOnAcceptChange(new Set(['a']), new Set(['b']), { a: true, b: false })).toEqual({ a: false, b: true })
+  })
+  it('Collapse all and Expand all set every section, and a bad saved state reads as empty', () => {
+    expect(setAllCollapsed(['a', 'b'], true)).toEqual({ a: true, b: true })
+    expect(parseCollapsed('{"a":true,"b":"x","c":false}')).toEqual({ a: true, c: false })
+    expect(parseCollapsed('[1]')).toEqual({})
+    expect(parseCollapsed('not json')).toEqual({})
+    expect(parseCollapsed(null)).toEqual({})
+  })
+  it('names the state of a section for the index: accepted, waiting for another section, or not accepted', () => {
+    const doc: SectionsDocument = {
+      summary: '',
+      sections: [
+        { id: 'a', title: 'A', text: '', snippets: [{ mr: 'r!1', path: 'x.ts', lines: [1, 1] }] },
+        { id: 'b', title: 'B', text: '', snippets: [{ mr: 'r!1', path: 'x.ts', lines: [9, 9] }] }
+      ]
+    }
+    const x = viewedId('r!1', 'x.ts')
+    expect(sectionState(doc, {}, new Set(), 'a')).toBe('open')
+    const first = acceptSection(doc, {}, 'a')
+    expect(sectionState(doc, first.accepted, new Set(first.mark), 'a')).toBe('waiting') // x.ts waits for B
+    const both = acceptSection(doc, first.accepted, 'b')
+    expect(sectionState(doc, both.accepted, new Set([x]), 'a')).toBe('accepted')
+  })
+  it('counts the open threads and the drafts of a section, so a collapsed section hides nothing', () => {
+    const thread = (body: string, resolved: boolean): Thread =>
+      ({ id: body, resolvable: true, resolved, url: 'u', position: null, notes: [{ id: 1, author: 'ann', body, createdAt: '2026-01-01T00:00:00Z' }] }) as Thread
+    const mine = sectionCommentBody('Tokens', 'x')
+    const draft = { id: 'd', mr: 'r!1', path: null, body: sectionCommentBody('Tokens', 'y') } as PendingComment
+    expect(discussionOf('Tokens', [{ key: 'r!1', threads: [thread(mine, false), thread(mine + ' 2', true), thread('plain', false)] }], [draft])).toEqual({
+      open: 1,
+      total: 2,
+      drafts: 1
+    })
+  })
+})
+
+describe('the compact rows of a snippet', () => {
+  const L = (t: LineObj['t'], o: number | null, n: number | null, x = ''): LineObj => ({ t, o, n, x })
+  const ctx = (a: number, b: number): LineObj[] => Array.from({ length: b - a + 1 }, (_, i) => L(' ', a + i, a + i))
+  const shape = (rows: ReturnType<typeof snippetRows>[number]): string[] =>
+    rows.map((r) => (r.kind === 'line' ? r.line.t + (r.line.n ?? r.line.o) : `fold${r.lines.length}`))
+
+  it('shows each change with one line of context, and folds the long run of unchanged lines between two changes', () => {
+    const h = [...ctx(1, 3), L('+', null, 4), ...ctx(5, 12), L('+', null, 13), ...ctx(14, 16)]
+    const [g] = snippetRows([h], { lines: [1, 20] })
+    expect(shape(g)).toEqual([' 3', '+4', ' 5', 'fold6', ' 12', '+13', ' 14'])
+    // two changes with a short gap show the gap, because a fold of one line saves nothing
+    const close = [...ctx(1, 2), L('+', null, 3), ...ctx(4, 6), L('+', null, 7), ...ctx(8, 9)]
+    expect(shape(snippetRows([close], { lines: [1, 20] })[0])).toEqual([' 2', '+3', ' 4', ' 5', ' 6', '+7', ' 8'])
+  })
+  it('has no fold when the range holds only changes, keeps a replaced block together, and reads the old side for removed code', () => {
+    const h = [L('-', 4, null), L('-', 5, null), L('+', null, 4), L('+', null, 5), L('+', null, 6)]
+    expect(shape(snippetRows([h], { lines: [4, 6] })[0])).toEqual(['-4', '-5', '+4', '+5', '+6'])
+    // a range of the old side picks the removed row only, and the new lines that replace it stay with their own range
+    expect(shape(snippetRows([h], { lines: [5, 5], side: 'old' })[0])).toEqual(['-5'])
+    expect(snippetRows([h], { lines: [50, 60] })).toEqual([])
+  })
+  it('makes one group for each hunk', () => {
+    const a = [...ctx(1, 2), L('+', null, 3)]
+    const b = [L('+', null, 40), ...ctx(41, 42)]
+    expect(snippetRows([a, b], { lines: [1, 100] })).toHaveLength(2)
+  })
+  it('refuses a range that is far wider than the changes it holds, and names the lines that changed', () => {
+    const d = good()
+    d.sections[1].snippets[0].lines = [10, 40] // holds three changed lines in 31
+    expect(check(d).problems).toEqual([
+      "section 'api': lines 10-40 of src/A.cs are too wide: only 10-11, 40 changed. Use a tight range, the changed lines and at most one or two lines around them, or two small snippets"
+    ])
+    const ok = good()
+    ok.sections[1].snippets[0].lines = [8, 14] // a short range is never too wide
+    expect(check(ok).problems).toEqual([])
+  })
+})
+
+describe('mirror files', () => {
+  const withMirror = (): Record<string, any> => {
+    const d = good()
+    d.sections[1].mirrors = [{ mr: 'backend/x!1', path: 'src/A.Tests.cs' }]
+    return d
+  }
+  it('are allowed with no snippet, when the file is in the review', () => {
+    const r = check(withMirror())
+    expect(r.problems).toEqual([])
+    expect(r.document?.sections[1].mirrors).toEqual([{ mr: 'backend/x!1', path: 'src/A.Tests.cs' }])
+    expect(check(good()).document?.sections[1]).not.toHaveProperty('mirrors')
+  })
+  it('are refused for a file or a change that is not in the review, and in too great a number', () => {
+    const d = withMirror()
+    d.sections[1].mirrors.push({ mr: 'backend/x!1', path: 'src/Nope.cs' }, { mr: 'backend/x!9', path: 'src/A.cs' })
+    expect(check(d).problems).toEqual([
+      "section 'api': the mirror src/Nope.cs is not a changed file of backend/x!1. Use a path as the .diff files name it",
+      "section 'api': the mirror src/A.cs names backend/x!9, which is not a change of this review. The keys are backend/x!1, web/y!2"
+    ])
+    const many = withMirror()
+    many.sections[1].mirrors = Array.from({ length: 31 }, () => ({ mr: 'backend/x!1', path: 'src/A.cs' }))
+    expect(check(many).problems).toEqual(["section 'api': it lists 31 mirror files, and the limit is 30"])
+    const bad = withMirror()
+    bad.sections[1].mirrors = 'x'
+    expect(check(bad).problems[0]).toBe('The answer is not a valid sections document: section 2: mirrors is not a list.')
+  })
+  it('leave Everything else, count in the sections, and are accepted with the section', () => {
+    const doc = check(withMirror()).document!
+    expect(restOf(doc, facts()).some((e) => e.path === 'src/A.Tests.cs')).toBe(false)
+    expect(restOf(check(good()).document!, facts()).some((e) => e.path === 'src/A.Tests.cs')).toBe(true)
+    expect(coverageOf(doc, facts(), restOf(doc, facts()))).toMatchObject({ inSections: 4 }) // hook.ts, A.cs, Gone.cs and the mirror
+    const r = acceptSection(doc, {}, 'api')
+    expect(r.mark).toContain(viewedId('backend/x!1', 'src/A.Tests.cs'))
+    expect(sectionProgress(doc.sections[1], new Set(r.mark))).toEqual({ viewed: 3, total: 3 })
+  })
+  it('make the saved page out of date when the version of the rules changed', () => {
+    const now = { version: 2, issues: [], heads: { 'r!1': 'a' } }
+    expect(basisProblems(now, now)).toEqual([])
+    expect(basisProblems({ issues: [], heads: { 'r!1': 'a' } }, now)).toEqual([
+      'The page was written with an older version of the rules, so it is written again.'
+    ])
   })
 })

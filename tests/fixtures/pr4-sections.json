@@ -1,0 +1,50 @@
+{
+  "summary": "The Types filter in the Diff tab now has Images and Binary. Each file gets exactly one type, and the filter shows only the types that have files. A type that is switched on stays visible at 0 files, so the reader can switch it off.",
+  "sections": [
+    {
+      "id": "classification-order",
+      "title": "One type per file: Images, then Binary, then the old rules",
+      "text": "`fileKind` now takes the binary flag from git. An image extension wins first, so an image is never Binary even when git flags it. Then `binary || BINARY_EXTENSIONS` decides Binary, and this check runs before Docs, Tests and Config. So `docs/guide.pdf` and `Tests.dll` are Binary. Check that the old rules cannot be reached by a file that should now be Binary. Check that the binary extension list holds nothing that is often text. `lockb`, `db`, `img`, `bin`, `a`, `o` and `node` are worth a look. A file that git flags as binary but with a text-like name, such as `README.md`, also becomes Binary.",
+      "snippets": [
+        { "mr": "code-diff-app!4", "path": "src/shared/file-kinds.ts", "lines": [76, 83] },
+        { "mr": "code-diff-app!4", "path": "src/shared/file-kinds.ts", "lines": [43, 57] }
+      ]
+    },
+    {
+      "id": "extension-parsing",
+      "title": "How the extension is taken from a path",
+      "text": "`extensionOf` cuts the name after the last `/` or `\\`, then takes the text after the last dot, in lower case. A leading dot (`dot <= 0`) or a trailing dot gives no extension. Check names such as `.png` (a dotfile, so not an image), `weird.` and a dot in a folder name. The code only checks the file name, so these are handled. The Image and Binary regexes are not used here, but the old Docs, Tests and Config regexes still match on the whole path.",
+      "snippets": [{ "mr": "code-diff-app!4", "path": "src/shared/file-kinds.ts", "lines": [60, 64] }]
+    },
+    {
+      "id": "visible-options",
+      "title": "Only options with files show, and an option that is on stays",
+      "text": "`countKinds` counts every kind, with 0 for kinds that have no file. `visibleKinds` keeps a kind when its count is above 0 or when it is selected, and it keeps the fixed order of `FILE_KINDS`. The toolbar hides the whole group when the list is empty. Check that a selected kind at 0 files cannot trap the reader. The count shows 0, and one click turns the option off. Also check the empty case with nothing selected, which still means all files.",
+      "snippets": [
+        { "mr": "code-diff-app!4", "path": "src/shared/file-kinds.ts", "lines": [87, 91] },
+        { "mr": "code-diff-app!4", "path": "src/shared/file-kinds.ts", "lines": [98, 99] }
+      ]
+    },
+    {
+      "id": "difftab-wiring",
+      "title": "Counts and filter in the Diff tab use the binary flag",
+      "text": "The tree filter now passes `e.file.binary` to `fileKind`. The counts come from `shown`, the files after the View and Noise settings, and not from the filtered list. So the Files, Comments, Hide viewed and name filters do not change the counts. The memo depends on `[shown, kinds]`. Check that the filter and the counts classify a file the same way, because both use the same flag. The old `kindCount` is gone.",
+      "snippets": [
+        { "mr": "code-diff-app!4", "path": "src/renderer/features/DiffTab.tsx", "lines": [291, 291] },
+        { "mr": "code-diff-app!4", "path": "src/renderer/features/DiffTab.tsx", "lines": [307, 307] },
+        { "mr": "code-diff-app!4", "path": "src/renderer/features/DiffTab.tsx", "lines": [675, 679] }
+      ]
+    },
+    {
+      "id": "tests",
+      "title": "Tests: classifier order, edge names, visible options and the e2e flow",
+      "text": "The unit tests cover the order rules (an image in `tests/`, `Tests.dll`, a flagged image), case, double extensions, dotfiles, trailing dots and Windows separators. They also cover the visible-options rule, including a selected option with 0 files. The e2e test adds a PNG and an SVG and checks the counts, that Code, Tests and Config are absent, and the narrowing. One case that does not look covered: a user turns on an option and the files change so that the option falls to 0 while other options stay. The unit test covers this at the function level only. The last test, 'hides the option again after it is turned off', passes an empty set and so does not show the turn-off step itself.",
+      "snippets": [
+        { "mr": "code-diff-app!4", "path": "tests/file-kinds.test.ts", "lines": [60, 78] },
+        { "mr": "code-diff-app!4", "path": "tests/file-kinds.test.ts", "lines": [190, 206] },
+        { "mr": "code-diff-app!4", "path": "tests/e2e/phase4.spec.ts", "lines": [139, 155] }
+      ]
+    }
+  ],
+  "restText": "Docs text in FEATURES.md and TECH-STACK.md, the setup lines of the e2e fixtures, and the list of image extensions."
+}

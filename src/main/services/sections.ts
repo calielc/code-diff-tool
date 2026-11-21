@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import {
   SECTIONS_INSTRUCTIONS,
   SECTIONS_PROMPT,
+  SECTIONS_PROMPT_VERSION,
   basisProblems,
   checkSections,
   giveUpMessage,
@@ -65,6 +66,7 @@ async function readJson<T>(path: string): Promise<T | null> {
 /** What the page is written for now: the issues and the head commit of each change. */
 const basisOf = (session: Session): SectionsBasis => ({
   issues: session.result.issues.map((t) => t.key),
+  version: SECTIONS_PROMPT_VERSION,
   heads: Object.fromEntries(session.result.mrs.map((m) => [m.key, m.snapshot.info.diffRefs.head]))
 })
 
@@ -158,14 +160,17 @@ async function run(session: Session): Promise<void> {
         clearTimeout(timer)
       }
       const check = checkSections(text, facts)
-      if (check.document) {
-        await atomicWrite(join(dir, 'sections.json'), JSON.stringify(check.document))
+      // A page that is too long after the last try is cut to its first sections, which are in the order of their importance. The note in
+      // restText says so, and the changes of the others fall to Everything else. Any other problem still fails the run.
+      const page = check.document ?? (attempt === SECTIONS_TRIES ? check.overflow : undefined)
+      if (page) {
+        await atomicWrite(join(dir, 'sections.json'), JSON.stringify(page))
         await atomicWrite(join(dir, 'sections-basis.json'), JSON.stringify(basisOf(session)))
         const current = sessions.get(slug)
         running.delete(slug)
         // The review was built again during the run: check the new page against the new changes
         if (current && current !== session) return void (await loadSections(current))
-        return void set(slug, { pending: false, document: check.document, problems: [], error: null })
+        return void set(slug, { pending: false, document: page, problems: [], error: null })
       }
       if (attempt === SECTIONS_TRIES) throw new Error(giveUpMessage(check.problems))
       previous = text

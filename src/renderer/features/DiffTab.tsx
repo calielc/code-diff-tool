@@ -255,6 +255,8 @@ export function DiffTab(props: { visible?: (mrKey: string) => boolean }): React.
     }
   }
   const [submitOpen, setSubmitOpen] = useState(false)
+  // The place in the left column where the Summarised view draws its index
+  const [indexHost, setIndexHost] = useState<HTMLDivElement | null>(null)
 
   useEffect(() => save('codediff:view', view), [view])
   useEffect(() => save('codediff:noise', level), [level])
@@ -739,43 +741,53 @@ export function DiffTab(props: { visible?: (mrKey: string) => boolean }): React.
         )}
       </div>
       <div ref={layoutRef} className={dragging ? 'difflayout dragging' : 'difflayout'} style={{ '--tree-width': `${treeWidth}px` } as React.CSSProperties}>
-        <aside className="filetree" hidden={view === 'summarised'}>
-          <input aria-label="Filter files" placeholder="Filter files" value={filter} onChange={(e) => setFilter(e.target.value)} />
-          <div className="progress" title={`${doneCount} of ${shown.length} files viewed`}>
-            <div className="bar6">
-              <div style={{ width: `${shown.length ? Math.round((doneCount / shown.length) * 100) : 0}%` }} />
-            </div>
-            <span className="muted">
-              {doneCount} of {shown.length} viewed
-            </span>
-          </div>
-          <ul className="tree" data-testid="tree">
-            {tree.map((n) => row(n, 0))}
-          </ul>
-          {noise.length > 0 && (
-            <div className="noiseblock">
-              <button className="link" onClick={() => setNoiseOpen((o) => !o)}>
-                {noise.length} {noise.length === 1 ? 'file' : 'files'} hidden: noise only at this level
-              </button>
-              {noiseOpen && (
-                <ul>
-                  {noise.map((e) => (
-                    <li key={e.id} className="muted" title={e.file.path}>
-                      {e.file.path}
-                    </li>
-                  ))}
-                </ul>
+        <aside
+          className="filetree"
+          hidden={view === 'summarised' && !r.sections.document}
+          aria-label={view === 'summarised' ? 'The sections of the page' : undefined}
+        >
+          {view === 'summarised' ? (
+            <div ref={setIndexHost} className="indexhost" />
+          ) : (
+            <>
+              <input aria-label="Filter files" placeholder="Filter files" value={filter} onChange={(e) => setFilter(e.target.value)} />
+              <div className="progress" title={`${doneCount} of ${shown.length} files viewed`}>
+                <div className="bar6">
+                  <div style={{ width: `${shown.length ? Math.round((doneCount / shown.length) * 100) : 0}%` }} />
+                </div>
+                <span className="muted">
+                  {doneCount} of {shown.length} viewed
+                </span>
+              </div>
+              <ul className="tree" data-testid="tree">
+                {tree.map((n) => row(n, 0))}
+              </ul>
+              {noise.length > 0 && (
+                <div className="noiseblock">
+                  <button className="link" onClick={() => setNoiseOpen((o) => !o)}>
+                    {noise.length} {noise.length === 1 ? 'file' : 'files'} hidden: noise only at this level
+                  </button>
+                  {noiseOpen && (
+                    <ul>
+                      {noise.map((e) => (
+                        <li key={e.id} className="muted" title={e.file.path}>
+                          {e.file.path}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
               )}
-            </div>
+            </>
           )}
         </aside>
 
-        {view !== 'summarised' && (
+        {!(view === 'summarised' && !r.sections.document) && (
           <div
             className="splitter"
             role="separator"
             aria-orientation="vertical"
-            aria-label="Resize the file tree"
+            aria-label={view === 'summarised' ? 'Resize the index' : 'Resize the file tree'}
             aria-valuenow={treeWidth}
             aria-valuemin={200}
             aria-valuemax={Math.max(200, Math.floor(areaWidth * 0.6))}
@@ -795,6 +807,7 @@ export function DiffTab(props: { visible?: (mrKey: string) => boolean }): React.
                 <SectionsView
                   doc={r.sections.document}
                   level={level}
+                  indexHost={indexHost}
                   onOpen={(mr, path, line) => {
                     setView('mr')
                     r.requestOpen(mr, path, line)

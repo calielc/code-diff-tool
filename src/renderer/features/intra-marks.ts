@@ -26,19 +26,3 @@ export function intraMapOf(hunks: LineObj[][]): Map<LineObj, Seg[]> {
   }
   return out
 }
-
-/** The text of a line, with the changed characters of a modified line marked. */
-export function codeOf(marks: Map<LineObj, Seg[]>, l: LineObj): React.ReactNode {
-  const segs = marks.get(l)
-  return segs
-    ? segs.map((g, i) =>
-        g.changed ? (
-          <span key={i} className="chg">
-            {g.text}
-          </span>
-        ) : (
-          g.text
-        )
-      )
-    : l.x
-}

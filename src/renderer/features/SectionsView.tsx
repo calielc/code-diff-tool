@@ -26,7 +26,9 @@ import {
   type SnippetRef
 } from '@shared/sections'
 import { api } from '../api'
-import { codeOf, intraMapOf } from './intra-marks'
+import { Code } from '../highlight/Code'
+import { useFileHighlight, type FileHighlight } from '../highlight/useFileHighlight'
+import { intraMapOf } from './intra-marks'
 import { useReview } from './review-context'
 import { CommentForm, DraftCard, ThreadCard } from './ThreadViews'
 
@@ -39,7 +41,7 @@ const nameOf = (p: string): string => p.slice(p.lastIndexOf('/') + 1)
 const REST_ROWS = 60
 
 /** The rows of some pieces of a diff, with a gap mark between two pieces. */
-function PieceTable(props: { pieces: Piece[] }): React.JSX.Element {
+function PieceTable(props: { pieces: Piece[]; hl: FileHighlight }): React.JSX.Element {
   const marks = useMemo(() => intraMapOf(props.pieces), [props.pieces])
   return (
     <table className="diff snip">
@@ -55,7 +57,9 @@ function PieceTable(props: { pieces: Piece[] }): React.JSX.Element {
               <td className="ln">{l.o ?? ''}</td>
               <td className="ln">{l.n ?? ''}</td>
               <td className="sign">{l.t === '+' ? '+' : l.t === '-' ? '−' : ''}</td>
-              <td className="code">{codeOf(marks, l)}</td>
+              <td className="code">
+                <Code text={l.x} tokens={props.hl.line(l)} segs={marks.get(l)} />
+              </td>
             </tr>
           ))
         ])}
@@ -64,12 +68,28 @@ function PieceTable(props: { pieces: Piece[] }): React.JSX.Element {
   )
 }
 
+/** The excerpt of a snippet, with the syntax colours of its file. It exists only for a file of the review, so the hook always has a file. */
+function SnippetCode(props: { file: FileObject; snippet: SnippetRef; level: LevelName }): React.JSX.Element {
+  const { file, snippet: sn } = props
+  const excerpt = useMemo(() => excerptOf(file.levels[props.level].hunks, sn), [file, props.level, sn])
+  const hl = useFileHighlight(file, file.levels[props.level])
+  return (
+    <>
+      {excerpt.pieces.length === 0 ? (
+        <p className="note">No line of this range changed at this noise level. It holds noise only.</p>
+      ) : (
+        <PieceTable pieces={excerpt.pieces} hl={hl} />
+      )}
+      {excerpt.truncated && <p className="note">The excerpt is cut short. Open the file to read the rest.</p>}
+    </>
+  )
+}
+
 /** The code of one snippet: small excerpts of the diff of one file, at the noise level of the toolbar. */
 function Snippet(props: { snippet: SnippetRef; level: LevelName; onOpen: OpenFile }): React.JSX.Element {
   const r = useReview()
   const { snippet: sn } = props
   const file = r.mrByKey(sn.mr)?.files.find((f) => f.path === sn.path)
-  const excerpt = useMemo(() => (file ? excerptOf(file.levels[props.level].hunks, sn) : null), [file, props.level, sn])
   const first = sn.side === 'old' ? null : sn.lines[0]
   return (
     <div className="snippet" data-testid="snippet">
@@ -84,12 +104,9 @@ function Snippet(props: { snippet: SnippetRef; level: LevelName; onOpen: OpenFil
         <p className="note">This file is not in the review any more.</p>
       ) : file.binary ? (
         <p className="note">Binary file, no text diff.</p>
-      ) : !excerpt || excerpt.pieces.length === 0 ? (
-        <p className="note">No line of this range changed at this noise level. It holds noise only.</p>
       ) : (
-        <PieceTable pieces={excerpt.pieces} />
+        <SnippetCode file={file} snippet={sn} level={props.level} />
       )}
-      {excerpt?.truncated && <p className="note">The excerpt is cut short. Open the file to read the rest.</p>}
     </div>
   )
 }
@@ -186,6 +203,23 @@ function restPieces(file: FileObject, entry: RestEntry, level: LevelName): { pie
 
 const runCount = (runs: Run[]): number => runs.length
 
+/** The changes of one file of "Everything else", with the syntax colours of the file. It is drawn when the file opens. */
+function RestCode(props: { file: FileObject; entry: RestEntry; level: LevelName }): React.JSX.Element {
+  const { file } = props
+  const shown = useMemo(() => restPieces(file, props.entry, props.level), [file, props.entry, props.level])
+  const hl = useFileHighlight(file, file.levels[props.level])
+  return (
+    <>
+      {shown.pieces.length === 0 ? (
+        <p className="note">Nothing of this file shows at this noise level. It holds noise only.</p>
+      ) : (
+        <PieceTable pieces={shown.pieces} hl={hl} />
+      )}
+      {shown.cut && <p className="note">Only the start is shown here.</p>}
+    </>
+  )
+}
+
 /** One file of "Everything else": a row that opens to show the changes that the section holds. */
 function RestFile(props: { doc: SectionsDocument; section: Section; entry: RestEntry; level: LevelName; onOpen: OpenFile }): React.JSX.Element {
   const r = useReview()
@@ -194,7 +228,6 @@ function RestFile(props: { doc: SectionsDocument; section: Section; entry: RestE
   const file = r.mrByKey(e.mr)?.files.find((f) => f.path === e.path)
   const seen = r.viewed.has(viewedId(e.mr, e.path))
   const waits = waitingFor(props.doc, r.accepted, props.section.id, { mr: e.mr, path: e.path })
-  const shown = useMemo(() => (open && file && !file.binary ? restPieces(file, e, props.level) : null), [open, file, e, props.level])
   return (
     <details className="restfile" data-testid={`rest-file-${e.path}`} onToggle={(ev) => setOpen((ev.currentTarget as HTMLDetailsElement).open)}>
       <summary title={`${e.path}\n!${iidOf(e.mr)}`}>
@@ -222,14 +255,7 @@ function RestFile(props: { doc: SectionsDocument; section: Section; entry: RestE
         )}
       </summary>
       <div className="restbody">
-        {file?.binary ? (
-          <p className="note">Binary file, no text diff.</p>
-        ) : shown && shown.pieces.length === 0 ? (
-          <p className="note">Nothing of this file shows at this noise level. It holds noise only.</p>
-        ) : (
-          shown && <PieceTable pieces={shown.pieces} />
-        )}
-        {shown?.cut && <p className="note">Only the start is shown here.</p>}
+        {file?.binary ? <p className="note">Binary file, no text diff.</p> : open && file && <RestCode file={file} entry={e} level={props.level} />}
         <button className="link" onClick={() => props.onOpen(e.mr, e.path, null)}>
           Open the file in the Linear view
         </button>

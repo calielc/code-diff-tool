@@ -17,11 +17,13 @@ import type { BuildResult } from '@shared/review'
 import { draftAtLine, fileThreads, isFileDraft, positionMatchesLine, threadCounts, threadOnFile, threadsAtLine } from '@shared/threads'
 import { clampTreeWidth, nextTreeWidth, parseStoredTreeWidth, treeWidthFromPointer } from '@shared/tree-width'
 import { api } from '../api'
+import { Code, SyntaxToggle } from '../highlight/Code'
+import { useFileHighlight } from '../highlight/useFileHighlight'
 import { useReview } from './review-context'
 import { SubmitDialog, reviewable } from './SubmitDialog'
 import { viewedId } from '@shared/sections'
 import { SectionsStatus, SectionsView } from './SectionsView'
-import { codeOf as codeOfLine, intraMapOf } from './intra-marks'
+import { intraMapOf } from './intra-marks'
 import { LineChat } from './LineChat'
 import { CommentForm, DraftCard, ThreadCard } from './ThreadViews'
 
@@ -912,8 +914,12 @@ function FileBody(props: {
   // The file as the chosen commit changed it, or the whole change at HEAD
   const file = commitReady ? atCommit.file! : entry.file
   const lv = file.levels[level]
+  // The characters that really changed in a removed line and the added line that replaces it, found for each pair of a run
   const intraMap = useMemo(() => intraMapOf(lv.hunks), [lv])
-  const codeOf = (l: LineObj): React.ReactNode => codeOfLine(intraMap, l)
+  // The colours of the code come from the whole old and new file, in a worker, so the first render is plain text
+  const hl = useFileHighlight(file, lv)
+  /** The text of a line, with its syntax colours and the changed characters of a modified line marked. */
+  const codeOf = (l: LineObj): React.ReactNode => <Code text={l.x} tokens={hl.line(l)} segs={intraMap.get(l)} />
   // A commit is viewed by its own mark, or because HEAD is: marking HEAD flags every commit before it
   const commitKey = (sha: string): string => entry.id + '@' + sha
   const commitViewed = (sha: string): boolean => props.viewed || r.viewed.has(commitKey(sha))
@@ -1175,13 +1181,13 @@ function FileBody(props: {
                   rows.push(
                     <tr key={'l' + id} data-new-line={l.n ?? undefined} className="ctx">
                       <td className="ln">{l.o}</td>
-                      <td className="code">{l.x}</td>
+                      <td className="code">{codeOf(l)}</td>
                       <td className="ln">
                         {gutter(l, id)}
                         {l.n}
                       </td>
                       <td className="sign" />
-                      <td className="code">{l.x}</td>
+                      <td className="code">{codeOf(l)}</td>
                     </tr>,
                     ...extraRows(l, id, 5)
                   )
@@ -1248,7 +1254,9 @@ function FileBody(props: {
                   <td className="ln">{gutter(l, id)}</td>
                   <td className="ln">{n}</td>
                   <td className="sign">{l.t === '+' ? '+' : ''}</td>
-                  <td className="code">{text}</td>
+                  <td className="code">
+                    <Code text={text} tokens={hl.newLine(n)} />
+                  </td>
                 </tr>,
                 ...extraRows(l, id, 4)
               ]
@@ -1345,6 +1353,7 @@ function FileBody(props: {
           <span className="counts">
             <span className="plus">+{lv.add}</span> <span className="minus">−{lv.del}</span>
           </span>
+          <SyntaxToggle notice={hl.notice} />
           <label className="viewedbtn">
             <input type="checkbox" data-testid="viewed-now" checked={viewedNow} onChange={(e) => setViewedNow(e.target.checked)} /> Viewed
             {commit ? ' ' + commit.slice(0, 7) : ''} <kbd>v</kbd>

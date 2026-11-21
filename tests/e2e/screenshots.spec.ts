@@ -25,8 +25,8 @@ const FILES: Record<string, [string | null, string | null]> = {
   ],
   'ci/build-client.sh': [null, '#!/bin/sh\nset -e\nkiota generate\n'],
   'src/Api/Program.cs': [
-    'using System;\n\nnamespace Api;\n\npublic class Program\n{\n    public static void Main() => Console.WriteLine("old");\n}\n',
-    'using System;\n\nnamespace Api;\n\npublic class Program\n{\n    public static void Main() => Console.WriteLine("new");\n}\n'
+    'using System;\n\nnamespace Api;\n\npublic class Program\n{\n    public static void Main() => Console.WriteLine("old");\n\n    /// <summary>The port that the service listens on.</summary>\n    public static int Port(string[] args) => args.Length > 0 ? int.Parse(args[0]) : 8080;\n}\n',
+    'using System;\n\nnamespace Api;\n\npublic class Program\n{\n    public static void Main() => Console.WriteLine("new");\n\n    /// <summary>The port that the service listens on.</summary>\n    public static int Port(string[] args) => args.Length > 0 ? int.Parse(args[0]) : 8443;\n}\n'
   ],
   'src/Api/Old.cs': ['class Old {}\n', null],
   'test/Api.Tests/ProgramTests.cs': ['class T { }\n', 'class T\n{\n    void A() { }\n}\n'],
@@ -241,6 +241,7 @@ test('screenshots of the main screens', async () => {
     .getByTestId('file-.config/tools.json')
     .click()
     .catch(() => undefined)
+  await expect(page.getByTestId('diff-table').locator('[class*="tk-"]').first()).toBeVisible()
   await shot('diff')
 
   await page.getByTestId('view-summarised').click()
@@ -254,8 +255,11 @@ test('screenshots of the main screens', async () => {
   await page.getByTestId('accept-tools').click() // undo, so the other pictures show no viewed file
   await page.getByRole('button', { name: 'Linear', exact: true }).click()
   await page.getByTestId('layout-side').click()
+  await page.getByTestId('file-src/Api/Program.cs').click()
+  await expect(page.getByTestId('diff-table').locator('.tk-kw').first()).toBeVisible()
   await shot('side-by-side')
   await page.getByTestId('layout-full').click()
+  await expect(page.getByTestId('diff-table').locator('.tk-kw').first()).toBeVisible()
   await shot('full-file')
   await page.getByTestId('layout-inline').click()
   await page.getByTestId('tab-ac').click()

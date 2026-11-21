@@ -63,6 +63,7 @@ const api: CodeDiffApi = {
   },
   sections: {
     get: (slug) => ipcRenderer.invoke(CH.sectionsGet, slug),
+    start: (slug) => ipcRenderer.invoke(CH.sectionsStart, slug),
     onState: (cb) => {
       const listener = (_e: unknown, m: Parameters<typeof cb>[0]): void => cb(m)
       ipcRenderer.on(CH.sectionsState, listener)

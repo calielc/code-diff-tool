@@ -168,21 +168,19 @@ test('screenshots of the main screens', async () => {
   const K = 'backend/api-service!104'
   const page104 = {
     summary:
-      'The service now builds an API client for C# and for TypeScript from its contract, and publishes both from two manual CI jobs. The change adds the tool, the job, a new entry point text and the documents that explain them.',
+      'The service now builds an API client for C# and for TypeScript from its contract, and publishes both from two manual CI jobs. The change adds the tool, the job and a new entry point text.',
     sections: [
       {
         id: 'tools',
         title: 'A new tool generates the clients',
         text: 'The tool manifest gains the Kiota tool next to the Entity Framework tool. Every build machine now installs the same version, so the clients do not drift between a laptop and the pipeline.',
-        snippets: [{ mr: K, path: '.config/tools.json', lines: [6, 13] }],
-        files: []
+        snippets: [{ mr: K, path: '.config/tools.json', lines: [6, 13] }]
       },
       {
         id: 'ci',
         title: 'The CI job builds and publishes the clients',
         text: 'A new script runs the generator and stops at the first error. The two manual jobs call it, so a person decides when a new client version goes out.',
-        snippets: [{ mr: K, path: 'ci/build-client.sh', lines: [1, 3] }],
-        files: []
+        snippets: [{ mr: K, path: 'ci/build-client.sh', lines: [1, 3] }]
       },
       {
         id: 'entry',
@@ -191,28 +189,10 @@ test('screenshots of the main screens', async () => {
         snippets: [
           { mr: K, path: 'src/Api/Program.cs', lines: [7, 7] },
           { mr: K, path: 'src/Api/Old.cs', lines: [1, 1], side: 'old' }
-        ],
-        files: []
-      },
-      {
-        id: 'tests',
-        title: 'The test class gets a body',
-        text: 'The test class changes from an empty one-line class to a class with one method. The method is empty, so it checks nothing yet.',
-        snippets: [{ mr: K, path: 'test/Api.Tests/ProgramTests.cs', lines: [1, 4] }],
-        files: []
-      },
-      {
-        id: 'rest',
-        title: 'Everything else',
-        leftover: true,
-        text: 'Two documents explain the clients and the publishing. They hold no code, so you can read them last.',
-        snippets: [],
-        files: [
-          { mr: K, path: 'docs/api-clients.md' },
-          { mr: K, path: 'README.md' }
         ]
       }
-    ]
+    ],
+    restText: 'Two documents and a test class with an empty method. They hold no logic, so a quick look is enough.'
   }
   writeFileSync(join(pageDir, 'sections.json'), JSON.stringify(page104))
   writeFileSync(join(pageDir, 'sections-basis.json'), JSON.stringify({ issues: ['APP-101'], heads: { [K]: head } }))
@@ -232,7 +212,6 @@ test('screenshots of the main screens', async () => {
     env: {
       ...process.env,
       CODEDIFF_USER_DATA: ud,
-      CODEDIFF_TEST_SECTIONS: '1',
       ...forgeEnv(forge.url),
       FAKE_CLAUDE_ANSWER: JSON.stringify({
         checklist: [
@@ -265,9 +244,10 @@ test('screenshots of the main screens', async () => {
   await shot('diff')
 
   await page.getByTestId('view-summarised').click()
+  await expect(page.getByTestId('sections-view')).toBeVisible()
   await page.getByTestId('accept-tools').click()
   await expect(page.getByTestId('section-tools')).toHaveAttribute('data-accepted', 'true')
-  await page.setViewportSize({ width: 1600, height: 1900 }) // a tall window, so the picture shows several sections
+  await page.setViewportSize({ width: 1600, height: 2300 }) // a tall window, so the picture shows several sections
   await expect(page.getByTestId('section-thread-ci').getByTestId('thread')).toBeVisible()
   await shot('summarised')
   await page.setViewportSize({ width: 1600, height: 1000 })

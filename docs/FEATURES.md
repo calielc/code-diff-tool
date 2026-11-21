@@ -12,7 +12,7 @@ The app helps a reviewer read the code changes of one piece of work. A piece of 
 
 ## 2. Reviews
 
-The home screen lists your reviews with their name, title, number of changes, number of issues, last opened time and the state of the Summarised page. Every column sorts. A filter box narrows the list.
+The home screen lists your reviews with their name, title, number of changes, number of issues, last opened time and the state of the Summarised page (Ready, Not written or Failed). A new review shows Not written until you open the Summarised view. Every column sorts. A filter box narrows the list.
 
 - **New review** asks for the URLs of the merge or pull requests, the issue keys, an optional spec file, and a name. The check step reads each change and shows what the review will hold. A change with no local clone is skipped, and the list says so. Create and open builds the review.
 - A review is built when it opens. The build shows its stages: finding the clones, checking your login, reading the issues, reading the code changes, fetching the missing commits, diffing the files and preparing the review. A reload builds it again.
@@ -89,24 +89,35 @@ The header shows the path, the state of the change, the commits of the file and 
 
 ![The Summarised view](docs/images/summarised.png)
 
-An AI tool reads the whole review and writes a page of sections. The page starts with a paragraph about the whole change. The sections follow in reading order: the core of the change first, then what supports it, then tests, documents and settings. The page shows what matters and leaves the boilerplate out. A reviewer who reads and accepts every section knows the whole change.
+The Summarised view is a page of sections that shows what a reviewer must think about, in reading order, with the boilerplate left out. A reviewer who reads and accepts every section, "Everything else" included, has seen the whole change.
 
-A section has:
+**When the page is written.** An AI tool writes the page when you open the Summarised view, and not when the review is built. Open it with the View button of the Diff tab. The Diff tab also opens it when Summarised is your saved choice.
 
-- a title and one paragraph that says what this part of the change does and what to check. A section can be about anything: a behaviour, a data change, a test, a document, a setting.
+- While the tool writes, the view says so, and a banner shows on every tab. It takes a few minutes. If you leave the view, the run goes on and saves the page, and the page is there when you come back. The app never starts two runs for one review.
+- The page is saved in the review. When you open the view again, a saved page that still fits is shown at once, and no run starts. A page is out of date when a change has new commits, when the issues changed, or when a snippet no longer points at a change. Then the app holds the page back and writes it again when the view is open. After new commits arrive, press Refresh, and the open view writes the page again.
+- If the tool fails, the view shows the reason and a **Try again** button. The app does not try again by itself. The banner says where to press it.
+
+**The sections.** The page starts with a short paragraph about the whole change. A section has:
+
+- a title and one short paragraph that says what this change does and what to check.
 - the code, as small excerpts of the diff: new, removed or modified lines with a little code around them. The excerpts follow the Noise buttons of the toolbar. A click on the name of the file above an excerpt opens the file in the Linear view at that line.
 - a footer with the files that the section involves. A click on a file opens it in the Linear view. A file shows a tick when it is viewed.
 - an **Accept** button, and its own thread.
-- The last section can be marked "Everything else". It holds what the other sections leave out, such as generated files, lock files and renames, and its paragraph says why it is safe to skip.
+
+The AI tool is told to be selective: few sections, only the changes that need thought, such as behaviour, contracts, data, security, error handling and logic that is not obvious. It leaves out boilerplate, renames, moves, formatting, generated code, imports, lock files, version bumps and other mechanical changes.
+
+**Everything else.** The last section is always "Everything else", and the app computes it from the real diffs. It holds every changed file that no snippet shows, and every change in a file that no snippet covers. A change counts as covered when a snippet has a line of it. Changes that are only imports, comments or white space do not count, because the Code only level already hides them. The AI tool does not list these files, and it may add one short sentence for the section.
+
+- The section lists its files. A file opens to show its changes, and a file that is only partly left over shows only the changes that no section shows. A click on "Open the file in the Linear view" opens the whole file.
+- If the sections show every change, the section does not appear. If no change needs a section, the page shows only "Everything else", with the short summary of the tool.
+- It has an Accept button and a thread, like any section.
 
 **Accept and Viewed.** Accept marks the files of the section as viewed, with the same rules as the Viewed box of the Linear view: the HEAD mark counts for the commits before it, the tree and its counter show the mark, and the marks stay in the review on this machine.
 
-- A file that two sections show becomes viewed only when both sections are accepted. The first Accept leaves the file unviewed, and the tooltip of the file names the section that it waits for. This way a file is never marked as read while one of its changes is not.
+- A file that more than one section holds becomes viewed only when all of them are accepted. This includes a file that is partly in a section and partly in "Everything else". The first Accept leaves the file unviewed, and the tooltip of the file names the sections that it waits for. This way a file is never marked as read while one of its changes is not.
 - The button turns into "Accepted". Press it again to take the accept back. The files of that section lose their viewed mark, because the section is no longer read. Another section that you accepted stays accepted.
-- If you remove the viewed mark of a file in the tree, the sections that show only that file stop being accepted. Accept sets the marks again.
-- The top of the page shows how many sections are accepted and how many files are viewed.
-
-**Nothing is missed.** The page must name every changed file, and show every change that is more than an import, a comment, a blank line or white space. The page says "All N changed files are in a section". If a file is ever in no section, a warning names it and links to it.
+- If you remove the viewed mark of a file in the tree, the sections that hold only that file stop being accepted. Accept sets the marks again.
+- The top of the page shows how many sections are accepted and how many files are viewed. The line under it says how many files are in the sections and how many in "Everything else", and how many of those also have changes in a section.
 
 **The thread of a section.** The button "Comment on this section" opens a form. The comment goes to the host as a comment on the change, as the comments of the conversation do. It starts with the line `**Section: <title>**`, so people who read the change on the host see which section it is about. The app finds the threads by that line and shows them on the section, with their replies and their state. You can resolve and reopen a thread there, and you can also see it under the row in the Code changes tab.
 
@@ -114,10 +125,7 @@ A section has:
 - **Save draft** keeps the comment in the review. The draft shows on the section, and you can edit it, delete it, or post it. Submit review posts it with the other drafts.
 - If the AI writes the page again with a new title for a section, its old thread stays on the change but shows only in the Code changes tab.
 
-**Checks.** The page is checked against the real diffs. Every snippet must hold a changed line. Every changed file must be in a section. Every change in a file must be inside a snippet, unless the file is in "Everything else", or is generated, binary or only noise. A section has one paragraph, a unique title and at most 12 snippets. When the check fails, the tool must fix the page. The app asks up to three times.
-
-- A page that no longer matches the changes is hidden, and a banner says that the AI is writing it again. The page is out of date when a change has new commits, when the issues of the review changed, or when a line moved.
-- A page that the AI could not write shows a banner, and the Reload button tries again. The accepted sections are kept on this machine. A section that the new page rewrites with other files is not accepted any more, and its files stay viewed.
+**Checks.** The page is checked against the real diffs. Every snippet must point at a file of the review and hold a changed line. A section has a title, one paragraph and at least one snippet, and the page has at most 12 sections. When the check fails, the tool must fix the page. The app asks up to three times. The check never asks the tool to cover every file, because "Everything else" holds what the sections leave out.
 
 ## 8. Acceptance criteria
 

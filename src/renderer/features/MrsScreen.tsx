@@ -323,7 +323,7 @@ function Screen(props: { onHome: () => void }): React.JSX.Element {
           title={r.sections.error ?? (r.sections.problems.length > 0 ? r.sections.problems.slice(0, 8).join('\n') : undefined)}
         >
           {r.sections.error
-            ? 'The AI could not write the Summarised page. Reload the review to try again.'
+            ? 'The AI could not write the Summarised page. Open the Summarised view and press Try again.'
             : r.sections.problems.length > 0
               ? `The Summarised page is out of date: the changes moved since it was written (${r.sections.problems.length} problem(s)). The AI is writing it again.`
               : r.sections.context === 'gathering'

@@ -3,17 +3,20 @@ import type { PendingComment } from '../src/shared/comments'
 import type { LineObj } from '../src/shared/diff'
 import type { Thread } from '../src/shared/provider'
 import {
+  REST_ID,
+  REST_TITLE,
   acceptSection,
   basisProblems,
   checkSections,
   cleanTitle,
+  coverageOf,
   excerptOf,
   fileKey,
   giveUpMessage,
-  globMatch,
   isAccepted,
   problemPrompt,
   relaxJson,
+  restOf,
   sectionCommentBody,
   sectionDrafts,
   sectionFactsOf,
@@ -21,25 +24,19 @@ import {
   sectionProgress,
   sectionThreads,
   threadTarget,
-  uncoveredFiles,
   unacceptSection,
   viewedId,
   waitingFor,
+  withRest,
   type Accepted,
   type FileFacts,
   type SectionFacts,
   type SectionsDocument
 } from '../src/shared/sections'
 
-const file = (over: Partial<FileFacts> & { runs?: FileFacts['runs'] }): FileFacts => ({
-  rawNew: new Set(),
-  rawOld: new Set(),
-  runs: [],
-  mechanical: false,
-  ...over
-})
+const file = (over: Partial<FileFacts>): FileFacts => ({ rawNew: new Set(), rawOld: new Set(), runs: [], ...over })
 
-/** Two changes. A.cs has two separate changes to read, hook.ts one, a removal one, and the rest is mechanical. */
+/** Two changes. A.cs has two separate changes to read, Gone.cs a removal, hook.ts one change, the lock file one, and the logo none. */
 const facts = (): SectionFacts => ({
   files: new Map([
     [
@@ -56,7 +53,7 @@ const facts = (): SectionFacts => ({
     [fileKey('backend/x!1', 'src/A.Tests.cs'), file({ rawNew: new Set([5]), runs: [{ new: [5], old: [] }] })],
     [fileKey('web/y!2', 'src/hook.ts'), file({ rawNew: new Set([3, 4]), runs: [{ new: [3, 4], old: [] }] })],
     [fileKey('web/y!2', 'package-lock.json'), file({ rawNew: new Set([1]), runs: [{ new: [1], old: [] }] })],
-    [fileKey('web/y!2', 'logo.png'), file({ mechanical: true })]
+    [fileKey('web/y!2', 'logo.png'), file({})]
   ]),
   filesByMr: new Map([
     ['backend/x!1', ['src/A.cs', 'src/Gone.cs', 'src/A.Tests.cs']],
@@ -76,8 +73,7 @@ const good = (): Record<string, any> => ({
       id: 'hook',
       title: 'The page asks for the card',
       text: 'The hook calls the endpoint.',
-      snippets: [{ mr: 'web/y!2', path: 'src/hook.ts', lines: [3, 4] }],
-      files: []
+      snippets: [{ mr: 'web/y!2', path: 'src/hook.ts', lines: [3, 4] }]
     },
     {
       id: 'api',
@@ -87,48 +83,46 @@ const good = (): Record<string, any> => ({
         { mr: 'backend/x!1', path: 'src/A.cs', lines: [10, 12] },
         { mr: 'backend/x!1', path: 'src/A.cs', lines: [38, 41] },
         { mr: 'backend/x!1', path: 'src/Gone.cs', lines: [5, 6], side: 'old' }
-      ],
-      files: []
-    },
-    { id: 'tests', title: 'Tests', text: 'They cover it.', snippets: [{ mr: 'backend/x!1', path: 'src/A.Tests.cs', lines: [5, 5] }], files: [] },
-    {
-      id: 'rest',
-      title: 'Everything else',
-      leftover: true,
-      text: 'Generated files.',
-      snippets: [],
-      files: [
-        { mr: 'web/y!2', pattern: '*.json' },
-        { mr: 'web/y!2', path: 'logo.png' }
       ]
     }
-  ]
+  ],
+  restText: 'The tests, the lock file and the logo.'
 })
 const check = (doc: unknown): ReturnType<typeof checkSections> => checkSections(typeof doc === 'string' ? doc : JSON.stringify(doc), facts())
 
 describe('a good page', () => {
-  it('passes, also inside prose and a code fence, and expands the patterns of a file entry', () => {
+  it('passes, also inside prose and a code fence', () => {
     const r = check('Here it is:\n```json\n' + JSON.stringify(good()) + '\n```\nDone.')
     expect(r.problems).toEqual([])
-    expect(r.document?.sections).toHaveLength(4)
-    expect(r.document?.sections[3].files).toEqual([
-      { mr: 'web/y!2', path: 'package-lock.json' },
-      { mr: 'web/y!2', path: 'logo.png' }
-    ])
+    expect(r.document?.sections).toHaveLength(2)
+    expect(r.document?.restText).toBe('The tests, the lock file and the logo.')
   })
-  it('puts the leftover section last, wherever the tool wrote it', () => {
+  it('does not ask for coverage: a page may show one change and leave the rest to Everything else', () => {
     const d = good()
-    d.sections.unshift(d.sections.pop())
-    expect(check(d).document?.sections.map((s) => s.id)).toEqual(['hook', 'api', 'tests', 'rest'])
+    d.sections.pop() // A.cs, Gone.cs, the tests, the lock file and the logo are shown by no section
+    delete d.restText
+    expect(check(d).problems).toEqual([])
   })
-  it('accepts comments and trailing commas', () => {
+  it('accepts a page with no section, for a change that needs no thought', () => {
+    expect(check({ summary: 'Only generated files changed.', sections: [] }).problems).toEqual([])
+  })
+  it('accepts comments and trailing commas, and ignores the fields of an older page', () => {
     const text = JSON.stringify(good()).replace('"summary"', '// note\n"summary"').replace(/\]\}$/, ',]}')
     expect(check(text).problems).toEqual([])
+    const old = good()
+    old.sections[0].files = [{ mr: 'web/y!2', path: 'logo.png' }]
+    old.sections[0].leftover = true
+    expect(check(old).document?.sections[0]).toEqual({
+      id: 'hook',
+      title: 'The page asks for the card',
+      text: 'The hook calls the endpoint.',
+      snippets: old.sections[0].snippets
+    })
     expect(relaxJson('{"a":"// not a comment","b":[1,],}')).toBe('{"a":"// not a comment","b":[1]}')
   })
 })
 
-describe('every rule of the checker has its message', () => {
+describe('the checks that stay', () => {
   it('no JSON object, or JSON that is not a page', () => {
     expect(check('nothing here').problems).toEqual(['The answer holds no JSON object.'])
     expect(check('{ broken }').problems[0]).toMatch(/^The answer is not a valid sections document: /)
@@ -136,7 +130,6 @@ describe('every rule of the checker has its message', () => {
     const d = good()
     d.sections[0].snippets[0].lines = [1, 'x']
     expect(check(d).problems[0]).toContain('section 1, snippet 1: lines is not a pair of whole numbers')
-    expect(check({ summary: '', sections: [] }).problems).toContain('The document has no section.')
   })
   it('a snippet of a file that is not changed, and of lines that hold no change', () => {
     const d = good()
@@ -149,114 +142,116 @@ describe('every rule of the checker has its message', () => {
   it('a removed line is found on the old side only', () => {
     const d = good()
     delete d.sections[1].snippets[2].side
-    const p = check(d).problems
-    expect(p).toContain("section 'api': lines 5-6 of src/Gone.cs on the new side hold no change")
+    expect(check(d).problems).toContain("section 'api': lines 5-6 of src/Gone.cs on the new side hold no change")
   })
-  it('a range that is too long, and too many snippets', () => {
+  it('a range that is too long, a section with no snippet, and too many snippets', () => {
     const d = good()
     d.sections[0].snippets[0].lines = [1, 500]
     expect(check(d).problems).toContain("section 'hook': lines 1-500 of src/hook.ts are more than 120 lines. Split the snippet")
     const e = good()
     e.sections[0].snippets = Array.from({ length: 13 }, () => ({ mr: 'web/y!2', path: 'src/hook.ts', lines: [3, 4] }))
     expect(check(e).problems).toContain("section 'hook': it has 13 snippets, and the limit is 12. Split the section")
+    const n = good()
+    n.sections[0].snippets = []
+    expect(check(n).problems).toEqual(["section 'hook' has no snippet: show the code that the paragraph is about"])
   })
-  it('ids and titles are unique, and the text is one paragraph', () => {
+  it('ids and titles are unique and the text is one paragraph', () => {
     const d = good()
     d.sections[1].id = 'hook'
-    d.sections[2].title = '**The endpoint answers**'
+    d.sections[1].title = '**The page asks for the card**'
     d.sections[0].text = 'One.\n\nTwo.'
-    d.sections[3].text = ' '
+    d.sections.push({ ...good().sections[1], id: 'empty', text: ' ' })
     const p = check(d).problems
     expect(p).toContain("section 'hook': the id is used twice")
-    expect(p).toContain("section 'tests': the title 'The endpoint answers' is used twice")
+    expect(p).toContain("section 'hook': the title 'The page asks for the card' is used twice")
     expect(p).toContain("section 'hook': the text must be one paragraph, with no blank line")
-    expect(p).toContain("section 'rest' has an empty text")
+    expect(p).toContain("section 'empty' has an empty text")
   })
-  it('a section with no file, and two leftover sections', () => {
+  it('the name of the section that the app adds is kept, and the page has at most 12 sections', () => {
     const d = good()
-    d.sections.push({ id: 'empty', title: 'Empty', text: 'x', snippets: [], files: [] }, { ...d.sections[3], id: 'rest2', title: 'More' })
+    d.sections[0].title = 'Everything else'
+    d.sections[1].id = REST_ID
     const p = check(d).problems
-    expect(p).toContain("section 'empty' names no file: give it a snippet or a file")
-    expect(p).toContain('The document has 2 leftover sections, and it may have one')
-  })
-  it('a file entry that matches nothing', () => {
-    const d = good()
-    d.sections[3].files.push({ mr: 'web/y!2', pattern: 'none/**' }, { mr: 'web/y!2', path: 'ghost.md' })
-    expect(check(d).problems).toEqual([
-      `section 'rest': {"mr":"web/y!2","pattern":"none/**"} matches no changed file`,
-      `section 'rest': {"mr":"web/y!2","path":"ghost.md"} matches no changed file`
+    expect(p).toContain(`section 'hook': the title "${REST_TITLE}" is kept for the section that the app adds. Leave it out`)
+    expect(p).toContain(`section '${REST_ID}': the id is kept for the section that the app adds. Leave "${REST_TITLE}" out`)
+    const many = good()
+    many.sections = Array.from({ length: 13 }, (_, i) => ({ ...good().sections[0], id: `s${i}`, title: `Idea ${i}` }))
+    expect(check(many).problems).toEqual([
+      'The page has 13 sections, and the limit is 12. Keep only what a reviewer must think about. The rest goes to "Everything else"'
     ])
-  })
-  it('only the leftover section may list a file with code changes and no snippet', () => {
-    const d = good()
-    d.sections[0].files.push({ mr: 'backend/x!1', path: 'src/A.Tests.cs' })
-    expect(check(d).problems).toEqual([
-      "section 'hook': src/A.Tests.cs of backend/x!1 holds code changes, so it needs a snippet. Only the leftover section may list it with no snippet"
-    ])
-    const ok = good()
-    ok.sections[3].files.push({ mr: 'backend/x!1', path: 'src/A.Tests.cs' })
-    ok.sections.splice(2, 1) // the tests section is gone, and the leftover section holds the file
-    expect(check(ok).problems).toEqual([])
   })
 })
 
-describe('coverage', () => {
-  it('a file in no section', () => {
-    const d = good()
-    d.sections.splice(2, 1)
-    expect(check(d).problems).toEqual(['backend/x!1 src/A.Tests.cs is in no section. Show it in a snippet, or list it in the leftover section'])
+describe('Everything else, computed from the real diffs', () => {
+  const doc = (): SectionsDocument => check(good()).document!
+  const key = (e: { mr: string; path: string }): string => `${e.mr} ${e.path}`
+
+  it('holds every file that no snippet is in, with all its changes', () => {
+    const rest = restOf(doc(), facts())
+    expect(rest.filter((e) => e.whole).map(key)).toEqual(['backend/x!1 src/A.Tests.cs', 'web/y!2 package-lock.json', 'web/y!2 logo.png'])
+    expect(rest.find((e) => e.path === 'package-lock.json')?.runs).toEqual([{ new: [1], old: [] }])
+    expect(rest.find((e) => e.path === 'logo.png')?.runs).toEqual([]) // a binary file has no change to show, and it is still left out
   })
-  it('a change that no snippet shows, on the new side and on the old side', () => {
+  it('holds the change of a file that a section shows only in part', () => {
     const d = good()
-    d.sections[1].snippets.splice(1, 1) // the change at line 40 is no longer shown
-    d.sections[1].snippets[1].side = 'new' // and the removal is asked for on the wrong side
-    const p = check(d).problems
-    expect(p).toContain('backend/x!1 src/A.cs: the change at lines 40-40 is in no snippet')
-    expect(p).toContain("section 'api': lines 5-6 of src/Gone.cs on the new side hold no change")
-    // a file with a removal and an addition, where the snippet shows the addition only
-    const f = facts()
-    f.files.set(
-      fileKey('backend/x!1', 'src/Gone.cs'),
-      file({
-        rawNew: new Set([7]),
-        rawOld: new Set([5, 6]),
-        runs: [
-          { new: [7], old: [] },
-          { new: [], old: [5, 6] }
-        ]
-      })
-    )
+    d.sections[1].snippets.splice(1, 1) // the change at line 40 of A.cs is no longer shown
+    const rest = restOf(check(d).document!, facts())
+    expect(rest.find((e) => e.path === 'src/A.cs')).toEqual({ mr: 'backend/x!1', path: 'src/A.cs', whole: false, runs: [{ new: [40], old: [] }] })
+    expect(rest.some((e) => e.path === 'src/Gone.cs')).toBe(false) // shown in full
+  })
+  it('counts a change as shown when a snippet has one of its lines, on the side of the snippet', () => {
+    const d = good()
+    d.sections[1].snippets[0].lines = [11, 11] // the run at lines 10 and 11
+    expect(restOf(check(d).document!, facts()).some((e) => e.path === 'src/A.cs')).toBe(false)
     const e = good()
-    e.sections[1].snippets[2] = { mr: 'backend/x!1', path: 'src/Gone.cs', lines: [7, 7] }
-    expect(checkSections(JSON.stringify(e), f).problems).toEqual(['backend/x!1 src/Gone.cs: the change at old lines 5-6 is in no snippet (add "side": "old")'])
+    e.sections[1].snippets[2] = { mr: 'backend/x!1', path: 'src/Gone.cs', lines: [5, 5] } // new side: a removal is not shown by it
+    // the snippet is refused by the check, so test the computation on the document directly
+    const unchecked = { ...doc(), sections: doc().sections.map((s) => (s.id === 'api' ? { ...s, snippets: [e.sections[1].snippets[2]] } : s)) }
+    expect(restOf(unchecked, facts()).find((x) => x.path === 'src/Gone.cs')).toMatchObject({ whole: false, runs: [{ new: [], old: [5, 6] }] })
   })
-  it('a snippet that touches a change counts for the whole run', () => {
+  it('holds every file when the page has no section', () => {
+    const none = check({ summary: 'Nothing to think about.', sections: [] }).document!
+    expect(restOf(none, facts())).toHaveLength(6)
+  })
+  it('holds nothing when the sections show every change', () => {
+    const all: SectionsDocument = {
+      summary: '',
+      sections: [
+        {
+          id: 'all',
+          title: 'All',
+          text: 'x',
+          snippets: [
+            { mr: 'backend/x!1', path: 'src/A.cs', lines: [10, 40] },
+            { mr: 'backend/x!1', path: 'src/Gone.cs', lines: [5, 6], side: 'old' },
+            { mr: 'backend/x!1', path: 'src/A.Tests.cs', lines: [5, 5] },
+            { mr: 'web/y!2', path: 'src/hook.ts', lines: [3, 4] },
+            { mr: 'web/y!2', path: 'package-lock.json', lines: [1, 1] },
+            { mr: 'web/y!2', path: 'logo.png', lines: [1, 1] }
+          ]
+        }
+      ]
+    }
+    expect(restOf(all, facts())).toEqual([])
+    expect(withRest(all, [])).toBe(all)
+  })
+  it('is the last section of the page, with the text that the tool wrote, and its files in one list', () => {
+    const rest = restOf(doc(), facts())
+    const page = withRest(doc(), rest)
+    expect(page.sections.map((s) => s.id)).toEqual(['hook', 'api', REST_ID])
+    const last = page.sections[2]
+    expect(last).toMatchObject({ title: REST_TITLE, text: 'The tests, the lock file and the logo.', leftover: true, snippets: [] })
+    expect(last.files).toEqual(rest.map((e) => ({ mr: e.mr, path: e.path })))
+  })
+  it('says how the files split between the sections and Everything else', () => {
     const d = good()
-    d.sections[1].snippets[0].lines = [11, 11] // the run at lines 10 and 11 is shown by line 11
-    expect(check(d).problems).toEqual([])
-  })
-  it('a file that a section lists is covered whole, with no snippet of its own', () => {
-    const d = good()
-    d.sections[3].files.push({ mr: 'backend/x!1', path: 'src/A.cs' })
-    d.sections[1].snippets = d.sections[1].snippets.slice(2) // the leftover section covers A.cs
-    expect(check(d).problems).toEqual([])
-  })
-  it('names the files that no section mentions', () => {
-    const doc = check(good()).document!
-    expect(uncoveredFiles(doc, facts())).toEqual([])
-    const fewer: SectionsDocument = { ...doc, sections: doc.sections.filter((s) => s.id !== 'tests') }
-    expect(uncoveredFiles(fewer, facts())).toEqual([{ mr: 'backend/x!1', path: 'src/A.Tests.cs' }])
+    d.sections[1].snippets.splice(1, 1)
+    const c = check(d).document!
+    expect(coverageOf(c, facts(), restOf(c, facts()))).toEqual({ total: 6, inSections: 3, inRest: 4, inBoth: 1 })
   })
 })
 
-describe('globs, the retry prompt and the built facts', () => {
-  it('matches * within a folder, ** across folders, and the whole path', () => {
-    expect(globMatch('src/openapi-docs/*', 'src/openapi-docs/a.json')).toBe(true)
-    expect(globMatch('src/openapi-docs/*', 'src/openapi-docs/deep/a.json')).toBe(false)
-    expect(globMatch('src/**', 'src/a/b/c.ts')).toBe(true)
-    expect(globMatch('a.b', 'aXb')).toBe(false) // a dot is literal
-    expect(globMatch('', 'a')).toBe(false)
-  })
+describe('the retry prompt and the built facts', () => {
   it('words the problem prompt and the failure', () => {
     expect(problemPrompt(['one', 'two'])).toBe(
       'The answer has these problems. Fix every one, and answer with the whole JSON document again, nothing else:\n- one\n- two'
@@ -276,7 +271,7 @@ describe('globs, the retry prompt and the built facts', () => {
     })
     const info = { diffRefs: { head: 'h1' } }
     const f = sectionFactsOf([
-      { key: 'r!1', noDiff: false, snapshot: { info }, files: [mk(strict), mk([], { path: 'noise.ts' }), mk(strict, { path: 'g.ts', generated: true })] },
+      { key: 'r!1', noDiff: false, snapshot: { info }, files: [mk(strict), mk([], { path: 'noise.ts' }), mk(strict, { path: 'g.ts' })] },
       { key: 'r!2', noDiff: true, snapshot: { info: { diffRefs: { head: 'h2' } } }, files: [] }
     ])
     const a = f.files.get(fileKey('r!1', 'a.ts'))!
@@ -286,9 +281,6 @@ describe('globs, the retry prompt and the built facts', () => {
     ])
     expect([...a.rawNew]).toEqual([2, 4])
     expect([...a.rawOld]).toEqual([2])
-    expect(a.mechanical).toBe(false)
-    expect(f.files.get(fileKey('r!1', 'noise.ts'))!.mechanical).toBe(true) // nothing to read at the Code only level
-    expect(f.files.get(fileKey('r!1', 'g.ts'))!.mechanical).toBe(true)
     expect(f.filesByMr.has('r!2')).toBe(false)
     expect(f.heads.get('r!2')).toBe('h2')
   })
@@ -427,6 +419,36 @@ describe('Accept and Viewed', () => {
     const rewritten: SectionsDocument = { ...doc, sections: doc.sections.map((x) => (x.id === 'c' ? { ...x, files: [{ mr: 'r!2', path: 'y.md' }] } : x)) }
     expect(isAccepted(rewritten, s.accepted, s.viewed, 'c')).toBe(false)
     expect(acceptSection(doc, start.accepted, 'nope')).toEqual({ accepted: start.accepted, mark: [] })
+  })
+  it('Everything else is accepted like any section, and a file that is partly in a section is viewed only when both are accepted', () => {
+    // solo.ts is shown whole by A. shared.ts is shown in part by A and B, and its other change is in Everything else. lock.json is only there.
+    const page = withRest(
+      {
+        summary: '',
+        sections: [
+          { id: 'a', title: 'A', text: '', snippets: [{ mr: 'r!1', path: 'shared.ts', lines: [1, 2] }] },
+          { id: 'b', title: 'B', text: '', snippets: [{ mr: 'r!1', path: 'solo.ts', lines: [1, 2] }] }
+        ]
+      },
+      [
+        { mr: 'r!1', path: 'shared.ts', whole: false, runs: [{ new: [9], old: [] }] },
+        { mr: 'r!1', path: 'lock.json', whole: true, runs: [] }
+      ]
+    )
+    const lock = viewedId('r!1', 'lock.json')
+    const run = (s: { accepted: Accepted; viewed: Set<string> }, id: string): { accepted: Accepted; viewed: Set<string> } => {
+      const r = acceptSection(page, s.accepted, id)
+      return { accepted: r.accepted, viewed: new Set([...s.viewed, ...r.mark]) }
+    }
+    let s = run(start, 'a')
+    expect(s.viewed.has(shared)).toBe(false) // Everything else holds the other change of this file
+    s = run(s, REST_ID)
+    expect(s.viewed.has(lock)).toBe(true)
+    expect(s.viewed.has(shared)).toBe(true) // A and Everything else are accepted
+    expect(isAccepted(page, s.accepted, s.viewed, REST_ID)).toBe(true)
+    const un = unacceptSection(page, s.accepted, REST_ID)
+    expect(un.unmark).toEqual([shared, lock])
+    expect(waitingFor(page, un.accepted, 'a', { mr: 'r!1', path: 'shared.ts' }).map((x) => x.id)).toEqual([REST_ID])
   })
   it('counts the viewed files of a section', () => {
     expect(sectionProgress(doc.sections[0], new Set([solo]))).toEqual({ viewed: 1, total: 2 })

@@ -20,7 +20,7 @@ import { api } from '../api'
 import { useReview } from './review-context'
 import { SubmitDialog, reviewable } from './SubmitDialog'
 import { viewedId } from '@shared/sections'
-import { SectionsView } from './SectionsView'
+import { SectionsStatus, SectionsView } from './SectionsView'
 import { codeOf as codeOfLine, intraMapOf } from './intra-marks'
 import { LineChat } from './LineChat'
 import { CommentForm, DraftCard, ThreadCard } from './ThreadViews'
@@ -179,7 +179,10 @@ export function DiffTab(props: { visible?: (mrKey: string) => boolean }): React.
   const r = useReview()
   const result = r.data
   const hasCombined = result.combined.length > 0
-  const [view, setView] = useState<ViewName>(() => (store<ViewName>('codediff:view', 'mr') === 'combined' && hasCombined ? 'combined' : 'mr'))
+  const [view, setView] = useState<ViewName>(() => {
+    const saved = store<ViewName>('codediff:view', 'mr')
+    return saved === 'summarised' ? 'summarised' : saved === 'combined' && hasCombined ? 'combined' : 'mr'
+  })
   const [level, setLevel] = useState<LevelName>(() => store<LevelName>('codediff:noise', 'strict'))
   const [filter, setFilter] = useState('')
   const [selected, setSelected] = useState<string | null>(null)
@@ -254,10 +257,12 @@ export function DiffTab(props: { visible?: (mrKey: string) => boolean }): React.
   useEffect(() => save('codediff:view', view), [view])
   useEffect(() => save('codediff:noise', level), [level])
 
-  // The Summarised view shows no tree. Leaving it returns to the Linear view, and a page that went away does the same.
+  // Opening the Summarised view, or opening the Diff tab with it chosen, writes the page when it is missing or out of date. A build never does.
+  // A failed run is not started again by itself. The reader presses Try again.
+  const sec = r.sections
   useEffect(() => {
-    if (view === 'summarised' && !r.sections.document) setView('mr')
-  }, [view, r.sections.document])
+    if (view === 'summarised' && !sec.pending && !sec.error && !sec.document) void api.sections.start(r.slug)
+  }, [view, sec.pending, sec.error, sec.document, r.slug])
   const { visible: mrShown } = props
   const all = useMemo(() => entriesOf(result, view).filter((e) => !mrShown || (e.mrKey ? mrShown(e.mrKey) : e.partMrs.some(mrShown))), [result, view, mrShown])
   // A file is noise at a level when it is not binary and has no hunk at that level (file 02 section 2.1).
@@ -604,14 +609,13 @@ export function DiffTab(props: { visible?: (mrKey: string) => boolean }): React.
           <span className="seg">
             <button
               className={view === 'summarised' ? 'on' : ''}
-              disabled={!r.sections.document}
               data-testid="view-summarised"
               title={
                 r.sections.pending
                   ? 'The AI is writing the Summarised page'
                   : r.sections.document
                     ? 'The parts of the change that matter, in reading order'
-                    : 'No Summarised page yet'
+                    : 'The AI writes the page when you open this view'
               }
               onClick={() => setView('summarised')}
             >
@@ -781,15 +785,19 @@ export function DiffTab(props: { visible?: (mrKey: string) => boolean }): React.
 
         <section className="rightcard">
           <div className="rightscroll">
-            {view === 'summarised' && r.sections.document ? (
-              <SectionsView
-                doc={r.sections.document}
-                level={level}
-                onOpen={(mr, path, line) => {
-                  setView('mr')
-                  r.requestOpen(mr, path, line)
-                }}
-              />
+            {view === 'summarised' ? (
+              r.sections.document ? (
+                <SectionsView
+                  doc={r.sections.document}
+                  level={level}
+                  onOpen={(mr, path, line) => {
+                    setView('mr')
+                    r.requestOpen(mr, path, line)
+                  }}
+                />
+              ) : (
+                <SectionsStatus state={r.sections} />
+              )
             ) : (
               <div className="filepanel">
                 {current ? (

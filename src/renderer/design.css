@@ -1283,3 +1283,54 @@ table.diff.side td.code.del .chg {
 .sectionthread > .commentform {
   align-self: stretch;
 }
+.section.leftover {
+  background: var(--panel);
+}
+.restlist {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.restfile {
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--bg);
+}
+.restfile > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  cursor: pointer;
+  list-style: none;
+}
+.restfile > summary::-webkit-details-marker {
+  display: none;
+}
+.restfile .restpath {
+  font-size: 12px;
+}
+.restfile .tick {
+  color: var(--ok);
+}
+.restbody {
+  border-top: 1px solid var(--line);
+  padding: 6px 10px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+}
+.restbody table.diff {
+  align-self: stretch;
+  font-size: 12px;
+}
+.sectionsstatus {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 48px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-start;
+}

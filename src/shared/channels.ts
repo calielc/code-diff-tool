@@ -35,6 +35,7 @@ export const CH = {
   chatCancel: 'chat:cancel',
   chatEvent: 'chat:event',
   sectionsGet: 'sections:get',
+  sectionsStart: 'sections:start',
   sectionsState: 'sections:state',
   aiGet: 'ai:get',
   aiStart: 'ai:start',

@@ -1,6 +1,6 @@
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { forgeEnv, startFakeForge, type FakeForge, type Fixture } from '../fakes/fake-forge'
@@ -14,7 +14,12 @@ interface Setup {
   shas: { base: string; head: string }
 }
 
-/** One change that edits line 2 of a.txt and adds b.txt. */
+const lines = (edit: Record<number, string> = {}): string =>
+  Array.from({ length: 14 }, (_, i) => edit[i + 1] ?? `line ${i + 1}`)
+    .join('\n')
+    .concat('\n')
+
+/** One change that edits line 2 and line 12 of a.txt, which are far apart, and adds b.txt. */
 function setup(): Setup {
   const base = mkdtempSync(join(tmpdir(), 'codediff-e2e8-'))
   const root = join(base, 'ws')
@@ -26,11 +31,11 @@ function setup(): Setup {
   git('config', 'user.email', 't@example.com')
   git('config', 'core.autocrlf', 'false')
   git('remote', 'add', 'origin', 'git@gitlab.com:team/backend/x.git')
-  writeFileSync(join(dir, 'a.txt'), 'one\ntwo\nthree\n')
+  writeFileSync(join(dir, 'a.txt'), lines())
   git('add', '-A')
   git('commit', '-q', '-m', 'base')
   const b = git('rev-parse', 'HEAD')
-  writeFileSync(join(dir, 'a.txt'), 'one\nTWO\nthree\n')
+  writeFileSync(join(dir, 'a.txt'), lines({ 2: 'TWO', 12: 'TWELVE' }))
   writeFileSync(join(dir, 'b.txt'), 'brand new\n')
   git('add', '-A')
   git('commit', '-q', '-m', 'head')
@@ -83,31 +88,26 @@ async function openReview(
   return { app, page, forge }
 }
 
+/** How many times the fake AI tool was started. */
+const runs = (s: Setup): number =>
+  readFileSync(s.log, 'utf8')
+    .split('\n')
+    .filter((l) => l.includes('"args"')).length
+
 const K = 'backend/x!12'
-/** Two sections that both show a.txt. The second one also shows the new file b.txt. */
+/**
+ * The tool picks two ideas. Both show line 2 of a.txt. Nothing shows line 12 of a.txt or the file b.txt, so the app puts them in
+ * "Everything else", where a.txt is also a file that two sections show.
+ */
 const GOOD = {
   summary: 'A user sees the change.',
   sections: [
-    {
-      id: 's1',
-      title: 'The first idea',
-      text: 'It changes line two.',
-      snippets: [{ mr: K, path: 'a.txt', lines: [2, 2] }],
-      files: []
-    },
-    {
-      id: 's2',
-      title: 'The second idea',
-      text: 'It also needs line two, and adds a file.',
-      snippets: [
-        { mr: K, path: 'a.txt', lines: [2, 2] },
-        { mr: K, path: 'b.txt', lines: [1, 1] }
-      ],
-      files: []
-    }
-  ]
+    { id: 's1', title: 'The first idea', text: 'It changes line two.', snippets: [{ mr: K, path: 'a.txt', lines: [2, 2] }] },
+    { id: 's2', title: 'The second idea', text: 'It also needs line two.', snippets: [{ mr: K, path: 'a.txt', lines: [2, 2] }] }
+  ],
+  restText: 'The change to line twelve and the new file.'
 }
-const ENV = { CODEDIFF_TEST_SECTIONS: '1', FAKE_CLAUDE_ANSWER: JSON.stringify(GOOD) }
+const ENV = { FAKE_CLAUDE_ANSWER: JSON.stringify(GOOD), FAKE_CLAUDE_SLEEP_MS: '1200' }
 
 const thread = (body: string): object => ({
   id: 'a'.repeat(40),
@@ -121,6 +121,7 @@ test.describe.serial('the Summarised page', () => {
   let page: Page
   let forge: FakeForge
   const commentBody = '**Section: The first idea**\n\nWhy two?'
+  const tree = (name: string): ReturnType<Page['getByTestId']> => page.getByTestId(`file-${name}`)
 
   test.beforeAll(async () => {
     s = setup()
@@ -137,62 +138,96 @@ test.describe.serial('the Summarised page', () => {
     app = opened.app
     page = opened.page
     forge = opened.forge
-    await page.getByTestId('tab-diff').click()
-    await expect(page.getByTestId('view-summarised')).toBeEnabled({ timeout: 20_000 }) // pending first, then ready
-    await page.getByTestId('view-summarised').click()
   })
   test.afterAll(async () => {
     await app.close()
     await forge.close()
   })
 
-  test('arrives without a reload as a page of sections in order, with code, files and coverage', async () => {
-    await expect(page.getByTestId('sections-summary')).toHaveText('A user sees the change.')
-    await expect(page.locator('article.section h3')).toHaveText(['The first idea', 'The second idea'])
-    await expect(page.getByTestId('section-s1')).toContainText('It changes line two.')
-    await expect(page.getByTestId('section-s1').locator('table.diff tr.add')).toContainText('TWO')
-    await expect(page.getByTestId('section-s1').locator('table.diff tr.del')).toContainText('two')
-    await expect(page.getByTestId('section-s2').locator('.snippet')).toHaveCount(2)
-    await expect(page.getByTestId('section-files-s2')).toContainText('a.txt')
-    await expect(page.getByTestId('section-files-s2')).toContainText('b.txt')
-    await expect(page.getByTestId('sections-coverage')).toHaveText('All 2 changed files are in a section.')
-    await expect(page.getByTestId('sections-progress')).toContainText('0 of 2 sections accepted · 0 of 2 files viewed')
+  test('a build does not write the page. Opening the view does, with the running state in between', async () => {
+    await page.getByTestId('tab-diff').click()
+    await expect(page.getByTestId('view-summarised')).toBeEnabled()
+    expect(runs(s)).toBe(0) // the build started no AI tool
+    expect(existsSync(join(s.root, '.code-diff', 'reviews', 'R-1', 'sections.json'))).toBe(false)
     await expect(page.getByTestId('sections-banner')).toHaveCount(0)
+    await page.getByTestId('view-summarised').click()
+    await expect(page.getByTestId('sections-status')).toContainText('The AI is writing the Summarised page')
+    await expect(page.getByTestId('sections-banner')).toContainText('The AI is writing the Summarised page')
+    await expect(page.getByTestId('sections-view')).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByTestId('sections-banner')).toHaveCount(0)
+    expect(runs(s)).toBe(1)
     expect(JSON.parse(readFileSync(join(s.root, '.code-diff', 'reviews', 'R-1', 'sections.json'), 'utf8')).summary).toBe('A user sees the change.')
-    await expect(page.getByTestId('file-a.txt')).toBeHidden() // the Summarised view shows no tree
   })
 
-  test('Accept marks the files viewed, and a file of two sections waits for both', async () => {
+  test('the page has the written sections, then Everything else, computed from the diffs, with the coverage line and the code', async () => {
+    await expect(page.getByTestId('sections-summary')).toHaveText('A user sees the change.')
+    await expect(page.locator('article.section h3')).toHaveText(['The first idea', 'The second idea', 'Everything else'])
+    await expect(page.getByTestId('section-s1').locator('table.diff tr.add')).toContainText('TWO')
+    await expect(page.getByTestId('section-s1').locator('table.diff tr.del')).toContainText('line 2')
+    await expect(page.getByTestId('section-everything-else')).toContainText('The change to line twelve and the new file.') // the text of the tool
+    await expect(page.getByTestId('sections-coverage')).toHaveText(
+      '1 of 2 changed files are in the sections. Everything else holds 2 files, 1 of them with changes that a section also shows.'
+    )
+    await expect(page.getByTestId('rest-file-a.txt')).toContainText('1 change that no section shows')
+    await expect(page.getByTestId('rest-file-b.txt')).toContainText('the whole file')
+    await expect(page.getByTestId('sections-progress')).toContainText('0 of 3 sections accepted · 0 of 2 files viewed')
+    await expect(tree('a.txt')).toBeHidden() // the Summarised view shows no tree
+  })
+
+  test('Everything else shows its code when a file opens', async () => {
+    await expect(page.getByTestId('rest-file-b.txt').locator('table.diff')).toHaveCount(0) // nothing is drawn until the file opens
+    await page.getByTestId('rest-file-b.txt').locator('summary').click()
+    await expect(page.getByTestId('rest-file-b.txt').locator('table.diff tr.add')).toContainText('brand new')
+    await page.getByTestId('rest-file-a.txt').locator('summary').click()
+    const rows = page.getByTestId('rest-file-a.txt').locator('table.diff tr.add')
+    await expect(rows).toContainText('TWELVE') // only the change that no section shows
+    await expect(rows).not.toContainText('TWO')
+  })
+
+  test('Accept marks the files viewed. A file in several sections, with Everything else, waits for all of them', async () => {
     await page.getByTestId('accept-s1').click()
     await expect(page.getByTestId('section-s1')).toHaveAttribute('data-accepted', 'true')
-    await expect(page.getByTestId('section-progress-s1')).toHaveText('0 of 1 file viewed') // a.txt waits for the second idea
-    await expect(page.getByTestId('section-files-s1').getByTestId('sfile-a.txt')).toHaveAttribute('title', /Not viewed until you accept: The second idea/)
+    await expect(page.getByTestId('section-progress-s1')).toHaveText('0 of 1 file viewed')
+    await expect(page.getByTestId('section-files-s1').getByTestId('sfile-a.txt')).toHaveAttribute(
+      'title',
+      /Not viewed until you accept: The second idea, Everything else\./
+    )
     await page.getByTestId('accept-s2').click()
+    await expect(page.getByTestId('section-progress-s2')).toHaveText('0 of 1 file viewed') // Everything else is not accepted yet
+    await page.getByTestId('accept-everything-else').click()
     await expect(page.getByTestId('section-progress-s1')).toHaveText('1 of 1 file viewed')
-    await expect(page.getByTestId('section-progress-s2')).toHaveText('2 of 2 files viewed')
-    await expect(page.getByTestId('sections-progress')).toContainText('2 of 2 sections accepted · 2 of 2 files viewed')
+    await expect(page.getByTestId('section-progress-everything-else')).toHaveText('2 of 2 files viewed')
+    await expect(page.getByTestId('sections-progress')).toContainText('3 of 3 sections accepted · 2 of 2 files viewed')
     // the Linear view shows the same marks, with its own counter
     await page.getByRole('button', { name: 'Linear', exact: true }).click()
-    await expect(page.getByTestId('file-a.txt')).toHaveClass(/viewed/)
-    await expect(page.getByTestId('file-b.txt')).toHaveClass(/viewed/)
+    await expect(tree('a.txt')).toHaveClass(/viewed/)
+    await expect(tree('b.txt')).toHaveClass(/viewed/)
     await expect(page.locator('.filetree .progress')).toContainText('2 of 2 viewed')
     await page.getByTestId('view-summarised').click()
   })
 
-  test('un-accepting a section takes the viewed mark from its files, and a file marked in the tree takes the section out', async () => {
-    await page.getByTestId('accept-s1').click() // un-accept the first
-    await expect(page.getByTestId('section-s1')).toHaveAttribute('data-accepted', 'false')
-    await expect(page.getByTestId('section-s2')).toHaveAttribute('data-accepted', 'true') // a.txt waits for the first idea
-    await expect(page.getByTestId('section-progress-s2')).toHaveText('1 of 2 files viewed')
+  test('un-accepting Everything else takes the mark from its files, and the other accepted sections stay accepted', async () => {
+    await page.getByTestId('accept-everything-else').click()
+    await expect(page.getByTestId('section-everything-else')).toHaveAttribute('data-accepted', 'false')
+    await expect(page.getByTestId('section-s1')).toHaveAttribute('data-accepted', 'true') // a.txt waits for Everything else
+    await expect(page.getByTestId('section-s2')).toHaveAttribute('data-accepted', 'true')
+    await expect(page.getByTestId('sections-progress')).toContainText('2 of 3 sections accepted · 0 of 2 files viewed')
     await page.getByRole('button', { name: 'Linear', exact: true }).click()
-    await expect(page.getByTestId('file-a.txt')).not.toHaveClass(/viewed/)
-    await expect(page.getByTestId('file-b.txt')).toHaveClass(/viewed/)
-    await page.getByTestId('file-b.txt').getByTitle('Viewed').uncheck() // un-view the file that only the second idea shows
+    await expect(tree('a.txt')).not.toHaveClass(/viewed/)
+    await expect(tree('b.txt')).not.toHaveClass(/viewed/)
     await page.getByTestId('view-summarised').click()
-    await expect(page.getByTestId('section-s2')).toHaveAttribute('data-accepted', 'false')
-    await page.getByTestId('accept-s1').click() // accept the first again: a.txt waits for the second
-    await page.getByTestId('accept-s2').click()
-    await expect(page.getByTestId('sections-progress')).toContainText('2 of 2 sections accepted · 2 of 2 files viewed')
+    await page.getByTestId('accept-everything-else').click() // accept it again, which marks both files
+    await expect(page.getByTestId('sections-progress')).toContainText('3 of 3 sections accepted · 2 of 2 files viewed')
+  })
+
+  test('a file that the reviewer un-marks in the tree takes the section that holds only that file out of the accepted state', async () => {
+    await page.getByRole('button', { name: 'Linear', exact: true }).click()
+    await tree('b.txt').getByTitle('Viewed').uncheck()
+    await page.getByTestId('view-summarised').click()
+    await expect(page.getByTestId('section-everything-else')).toHaveAttribute('data-accepted', 'false')
+    await expect(page.getByTestId('section-s1')).toHaveAttribute('data-accepted', 'true') // b.txt is not a file of s1
+    await page.getByTestId('accept-everything-else').click()
+    await expect(page.getByTestId('sections-progress')).toContainText('3 of 3 sections accepted · 2 of 2 files viewed')
   })
 
   test('a comment on a section is posted on the change with the name of the section, shows on the section, and resolves', async () => {
@@ -211,27 +246,27 @@ test.describe.serial('the Summarised page', () => {
     expect(forge.bodies.find((c) => c.method === 'PUT')!.body).toEqual({ resolved: true })
   })
 
-  test('a section can keep its comment as a draft, which stays on the section until it is posted', async () => {
-    await page.getByTestId('section-comment-s2').click()
+  test('Everything else has a thread of its own, and a draft stays on its section until it is posted', async () => {
+    await page.getByTestId('section-comment-everything-else').click()
     await page.getByLabel('Comment', { exact: true }).fill('Draft thought')
     await page.getByTestId('save-draft').click()
-    const drafts = page.getByTestId('section-thread-s2').getByTestId('draft')
+    const drafts = page.getByTestId('section-thread-everything-else').getByTestId('draft')
     await expect(drafts).toContainText('Draft thought')
     await expect(drafts).toContainText('Draft, not posted')
     const saved = JSON.parse(readFileSync(join(s.root, '.code-diff', 'reviews', 'R-1', 'comments.json'), 'utf8'))
     expect(Object.values<{ path: unknown; body: string }>(saved).map((d) => [d.path, d.body])).toEqual([
-      [null, '**Section: The second idea**\n\nDraft thought']
+      [null, '**Section: Everything else**\n\nDraft thought']
     ])
   })
 
   test('a file in the footer opens in the Linear view', async () => {
-    await page.getByTestId('section-files-s2').getByTestId('sfile-b.txt').click()
+    await page.getByTestId('section-files-s2').getByTestId('sfile-a.txt').click()
     await expect(page.getByTestId('file-scope')).toContainText('!12 · backend/x')
-    await expect(page.getByTestId('file-header')).toContainText('b.txt')
+    await expect(page.getByTestId('file-header')).toContainText('a.txt')
   })
 })
 
-test('a page that no longer matches is hidden, shown as out of date, and replaced', async () => {
+test('a page that no longer matches is held back at the build, and written again when the saved choice opens the view', async () => {
   const s = setup()
   const dir = join(s.root, '.code-diff', 'reviews', 'R-1')
   mkdirSync(dir, { recursive: true })
@@ -242,17 +277,37 @@ test('a page that no longer matches is hidden, shown as out of date, and replace
   }
   writeFileSync(join(dir, 'sections.json'), JSON.stringify(stale))
   writeFileSync(join(dir, 'sections-basis.json'), JSON.stringify({ issues: [], heads: { [K]: s.shas.head } }))
-  const { app, page, forge } = await openReview(s, {}, { ...ENV, FAKE_CLAUDE_SLEEP_MS: '2500' })
+  const { app, page, forge } = await openReview(s, {}, ENV)
+  // the build checked the saved page, held it back, and started nothing
+  await expect(page.getByTestId('mrs-tab')).toBeVisible()
+  await expect(page.getByTestId('sections-banner')).toHaveCount(0)
+  expect(runs(s)).toBe(0)
+  // the reader's saved choice is the Summarised view, so opening the Diff tab writes the page
+  await page.evaluate(() => localStorage.setItem('codediff:view', JSON.stringify('summarised')))
+  await page.getByTestId('tab-diff').click()
+  await expect(page.getByTestId('sections-status')).toContainText('The AI is writing the Summarised page')
   await expect(page.getByTestId('sections-banner')).toContainText(
     'The Summarised page is out of date: the changes moved since it was written (1 problem(s)). The AI is writing it again.'
   )
+  await expect(page.getByText('The OLD page.')).toHaveCount(0) // the old page is never shown while the run goes
+  await expect(page.getByTestId('sections-summary')).toHaveText('A user sees the change.', { timeout: 20_000 })
+  expect(runs(s)).toBe(1)
+  await app.close()
+  await forge.close()
+})
+
+test('a failed run shows the reason with a way to try again, and the banner', async () => {
+  const s = setup()
+  const { app, page, forge } = await openReview(s, {}, { FAKE_CLAUDE_ANSWER: 'no json here' })
   await page.getByTestId('tab-diff').click()
-  await expect(page.getByTestId('view-summarised')).toBeDisabled() // the old page is never shown while the run goes
-  await expect(page.getByText('The OLD page.')).toHaveCount(0)
-  await expect(page.getByTestId('view-summarised')).toBeEnabled({ timeout: 20_000 })
-  await expect(page.getByTestId('sections-banner')).toHaveCount(0)
   await page.getByTestId('view-summarised').click()
-  await expect(page.getByTestId('sections-summary')).toHaveText('A user sees the change.')
+  await expect(page.getByTestId('sections-error')).toBeVisible({ timeout: 20_000 })
+  await expect(page.getByTestId('sections-status')).toContainText('The answer still had 1 problem(s) after 3 answers')
+  await expect(page.getByTestId('sections-banner')).toContainText('press Try again')
+  expect(runs(s)).toBe(3) // three tries, and no fourth by itself
+  await page.getByTestId('sections-retry').click()
+  await expect.poll(() => runs(s), { timeout: 20_000 }).toBe(6)
+  await expect(page.getByTestId('sections-error')).toBeVisible()
   await app.close()
   await forge.close()
 })

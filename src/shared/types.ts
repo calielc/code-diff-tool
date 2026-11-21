@@ -126,6 +126,8 @@ export interface CodeDiffApi {
   }
   sections: {
     get(slug: string): Promise<SectionsState>
+    /** The reader opened the Summarised view: write the page when it is missing or out of date. It returns at once. */
+    start(slug: string): Promise<void>
     onState(cb: (m: { slug: string; state: SectionsState }) => void): () => void
   }
   ai: {

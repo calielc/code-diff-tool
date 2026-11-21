@@ -18,6 +18,9 @@ import { atomicWrite, reviewDir } from './reviews'
 import type { Session } from './session'
 
 const states = new Map<string, SectionsState>()
+/** The newest session of each review. A rebuild replaces it. */
+const sessions = new Map<string, Session>()
+/** The reviews with a run in progress. It never holds a review twice, so two runs never start for one review. */
 const running = new Set<string>()
 const listeners = new Set<(slug: string, state: SectionsState) => void>()
 
@@ -51,31 +54,52 @@ const basisOf = (session: Session): SectionsBasis => ({
   heads: Object.fromEntries(session.result.mrs.map((m) => [m.key, m.snapshot.info.diffRefs.head]))
 })
 
-/**
- * At each build: read the saved page and check it against the new changes. A valid page goes to the window. An invalid one starts a run,
- * unless one is already running for this review, and is withheld until the new one arrives.
- */
-export async function startSections(session: Session): Promise<void> {
-  const { slug, result } = session
-  const dir = reviewDir(session.root, slug)
+/** The saved page, checked against the changes of the session. The page is valid, or the problems say why it is out of date. */
+async function readSaved(session: Session): Promise<{ document: SectionsDocument | null; problems: string[] }> {
+  const dir = reviewDir(session.root, session.slug)
   const saved = await readJson<unknown>(join(dir, 'sections.json'))
-  let problems: string[] = []
-  let document: SectionsDocument | null = null
-  if (saved) {
-    const check = checkSections(JSON.stringify(saved), sectionFactsOf(result.mrs))
-    problems = [...check.problems, ...basisProblems(await readJson<SectionsBasis>(join(dir, 'sections-basis.json')), basisOf(session))]
-    document = problems.length === 0 ? check.document : null
+  if (!saved) return { document: null, problems: [] }
+  const check = checkSections(JSON.stringify(saved), sectionFactsOf(session.result.mrs))
+  const problems = [...check.problems, ...basisProblems(await readJson<SectionsBasis>(join(dir, 'sections-basis.json')), basisOf(session))]
+  return { document: problems.length === 0 ? check.document : null, problems }
+}
+
+/**
+ * At each build: read the saved page and check it against the new changes. A valid page goes to the window. An invalid or missing page
+ * is withheld, and nothing is written. A build never starts the AI tool. The page is written when the reader opens the Summarised
+ * view (`requestSections`).
+ */
+export async function loadSections(session: Session): Promise<void> {
+  sessions.set(session.slug, session)
+  if (running.has(session.slug)) return // a run is in progress: its state stays, and its end checks the page against this session
+  const { document, problems } = await readSaved(session)
+  set(session.slug, { pending: false, document, problems: document ? [] : problems, error: null, context: document ? 'ready' : null })
+}
+
+/**
+ * The reader opened the Summarised view, or pressed Try again. A valid saved page is used as it is. Otherwise the AI tool writes the
+ * page, unless a run is in progress for the review. Leaving the view does not stop a run: the page is saved when it ends, and it is
+ * there when the reader comes back.
+ */
+export async function requestSections(slug: string): Promise<void> {
+  const session = sessions.get(slug)
+  if (!session || running.has(slug)) return
+  running.add(slug) // set before the first wait, so a second request finds it
+  let started = false
+  try {
+    const saved = await readSaved(session)
+    if (saved.document) return void set(slug, { pending: false, document: saved.document, problems: [], error: null, context: 'ready' })
+    set(slug, { pending: true, document: null, problems: saved.problems, error: null, context: 'gathering' })
+    started = true
+  } finally {
+    if (!started) running.delete(slug) // a valid saved page, or a failed read: no run, so the review is free again
   }
-  if (document) return void set(slug, { pending: false, document, problems: [], error: null, context: 'ready' })
-  if (running.has(slug)) return // a run does not restart while one is in progress
-  set(slug, { pending: true, document: null, problems, error: null, context: 'gathering' })
-  void run(session)
+  await run(session)
 }
 
 async function run(session: Session): Promise<void> {
   const { root, slug, result } = session
   const dir = reviewDir(root, slug)
-  running.add(slug)
   try {
     await rm(join(dir, 'sections-error.txt'), { force: true })
     const ctx = await session.context.catch((e) => {
@@ -106,6 +130,10 @@ async function run(session: Session): Promise<void> {
       if (check.document) {
         await atomicWrite(join(dir, 'sections.json'), JSON.stringify(check.document))
         await atomicWrite(join(dir, 'sections-basis.json'), JSON.stringify(basisOf(session)))
+        const current = sessions.get(slug)
+        running.delete(slug)
+        // The review was built again during the run: check the new page against the new changes
+        if (current && current !== session) return void (await loadSections(current))
         return void set(slug, { pending: false, document: check.document, problems: [], error: null })
       }
       if (attempt === 3) throw new Error(giveUpMessage(check.problems))
@@ -124,5 +152,6 @@ async function run(session: Session): Promise<void> {
 /** For the tests. */
 export function resetSectionsMemory(): void {
   states.clear()
+  sessions.clear()
   running.clear()
 }

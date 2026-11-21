@@ -25,7 +25,7 @@ This file describes how the app is built. The product features are in `docs/FEAT
 
 ## 3. Files
 
-- `src/shared`: code and types that both sides use, with no dependency on Electron or the DOM. The diff model, the thread rules, the comparison of two lines, the file kinds, the themes, the prompts of the AI tools, the checks of their answers, the launch request, the version helpers of the review and the types of the IPC.
+- `src/shared`: code and types that both sides use, with no dependency on Electron or the DOM. The diff model, the thread rules, the comparison of two lines, the file kinds (`file-kinds.ts`: the type of a file for the Types filter, the counts and the options that show), the themes, the prompts of the AI tools, the checks of their answers, the launch request, the version helpers of the review and the types of the IPC.
 - `src/main/clients`: one module for each outside system. `rest-api.ts` and `forge-api.ts` make the calls, `gitlab.ts` and `github.ts` map them to the neutral model, `jira.ts` reads issues, `git.ts` runs `git`, and `writes.ts` posts comments, approvals and state changes.
 - `src/main/diff`: the diff engine. It is pure TypeScript with no `git` dependency except the reading of blobs. `myers.ts` makes the line diff, `noise.ts` finds the three noise levels, `file-diff.ts` builds a file with its hunks, `mr-files.ts` builds the files of a change, and `combined.ts` builds the combined view of a repo.
 - `src/main/services`: the build of a review, the session, the issues and their summaries, the review context folder, the exports of commits, the watcher, the AI runs, the flow, the commits of a file, the credentials and the state of the app.

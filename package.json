@@ -3,7 +3,7 @@
   "productName": "Code Diff Tool",
   "version": "0.1.0",
   "private": true,
-  "description": "Desktop review tool for GitLab merge requests (implements calielc/code-diff-spec)",
+  "description": "Desktop app to review GitLab and GitHub merge requests and pull requests together with their issues",
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
@@ -16,10 +16,13 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "icon": "electron scripts/make-icon.cjs",
     "check": "npm run typecheck && npm run lint && npm run format:check && npm test",
+    "icon": "electron scripts/make-icon.cjs",
+    "screenshots": "electron-vite build && node scripts/screenshots.cjs",
     "pack:dir": "electron-vite build && electron-builder --dir",
-    "dist": "electron-vite build && electron-builder"
+    "dist": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/dist.ts",
+    "dist:release": "electron-vite build && electron-builder",
+    "prepare": "husky"
   },
   "dependencies": {
     "@fontsource/ibm-plex-mono": "5.3.0",
@@ -44,13 +47,15 @@
     "eslint-config-prettier": "10.1.8",
     "eslint-plugin-react-hooks": "7.1.1",
     "globals": "17.14.0",
+    "husky": "9.1.7",
+    "lint-staged": "17.6.1",
     "prettier": "3.10.1",
     "typescript": "6.0.3",
     "typescript-eslint": "8.73.0",
     "vite": "8.3.8",
     "vitest": "5.1.1"
   },
-  "author": "Caliel",
+  "author": "Caliel Lima da Costa",
   "build": {
     "appId": "dev.caliel.code-diff-tool",
     "productName": "Code Diff Tool",
@@ -81,7 +86,8 @@
     },
     "mac": {
       "target": [
-        "dmg"
+        "dmg",
+        "zip"
       ],
       "icon": "build/icon.png",
       "category": "public.app-category.developer-tools"
@@ -100,6 +106,30 @@
           "codediff"
         ]
       }
+    ],
+    "artifactName": "Code-Diff-Tool-${version}-${os}-${arch}.${ext}",
+    "npmRebuild": false,
+    "afterPack": "scripts/ad-hoc-sign.cjs"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/calielc/code-diff-tool.git"
+  },
+  "bugs": {
+    "url": "https://github.com/calielc/code-diff-tool/issues"
+  },
+  "homepage": "https://github.com/calielc/code-diff-tool#readme",
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,mts}": [
+      "eslint --max-warnings=0",
+      "prettier --check"
+    ],
+    "*.{json,md,yml,yaml,css,html,mjs}": [
+      "prettier --check"
     ]
   }
 }

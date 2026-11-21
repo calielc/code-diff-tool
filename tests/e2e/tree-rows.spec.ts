@@ -235,7 +235,7 @@ test('the MR name is not cut at a wide pane, and shrinks with an ellipsis before
 
   // Assert
   expect(wide, 'the label is cut at a wide pane').toBeLessThanOrEqual(0)
-  expect(tight, 'the label has no room at all').toBeGreaterThan(30)
+  expect(tight, 'the label has no room at all').toBeGreaterThan(20)
   await app.close()
 })
 

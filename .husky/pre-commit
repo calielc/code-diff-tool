@@ -1,0 +1,7 @@
+# Checks the staged files before each commit. It only checks and never changes a file.
+# `git commit --no-verify` skips it. The CI runs the same checks on every pull request.
+npx --no-install lint-staged || {
+  echo "" >&2
+  echo "The checks found problems in the staged files. Run npm run lint:fix and npm run format, stage the files again and commit again." >&2
+  exit 1
+}

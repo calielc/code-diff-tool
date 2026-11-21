@@ -37,7 +37,7 @@ test('screenshots of the main screens', async () => {
   test.skip(!out, 'set SHOTS=<folder>')
   const base = mkdtempSync(join(tmpdir(), 'codediff-shots-'))
   const root = join(base, 'ws')
-  const dir = join(root, 'backend', 'recommendation-service')
+  const dir = join(root, 'backend', 'api-service')
   mkdirSync(dir, { recursive: true })
   const git = (...a: string[]): string => execFileSync('git', ['-c', 'core.autocrlf=false', ...a], { cwd: dir, encoding: 'utf8' }).trim()
   const put = (p: string, text: string | null): void => {
@@ -50,7 +50,7 @@ test('screenshots of the main screens', async () => {
   git('config', 'user.name', 'T')
   git('config', 'user.email', 't@example.com')
   git('config', 'core.autocrlf', 'false')
-  git('remote', 'add', 'origin', 'git@gitlab.com:team/backend/recommendation-service.git')
+  git('remote', 'add', 'origin', 'git@gitlab.com:team/backend/api-service.git')
   for (const [p, [before]] of Object.entries(FILES)) if (before !== null) put(p, before)
   git('add', '-A')
   git('commit', '-q', '-m', 'base')
@@ -63,17 +63,17 @@ test('screenshots of the main screens', async () => {
   const ud = join(base, 'ud')
   mkdirSync(ud)
   writeFileSync(join(ud, 'app-state.json'), JSON.stringify({ schemaVersion: 1, workspaceRoot: root, firstRunDone: true }))
-  const P = encodeURIComponent('team/backend/recommendation-service')
+  const P = encodeURIComponent('team/backend/api-service')
   const fixture: Fixture = {
-    'GET user': { json: { username: 'caliel' } },
+    'GET user': { json: { username: 'sam' } },
     [`GET projects/${P}/merge_requests/104`]: {
       json: {
-        web_url: 'https://gitlab.com/team/backend/recommendation-service/-/merge_requests/104',
+        web_url: 'https://gitlab.com/team/backend/api-service/-/merge_requests/104',
         state: 'merged',
-        title: 'LX-2720: Publish generated recommendation-service API clients',
+        title: 'APP-101: Publish the generated API clients',
         description: 'Publishes both clients.',
-        author: { username: 'caliel' },
-        source_branch: 'feat/LX-2720-publish',
+        author: { username: 'sam' },
+        source_branch: 'feat/APP-101-publish',
         target_branch: 'main',
         diff_refs: { base_sha: baseSha, start_sha: baseSha, head_sha: head }
       }
@@ -98,7 +98,7 @@ test('screenshots of the main screens', async () => {
               body: 'Agreed, done.',
               resolvable: true,
               resolved: true,
-              author: { username: 'caliel', name: 'Caliel' },
+              author: { username: 'sam', name: 'Sam' },
               created_at: '2026-11-03T11:00:00Z',
               position: { new_path: '.config/tools.json', old_path: '.config/tools.json', new_line: 12 }
             }
@@ -121,14 +121,14 @@ test('screenshots of the main screens', async () => {
       ]
     },
     [`GET projects/${P}/merge_requests/104/reviewers`]: { json: [] },
-    'GET rest/api/3/issue/LX-2720': {
+    'GET rest/api/3/issue/APP-101': {
       json: {
-        key: 'LX-2720',
+        key: 'APP-101',
         fields: {
-          summary: 'Publish generated recommendation-service API clients and consume them',
+          summary: 'Publish the generated API clients and use them',
           issuetype: { name: 'Task' },
           status: { name: 'Done' },
-          assignee: { displayName: 'Caliel Lima da Costa' },
+          assignee: { displayName: 'Sam Lee' },
           updated: '2026-11-10T10:00:00.000+0100',
           description: {
             type: 'doc',
@@ -146,17 +146,17 @@ test('screenshots of the main screens', async () => {
         }
       }
     },
-    'GET rest/api/3/issue/LX-2720/comment': { json: { total: 0, comments: [] } }
+    'GET rest/api/3/issue/APP-101/comment': { json: { total: 0, comments: [] } }
   }
   forge = await startFakeForge(fixture)
   // a saved flow, so the Critical thinking view has something to show
-  const flowDir = join(root, '.code-diff', 'reviews', 'LX-2720')
+  const flowDir = join(root, '.code-diff', 'reviews', 'APP-101')
   mkdirSync(flowDir, { recursive: true })
-  const K = 'backend/recommendation-service!104'
-  const R = 'backend/recommendation-service'
+  const K = 'backend/api-service!104'
+  const R = 'backend/api-service'
   const flow = {
     summary:
-      'Learners on Your List and admins on Manage recommendations now reach the service through a generated client that the service publishes from two manual CI jobs.',
+      'Users of the list page and admins of the settings page now reach the service through a generated client that the service publishes from two manual CI jobs.',
     lanes: [R],
     steps: [
       {
@@ -177,9 +177,9 @@ test('screenshots of the main screens', async () => {
         title: 'generate-and-publish-package',
         kind: 'new',
         text: 'Publishes.',
-        next: [{ to: 's3', label: 'GET /api/v1/your-list' }]
+        next: [{ to: 's3', label: 'GET /api/v1/items' }]
       },
-      { id: 's3', repo: R, title: 'YourListController', kind: 'existing', text: 'unchanged', next: [{ to: 's4', label: 'bind team_ids' }] },
+      { id: 's3', repo: R, title: 'ItemsController', kind: 'existing', text: 'unchanged', next: [{ to: 's4', label: 'bind team_filter' }] },
       { id: 's4', mr: K, path: 'src/Api/Program.cs', lines: [[7, 7]], title: 'Program.Main', kind: 'changed', text: 'Prints new.' }
     ],
     review: [
@@ -200,16 +200,16 @@ test('screenshots of the main screens', async () => {
     ]
   }
   writeFileSync(join(flowDir, 'flow.json'), JSON.stringify(flow))
-  writeFileSync(join(flowDir, 'flow-issues.json'), JSON.stringify(['LX-2720']))
-  const rdir = join(root, '.code-diff', 'reviews', 'LX-2720')
+  writeFileSync(join(flowDir, 'flow-issues.json'), JSON.stringify(['APP-101']))
+  const rdir = join(root, '.code-diff', 'reviews', 'APP-101')
   mkdirSync(rdir, { recursive: true })
   writeFileSync(
     join(rdir, 'review.json'),
     JSON.stringify({
-      title: 'LX-2720: Publish generated recommendation-service API clients and consume them',
-      mrs: [{ provider: 'gitlab', host: 'gitlab.com', projectPath: 'team/backend/recommendation-service', iid: 104 }],
+      title: 'APP-101: Publish the generated API clients and use them',
+      mrs: [{ provider: 'gitlab', host: 'gitlab.com', projectPath: 'team/backend/api-service', iid: 104 }],
       skipped: [],
-      issues: ['LX-2720']
+      issues: ['APP-101']
     })
   )
   const app = await electron.launch({
@@ -222,11 +222,11 @@ test('screenshots of the main screens', async () => {
       FAKE_CLAUDE_ANSWER: JSON.stringify({
         checklist: [
           {
-            ac: 'LX-2720 AC1',
+            ac: 'APP-101 AC1',
             state: 'partial',
             why: 'The jobs are manual and not part of deploy, but they sit in the dev stage.',
-            evidence: [{ mr: 'backend/recommendation-service!104', path: 'ci/build-client.sh', newLine: 2 }],
-            comment: { mr: 'backend/recommendation-service!104', path: 'ci/build-client.sh', newLine: 2, body: 'Publish only from main.' }
+            evidence: [{ mr: 'backend/api-service!104', path: 'ci/build-client.sh', newLine: 2 }],
+            comment: { mr: 'backend/api-service!104', path: 'ci/build-client.sh', newLine: 2, body: 'Publish only from main.' }
           }
         ]
       })
@@ -236,42 +236,42 @@ test('screenshots of the main screens', async () => {
   await page.setViewportSize({ width: 1600, height: 1000 })
   const shot = (name: string): Promise<Buffer> => page.screenshot({ path: join(out!, `${name}.png`) })
   await expect(page.getByRole('heading').first()).toBeVisible()
-  await shot('00-home')
-  await page.getByTestId('review-LX-2720').dblclick()
+  await shot('home')
+  await page.getByTestId('review-APP-101').dblclick()
   await expect(page.getByTestId('mrs-tab')).toBeVisible()
-  await shot('01-mrs')
+  await shot('code-changes')
   await page.getByTestId('tab-issues').click()
-  await shot('02-issues')
+  await shot('issues')
   await page.getByTestId('tab-diff').click()
   await page
     .getByTestId('file-.config/tools.json')
     .click()
     .catch(() => undefined)
-  await shot('03-diff')
+  await shot('diff')
 
   await page.getByTestId('view-flow').click()
-  await shot('10-flow')
+  await shot('critical-thinking')
   await page
     .getByTestId('view-flow')
     .click()
     .catch(() => undefined)
   await page.getByRole('button', { name: 'By MR' }).click()
   await page.getByTestId('layout-side').click()
-  await shot('05-side')
+  await shot('side-by-side')
   await page.getByTestId('layout-full').click()
-  await shot('06-full')
+  await shot('full-file')
   await page.getByTestId('layout-inline').click()
   await page.getByTestId('tab-ac').click()
-  await shot('04-ac')
+  await shot('criteria-empty')
   await expect(page.getByTestId('ac-start')).toBeEnabled({ timeout: 20_000 })
   await page.getByTestId('ac-start').click()
   await expect(page.getByTestId('ac-title')).toHaveText('ACs validated', { timeout: 20_000 })
-  await shot('07-ac-validated')
+  await shot('criteria')
   await page.getByTestId('ai-pill').click()
-  await shot('08-ai-box')
+  await shot('ai-review')
   await page.getByTestId('ai-pill').click()
   await page.getByTestId('tab-diff').click()
   await page.getByTestId('review-chat-button').click()
-  await shot('09-chat')
+  await shot('chat')
   await app.close()
 })

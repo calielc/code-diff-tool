@@ -68,7 +68,7 @@ const mrFixture = (s: Setup): Fixture => ({
 
 // The second start of the app: a plain process, as a shell or a link would start it. It hands over and exits.
 const startSecond = (args: string[], env: Record<string, string>): void => {
-  spawn(electronPath as unknown as string, [main, ...args], { env, stdio: 'ignore' })
+  spawn(electronPath as unknown as string, [main, ...(process.platform === 'linux' ? ['--no-sandbox'] : []), ...args], { env, stdio: 'ignore' })
 }
 
 const MR_URL = 'https://gitlab.com/team/backend/x/-/merge_requests/12'

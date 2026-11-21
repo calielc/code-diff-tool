@@ -53,14 +53,14 @@ describe('workspace scan', () => {
   it('still scans inside the chosen folder when that folder is itself a repo', async () => {
     const root = mkdtempSync(join(tmpdir(), 'codediff-ws-'))
     execFileSync('git', ['init', '-q'], { cwd: root })
-    execFileSync('git', ['remote', 'add', 'origin', 'git@gitlab.com:team/meta.git'], { cwd: root })
+    execFileSync('git', ['remote', 'add', 'origin', 'git@gitlab.com:team/mono.git'], { cwd: root })
     repo(root, 'backend/api', 'git@gitlab.com:team/api.git')
     repo(root, 'tools/web/app', 'git@gitlab.com:team/app.git')
     repo(root, 'backend/api/inner', 'git@gitlab.com:team/inner.git') // a repo below the top folder is still not entered
     const clones = await scanClones(root, true)
     expect(clones.map((c) => c.name).sort()).toEqual([basename(root), 'backend/api', 'tools/web/app'].sort())
     expect(findClone(clones, { host: 'gitlab.com', project: 'team/app' })?.name).toBe('tools/web/app')
-    expect(findClone(clones, { host: 'gitlab.com', project: 'team/meta' })?.dir).toBe(root)
+    expect(findClone(clones, { host: 'gitlab.com', project: 'team/mono' })?.dir).toBe(root)
   })
   it('finds a clone two, three and four levels down by its origin remote', async () => {
     const root = mkdtempSync(join(tmpdir(), 'codediff-ws-'))

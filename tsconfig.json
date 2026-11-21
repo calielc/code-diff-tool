@@ -7,11 +7,12 @@
     "jsx": "react-jsx",
     "strict": true,
     "noEmit": true,
+    "allowImportingTsExtensions": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
     "types": ["node"],
     "rootDir": ".",
     "paths": { "@shared/*": ["./src/shared/*"] }
   },
-  "include": ["src", "tests", "electron.vite.config.ts"]
+  "include": ["src", "tests", "scripts/*.ts", "electron.vite.config.ts"]
 }

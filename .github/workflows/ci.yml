@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Typecheck, test and build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    env:
+      # The steps below need no Electron binary, so the install skips the large download.
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm test
+      - run: npm run build
+
+  e2e:
+    name: End-to-end tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    env:
+      # A hidden window does not render on a runner, so the tests show their windows.
+      CODEDIFF_SHOW_WINDOW: '1'
+      # Two tests at a time: a runner has two to four processor cores, and each test starts a real app.
+      CODEDIFF_WORKERS: '2'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+      # This job needs the Electron binary, so the install does not skip it.
+      - run: npm ci
+      # The tests start the real app against a fake forge and fake AI tools. They need git, which the runners have.
+      # Linux has no screen on a runner. xvfb gives Electron a virtual one.
+      - name: Run the tests (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run --auto-servernum npm run test:e2e
+      - name: Run the tests (Windows)
+        if: runner.os != 'Linux'
+        run: npm run test:e2e

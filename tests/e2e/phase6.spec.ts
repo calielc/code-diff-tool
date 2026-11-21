@@ -163,6 +163,8 @@ test('adding issues: the statuses, the refused values, and the limits (checks 8,
 })
 
 test('Prerequisites: a token is checked before it is saved, then kept encrypted and never shown again', async () => {
+  // Linux keeps secrets in a keyring (a secret service). A CI runner has none, so the app cannot encrypt a token there.
+  test.skip(process.platform === 'linux' && !process.env['CODEDIFF_HAS_KEYRING'], 'needs a keyring to encrypt the token')
   const s = setup()
   forge = await startFakeForge({
     'GET rest/api/3/myself': [{ fail: 'HTTP 401 Unauthorized' }, { json: { displayName: 'Me' } }],

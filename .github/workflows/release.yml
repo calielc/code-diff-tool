@@ -1,0 +1,101 @@
+name: Release
+
+# Each push to main (a merged pull request) makes a release with a new version and a tag. The commit types decide:
+# feat gives a minor version, a "!" or a BREAKING CHANGE line gives a major version, and every other type gives a patch version.
+# The release has notes and no installers, because the installer build is costly.
+# A major release is the exception: the workflow "Installers" (installers.yml) builds its installers by itself.
+# For any other release, the owner builds the installers when needed: run that workflow by hand.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# A run that waits is replaced by a newer one. A run that works is never stopped half way.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  version:
+    name: Choose the version
+    runs-on: ubuntu-latest
+    outputs:
+      release: ${{ steps.next.outputs.release }}
+      bump: ${{ steps.next.outputs.bump }}
+      version: ${{ steps.next.outputs.version }}
+      previous: ${{ steps.next.outputs.previous }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The full history and the tags, to find the last release and the commits after it.
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+      - id: next
+        run: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/release-version.ts
+
+  release:
+    name: Make the release
+    if: needs.version.outputs.release == 'true'
+    needs: version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      PREVIOUS: ${{ needs.version.outputs.previous }}
+      BUMP: ${{ needs.version.outputs.bump }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Write the release notes
+        run: |
+          range="${PREVIOUS:+${PREVIOUS}..}HEAD"
+          {
+            echo "## Changes"
+            echo
+            changes="$(git log --no-merges --pretty='- %s' "${range}" | grep -v -E '^- (chore|ci|docs|test|build|style)(\(.*\))?:' || true)"
+            if [ -n "${changes}" ]; then echo "${changes}"; else echo "- No change that users can see."; fi
+            echo
+            echo "## Install"
+            echo
+            if [ "${BUMP}" = "major" ]; then
+              echo "The installers of this major release are being built. They appear under this release when the build ends."
+            else
+              echo "This release has no installers until someone builds them. To build them, run the workflow \"Installers\" in the Actions tab and give it the tag \`v${VERSION}\`. The files then appear under this release."
+            fi
+            echo "Windows and macOS builds are not signed, so the first start shows a warning."
+          } > notes.md
+          cat notes.md
+
+      # GitHub makes the tag v<version> on the commit of this run.
+      - name: Create the release
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const fs = require('node:fs')
+            const version = process.env.VERSION
+            await github.rest.repos.createRelease({
+              ...context.repo,
+              tag_name: `v${version}`,
+              target_commitish: context.sha,
+              name: `Code Diff Tool ${version}`,
+              body: fs.readFileSync('notes.md', 'utf8'),
+              make_latest: 'true'
+            })
+
+  # A major release gets its installers at once. The called workflow builds Windows and macOS and adds the files.
+  installers:
+    name: Build the installers
+    if: needs.version.outputs.bump == 'major'
+    needs: [version, release]
+    permissions:
+      contents: write
+    uses: ./.github/workflows/installers.yml
+    with:
+      tag: v${{ needs.version.outputs.version }}

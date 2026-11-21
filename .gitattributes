@@ -1,3 +1,6 @@
+# Every text file uses LF, on every system. Git changes nothing on checkout or commit.
 * text=auto eol=lf
+
 *.png binary
 *.ico binary
+*.icns binary

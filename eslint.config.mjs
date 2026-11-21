@@ -16,7 +16,7 @@ export default tseslint.config(
       'build/**',
       '**/*.cjs',
       'tests/fakes/*.mjs',
-      'scripts/**'
+      'scripts/*.cjs'
     ]
   },
   js.configs.recommended,
@@ -28,7 +28,7 @@ export default tseslint.config(
     rules: { 'react-hooks/rules-of-hooks': 'error', 'react-hooks/exhaustive-deps': 'warn' }
   },
   {
-    files: ['src/main/**/*.ts', 'src/preload/**/*.ts', 'tests/**/*.ts', '*.ts', '*.mts'],
+    files: ['src/main/**/*.ts', 'src/preload/**/*.ts', 'tests/**/*.ts', 'scripts/*.ts', '*.ts', '*.mts'],
     languageOptions: { globals: globals.node }
   },
   { files: ['tests/**/*.ts'], rules: { '@typescript-eslint/no-explicit-any': 'off' } },

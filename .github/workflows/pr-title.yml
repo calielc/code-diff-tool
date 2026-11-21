@@ -1,0 +1,24 @@
+name: Pull request title
+
+# The title of a pull request becomes the commit message when the pull request is squash merged.
+# The release workflow reads the type in that message to choose the version.
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  title:
+    name: Title has the form type, colon, description
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+      # The title goes in through the environment, not into the command line text, so a title cannot run a command.
+      - env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/release-version.ts --check-title "${PR_TITLE}"

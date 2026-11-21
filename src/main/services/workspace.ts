@@ -45,7 +45,7 @@ export async function findRepoDirs(root: string, maxDepth = SCAN_DEPTH): Promise
     }
     if (entries.some((e) => e.name === '.git')) {
       found.push(dir)
-      if (depth > 0) return // below the chosen folder a repo is not entered, but the chosen folder itself may hold the clones, as a meta repo does
+      if (depth > 0) return // below the chosen folder a repo is not entered, but the chosen folder itself may hold the clones, as a repo of repos does
     }
     if (depth >= maxDepth) return
     await Promise.all(

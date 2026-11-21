@@ -95,7 +95,7 @@ test('starting the app twice leaves one window (check 5)', async () => {
   // The second copy must quit by itself because the first holds the lock.
   const electronBin = (await import('electron')).default as unknown as string
   const code = await new Promise<number | null>((resolve) => {
-    const child = spawn(electronBin, [main], { env })
+    const child = spawn(electronBin, [main, ...(process.platform === 'linux' ? ['--no-sandbox'] : [])], { env })
     child.once('exit', resolve)
   })
   expect(code).toBe(0)

@@ -1,0 +1,141 @@
+name: Installers
+
+# The installer build is costly (a Windows and a macOS runner), so it runs only when the owner starts it.
+# It builds the installers of one release and adds the files to that release.
+# Start it in the Actions tab with "Run workflow", and give the tag of the release, for example v0.3.0.
+# Leave the tag empty to build the latest release.
+# A major release (see release.yml) starts this workflow by itself.
+on:
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag of the release, for example v0.3.0. Empty means the latest release.
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  tag:
+    name: Find the release
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.find.outputs.tag }}
+    env:
+      INPUT_TAG: ${{ inputs.tag }}
+    steps:
+      - id: find
+        uses: actions/github-script@v9
+        with:
+          script: |
+            let tag = process.env.INPUT_TAG
+            if (!tag) tag = (await github.rest.repos.getLatestRelease(context.repo)).data.tag_name
+            // The release must exist, and the tag must have the form of a version.
+            await github.rest.repos.getReleaseByTag({ ...context.repo, tag })
+            if (!/^v\d+\.\d+\.\d+$/.test(tag)) throw new Error(`The tag ${tag} is not a version tag.`)
+            console.log(`Build the installers of ${tag}.`)
+            core.setOutput('tag', tag)
+
+  build:
+    name: Build (${{ matrix.name }})
+    needs: tag
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - name: Windows
+            os: windows-latest
+            builder-args: --win
+            # The path of the unpacked app, for the smoke test.
+            packaged: release/win-unpacked/Code Diff Tool.exe
+          - name: macOS
+            os: macos-latest
+            builder-args: --mac --arm64 --x64
+            packaged: release/mac-arm64/Code Diff Tool.app/Contents/MacOS/Code Diff Tool
+    steps:
+      # The code of the release, not the code of main.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.tag.outputs.tag }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+
+      - run: npm ci
+
+      # The tag is the version. The file package.json keeps its old number in the repository.
+      # Inside this build, the number is set, so the installers and the app itself report the new version.
+      - name: Set the version
+        shell: bash
+        env:
+          TAG: ${{ needs.tag.outputs.tag }}
+        run: npm version "${TAG#v}" --no-git-tag-version --allow-same-version
+
+      # No certificate is configured. Windows skips the signing. The hook scripts/ad-hoc-sign.cjs signs the Mac app ad hoc.
+      - name: Build the installers
+        run: npm run dist:release -- ${{ matrix.builder-args }} --publish never
+
+      - name: Show the signature of the Mac app
+        if: runner.os == 'macOS'
+        run: |
+          codesign --display --verbose=2 "release/mac-arm64/Code Diff Tool.app"
+          codesign --verify --deep --strict --verbose=2 "release/mac-arm64/Code Diff Tool.app"
+
+      # Start the unpacked app and read its version. This proves that the packaged files start and that the app reports
+      # the version of the release.
+      - name: Smoke test the packaged app
+        shell: bash
+        env:
+          CODEDIFF_E2E_PACKAGED: ${{ github.workspace }}/${{ matrix.packaged }}
+          CODEDIFF_EXPECT_VERSION: ${{ needs.tag.outputs.tag }}
+        run: |
+          export CODEDIFF_EXPECT_VERSION="${CODEDIFF_EXPECT_VERSION#v}"
+          npx playwright test tests/e2e/phase10.spec.ts
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: installers-${{ matrix.name }}
+          path: |
+            release/Code-Diff-Tool-*.exe
+            release/Code-Diff-Tool-*.dmg
+            release/Code-Diff-Tool-*.zip
+          if-no-files-found: error
+          retention-days: 7
+
+  upload:
+    name: Add the files to the release
+    needs: [tag, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ needs.tag.outputs.tag }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: installers
+          merge-multiple: true
+      # A file with the same name as one of an earlier build of the same release replaces it.
+      - uses: actions/github-script@v9
+        with:
+          script: |
+            const fs = require('node:fs')
+            const path = require('node:path')
+            const release = (await github.rest.repos.getReleaseByTag({ ...context.repo, tag: process.env.TAG })).data
+            const existing = await github.paginate(github.rest.repos.listReleaseAssets, { ...context.repo, release_id: release.id })
+            for (const name of fs.readdirSync('installers')) {
+              for (const old of existing.filter((asset) => asset.name === name)) {
+                await github.rest.repos.deleteReleaseAsset({ ...context.repo, asset_id: old.id })
+              }
+              await github.rest.repos.uploadReleaseAsset({ ...context.repo, release_id: release.id, name, data: fs.readFileSync(path.join('installers', name)) })
+              console.log(`Added ${name}.`)
+            }

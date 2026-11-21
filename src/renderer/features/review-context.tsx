@@ -14,8 +14,6 @@ export interface ReviewCtx {
   data: BuildResult
   people: Record<string, Person>
   drafts: Record<string, PendingComment>
-  hideResolved: boolean
-  setHideResolved(v: boolean): void
   mrByKey(key: string): BuiltMr | undefined
   toast(text: string): void
   applyThreads(key: string, answer: ThreadsAnswer): void
@@ -59,7 +57,6 @@ export function ReviewProvider(props: { slug: string; result: BuildResult; onRel
   const [data, setData] = useState<BuildResult>(props.result)
   const [livePeople, setLivePeople] = useState<Record<string, Person>>({})
   const [drafts, setDrafts] = useState<Record<string, PendingComment>>({})
-  const [hideResolved, setHideResolved] = useState(false)
   const [toastText, setToastText] = useState<string | null>(null)
   const [banner, setBanner] = useState<string[] | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -166,8 +163,6 @@ export function ReviewProvider(props: { slug: string; result: BuildResult; onRel
     data,
     people,
     drafts,
-    hideResolved,
-    setHideResolved,
     mrByKey: (key) => data.mrs.find((m) => m.key === key),
     toast,
     applyThreads,

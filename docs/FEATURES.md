@@ -60,9 +60,9 @@ The table has one row for each change with its number, stack position, title and
 - **Layout**: Inline, Side by side, or Full file.
 - **Files**: New, Modified and Deleted, each with its count.
 - **Types**: Code, Tests, Config and Docs, each with its count.
-- **Comments**: Open and Resolved, each with the number of threads. With Open on, the tree shows only the files with open threads, and the diff shows only the open threads. Resolved works the same way.
+- **Comments**: Open and Resolved, each with the number of threads. With Open on, the tree shows only the files with open threads, and the diff shows only the open threads, so resolved threads are hidden. Resolved works the same way.
 - Filters with buttons (Files, Types and Comments) narrow the list only when a button is on. With no button on, every file shows.
-- Three checkboxes: Hide viewed, Hide resolved threads and Only files with comments.
+- **Show**: a group at the right end of the toolbar with two checkboxes, Hide viewed and Only files with comments.
 
 ### 6.2 The file tree
 

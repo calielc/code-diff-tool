@@ -707,18 +707,18 @@ export function DiffTab(props: { visible?: (mrKey: string) => boolean }): React.
             ))}
           </span>
         </div>
-      </div>
-      <div className="checkrow">
-        <label>
-          <input type="checkbox" data-testid="hide-viewed" checked={hideViewed} onChange={(e) => setHideViewed(e.target.checked)} /> Hide viewed
-        </label>
-        <label>
-          <input type="checkbox" checked={r.hideResolved} onChange={(e) => r.setHideResolved(e.target.checked)} /> Hide resolved threads
-        </label>
-        <label>
-          <input type="checkbox" data-testid="only-comments" checked={onlyComments} onChange={(e) => setOnlyComments(e.target.checked)} /> Only files with
-          comments
-        </label>
+        <div className="fgroup checks" role="group" aria-label="Show">
+          <span className="glabel">Show</span>
+          <span className="seg checkseg">
+            <label>
+              <input type="checkbox" data-testid="hide-viewed" checked={hideViewed} onChange={(e) => setHideViewed(e.target.checked)} /> Hide viewed
+            </label>
+            <label>
+              <input type="checkbox" data-testid="only-comments" checked={onlyComments} onChange={(e) => setOnlyComments(e.target.checked)} /> Only files with
+              comments
+            </label>
+          </span>
+        </div>
       </div>
       <div ref={layoutRef} className={dragging ? 'difflayout dragging' : 'difflayout'} style={{ '--tree-width': `${treeWidth}px` } as React.CSSProperties}>
         <aside className="filetree" hidden={view === 'flow'}>
@@ -1016,8 +1016,7 @@ function FileBody(props: {
     return err
   }
 
-  const threadShown = (t: { resolved: boolean }): boolean =>
-    !(r.hideResolved && t.resolved) && (props.commentFilter.size === 0 || props.commentFilter.has(t.resolved ? 'resolved' : 'open'))
+  const threadShown = (t: { resolved: boolean }): boolean => props.commentFilter.size === 0 || props.commentFilter.has(t.resolved ? 'resolved' : 'open')
   const visibleThreads = (mrKey: string, path: string, oldPath: string, line: { o: number | null; n: number | null }): ReturnType<typeof threadsAtLine> => {
     const m = r.mrByKey(mrKey)
     return m ? threadsAtLine(m.snapshot.threads, path, oldPath, line).filter(threadShown) : []

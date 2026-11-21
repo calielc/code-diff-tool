@@ -4,7 +4,7 @@
 import type { TokenLine } from '@shared/syntax-tokens'
 import type { Job, WorkerReply, WorkerRequest } from './highlight.worker'
 
-/** A worker that has not answered after this long is stopped, and the texts it was colouring stay plain. */
+/** A worker that has gone this long without an answer is stopped, and the texts it was colouring stay plain. */
 export const WORKER_TIMEOUT_MS = 8000
 /** The most texts that the cache keeps. A text is one whole file side, so this is a few files. */
 const CACHE_SIZE = 48
@@ -13,20 +13,23 @@ export type Result = TokenLine[] | null
 
 let worker: Worker | null = null
 let nextId = 1
-const pending = new Map<number, { resolve(r: Result[]): void; timer: ReturnType<typeof setTimeout>; size: number }>()
+const pending = new Map<number, { resolve(r: Result[]): void; size: number }>()
+// One watchdog for the worker. Each answer restarts it, so a small request that waits behind a slow one is not blamed.
+let watchdog: ReturnType<typeof setTimeout> | undefined
 
-function failAll(): void {
-  for (const [id, p] of pending) {
-    clearTimeout(p.timer)
-    p.resolve(new Array<Result>(p.size).fill(null))
-    pending.delete(id)
-  }
+function armWatchdog(): void {
+  clearTimeout(watchdog)
+  watchdog = pending.size > 0 ? setTimeout(stopWorker, WORKER_TIMEOUT_MS) : undefined
 }
 
 function stopWorker(): void {
   worker?.terminate()
   worker = null
-  failAll()
+  for (const [id, p] of pending) {
+    p.resolve(new Array<Result>(p.size).fill(null))
+    pending.delete(id)
+  }
+  armWatchdog()
 }
 
 function startWorker(): Worker | null {
@@ -39,9 +42,9 @@ function startWorker(): Worker | null {
   worker.onmessage = (e: MessageEvent<WorkerReply>) => {
     const p = pending.get(e.data.id)
     if (!p) return
-    clearTimeout(p.timer)
     pending.delete(e.data.id)
     p.resolve(e.data.results)
+    armWatchdog()
   }
   worker.onerror = () => stopWorker()
   return worker
@@ -52,8 +55,9 @@ function run(jobs: Job[]): Promise<Result[]> {
   if (!w) return Promise.resolve(jobs.map(() => null))
   return new Promise((resolve) => {
     const id = nextId++
-    const timer = setTimeout(stopWorker, WORKER_TIMEOUT_MS)
-    pending.set(id, { resolve, timer, size: jobs.length })
+    const idle = pending.size === 0
+    pending.set(id, { resolve, size: jobs.length })
+    if (idle) armWatchdog()
     const request: WorkerRequest = { id, jobs }
     w.postMessage(request)
   })

@@ -220,13 +220,13 @@ test('resolves a thread, folds it and updates the chip; deletes the viewer’s l
   await app.close()
 })
 
-test('hide resolved removes resolved threads, and another person’s note has no Delete', async () => {
+test('the Open filter of the comments shows only the open threads, and another person’s note has no Delete', async () => {
   const s = setup()
   const resolved = thread('c', 71, 'bob', 'old', { resolved: true })
   const { app, page } = await open(s, fixtures(s, { [`GET ${EP(12)}/discussions`]: { json: [resolved, thread('d', 72, 'bob', 'new one')] } }))
   await toDiff(page)
   await expect(page.getByTestId('thread')).toHaveCount(2)
-  await page.getByLabel('Hide resolved threads').check()
+  await page.getByTestId('comments-open').click()
   await expect(page.getByTestId('thread')).toHaveCount(1)
   await page
     .getByTestId('thread')

@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { ReviewFlowState, ReviewSummary } from '@shared/review'
+import type { SummarisedState, ReviewSummary } from '@shared/review'
 import type { LaunchRequest } from '@shared/launch'
 import { api } from '../api'
 import { AddToReview } from './AddToReview'
 import { NewReview } from './NewReview'
 
-type SortKey = 'slug' | 'title' | 'mrs' | 'issues' | 'lastOpened' | 'flow'
-type FlowFilter = 'all' | ReviewFlowState
+type SortKey = 'slug' | 'title' | 'mrs' | 'issues' | 'lastOpened' | 'summarised'
+type SummarisedFilter = 'all' | SummarisedState
 
-const FLOW_LABEL: Record<ReviewFlowState, string> = { writing: 'Writing…', failed: 'Failed', ready: 'Ready', 'not-written': 'Not written' }
-const FLOW_ORDER: ReviewFlowState[] = ['writing', 'failed', 'ready', 'not-written']
+const SUMMARISED_LABEL: Record<SummarisedState, string> = { writing: 'Writing…', failed: 'Failed', ready: 'Ready', 'not-written': 'Not written' }
+const SUMMARISED_ORDER: SummarisedState[] = ['writing', 'failed', 'ready', 'not-written']
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' }) // LX-2 before LX-10
 
 const when = (iso: string): string => new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
@@ -24,8 +24,8 @@ function compare(a: ReviewSummary, b: ReviewSummary, key: SortKey): number {
       return (a.mrCount ?? -1) - (b.mrCount ?? -1)
     case 'issues':
       return (a.issueCount ?? -1) - (b.issueCount ?? -1)
-    case 'flow':
-      return FLOW_ORDER.indexOf(a.flow) - FLOW_ORDER.indexOf(b.flow)
+    case 'summarised':
+      return SUMMARISED_ORDER.indexOf(a.summarised) - SUMMARISED_ORDER.indexOf(b.summarised)
     case 'lastOpened': {
       // A review never opened here comes after every opened one, ordered by the change time of review.json.
       if (!!a.openedAt !== !!b.openedAt) return a.openedAt ? 1 : -1 // ascending: opened first is "smaller" so desc puts it first
@@ -44,7 +44,7 @@ export function Home(props: {
   const [reviews, setReviews] = useState<ReviewSummary[] | null>(null)
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'lastOpened', dir: 'desc' })
   const [filter, setFilter] = useState('')
-  const [flow, setFlow] = useState<FlowFilter>('all')
+  const [summarised, setSummarised] = useState<SummarisedFilter>('all')
   const [selected, setSelected] = useState<string | null>(null)
   const [showNew, setShowNew] = useState(false)
   const [initial, setInitial] = useState<LaunchRequest | null>(null)
@@ -77,12 +77,13 @@ export function Home(props: {
   const rows = useMemo(() => {
     const text = filter.toLowerCase()
     const kept = (reviews ?? []).filter(
-      (r) => (flow === 'all' || r.flow === flow) && (!text || r.slug.toLowerCase().includes(text) || (r.title ?? '').toLowerCase().includes(text))
+      (r) =>
+        (summarised === 'all' || r.summarised === summarised) && (!text || r.slug.toLowerCase().includes(text) || (r.title ?? '').toLowerCase().includes(text))
     )
     const sign = sort.dir === 'asc' ? 1 : -1
     // Equal values sort by slug ascending in either direction.
     return kept.sort((a, b) => compare(a, b, sort.key) * sign || collator.compare(a.slug, b.slug))
-  }, [reviews, filter, flow, sort])
+  }, [reviews, filter, summarised, sort])
 
   useEffect(() => {
     if (!selected || !rows.some((r) => r.slug === selected)) setSelected(rows[0]?.slug ?? null)
@@ -137,11 +138,11 @@ export function Home(props: {
               onChange={(e) => setFilter(e.target.value)}
               onKeyDown={(e) => e.key === 'Escape' && setFilter('')}
             />
-            <select aria-label="Flow state" value={flow} onChange={(e) => setFlow(e.target.value as FlowFilter)}>
-              <option value="all">All flows</option>
-              {FLOW_ORDER.map((f) => (
+            <select aria-label="Summarised state" value={summarised} onChange={(e) => setSummarised(e.target.value as SummarisedFilter)}>
+              <option value="all">All summarised</option>
+              {SUMMARISED_ORDER.map((f) => (
                 <option key={f} value={f}>
-                  {FLOW_LABEL[f]}
+                  {SUMMARISED_LABEL[f]}
                 </option>
               ))}
             </select>
@@ -176,7 +177,7 @@ export function Home(props: {
                 {head('mrs', 'Changes', true)}
                 {head('issues', 'Issues', true)}
                 {head('lastOpened', 'Last opened')}
-                {head('flow', 'Flow')}
+                {head('summarised', 'Summarised')}
                 <th />
               </tr>
             </thead>
@@ -199,7 +200,7 @@ export function Home(props: {
                     {r.openedAt ? when(r.openedAt) : <span className="muted">Never opened here</span>}
                   </td>
                   <td>
-                    <span className={`flow ${r.flow}`}>{FLOW_LABEL[r.flow]}</span>
+                    <span className={`summ ${r.summarised}`}>{SUMMARISED_LABEL[r.summarised]}</span>
                   </td>
                   <td className="rowactions">
                     <button disabled={!!props.blocked || r.unreadable} title={r.unreadable ? 'review.json cannot be read' : gate} onClick={() => open(r)}>
@@ -219,7 +220,7 @@ export function Home(props: {
               <button
                 onClick={() => {
                   setFilter('')
-                  setFlow('all')
+                  setSummarised('all')
                 }}
               >
                 Clear filter
@@ -306,8 +307,8 @@ function DeleteDialog(props: { slug: string; onClose: () => void; onDeleted: () 
             <p>This deletes the folder below and everything in it.</p>
             <pre className="mono-box">{info.path}</pre>
             <p className="muted">
-              It holds the pending comments, the Critical thinking and the Claude results of this review. Comments already posted stay where they are. Your
-              repos and Jira are not touched.
+              It holds the pending comments, the Summarised page and the Claude results of this review. Comments already posted stay where they are. Your repos
+              and Jira are not touched.
             </p>
             {needsCheck && (
               <>

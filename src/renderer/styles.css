@@ -278,19 +278,19 @@ button.danger {
   border-color: var(--bad);
   color: var(--on-accent);
 }
-.flow {
+.summ {
   padding: 1px 8px;
   border-radius: 10px;
   font-size: 12px;
   border: 1px solid var(--line);
 }
-.flow.ready {
+.summ.ready {
   color: var(--ok);
 }
-.flow.failed {
+.summ.failed {
   color: var(--bad);
 }
-.flow.writing {
+.summ.writing {
   color: var(--warn);
 }
 .empty {
@@ -1078,72 +1078,6 @@ button.ask {
   to {
     transform: rotate(360deg);
   }
-}
-.flowview {
-  padding: 4px 0;
-}
-.flowsummary {
-  font-size: 14px;
-  max-width: none;
-}
-.lanes {
-  display: grid;
-  gap: 12px;
-  align-items: start;
-  margin: 12px 0;
-}
-.lane {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.lanehead {
-  font-weight: 600;
-  padding-bottom: 4px;
-  border-bottom: 2px solid var(--line);
-}
-.flowbox {
-  border: 1px solid var(--line);
-  border-left-width: 4px;
-  border-radius: 8px;
-  padding: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  background: var(--bg);
-}
-.flowbox.new {
-  border-left-color: var(--ok);
-}
-.flowbox.changed {
-  border-left-color: var(--accent);
-}
-.flowbox.existing {
-  border-left-color: var(--muted);
-  border-style: dashed;
-}
-.boxhead {
-  display: flex;
-  gap: 6px;
-  align-items: baseline;
-  flex-wrap: wrap;
-}
-.kind {
-  font-size: 10px;
-  text-transform: uppercase;
-  padding: 0 6px;
-  border-radius: 8px;
-  border: 1px solid var(--line);
-  color: var(--muted);
-}
-.edge {
-  text-align: left;
-}
-.revieworder li {
-  margin: 6px 0;
-}
-.skipgroup {
-  margin: 4px 0;
 }
 .aipanel {
   position: relative;

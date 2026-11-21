@@ -1,6 +1,6 @@
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
 import { join, sep } from 'node:path'
-import { problemPrompt } from '@shared/flow'
+import { problemPrompt } from '@shared/sections'
 import { acPrompt, AC_INSTRUCTIONS, REVIEW_INSTRUCTIONS, reviewPrompt } from '@shared/review-prompts'
 import { checkReviewAnswer, type ChecklistEntry } from '@shared/review-answer'
 import type { Result } from '@shared/types'

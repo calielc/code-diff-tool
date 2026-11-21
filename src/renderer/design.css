@@ -284,17 +284,24 @@ kbd {
   font: 500 10.5px var(--mono);
   margin-left: 3px;
 }
-.checkrow {
-  display: flex;
-  gap: 22px;
-  padding: 2px 0 8px;
+.difftoolbar .checks {
+  margin-left: auto;
+}
+.checkseg {
+  align-items: center;
+  gap: 0;
   font-size: 12.5px;
   color: var(--fg);
 }
-.checkrow label {
+.checkseg label {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  padding: 5px 12px;
+  white-space: nowrap;
+}
+.checkseg label + label {
+  border-left: 1px solid var(--line);
 }
 
 .difflayout {
@@ -916,122 +923,6 @@ table.diff td.ln:first-child {
   max-width: 420px;
 }
 
-/* ---- Critical thinking ---- */
-.flowview {
-  padding: 14px 18px 18px;
-}
-.flowsummary {
-  max-width: 920px;
-  margin: 0 0 14px;
-  font-size: 13.5px;
-  line-height: 1.5;
-}
-.flowcanvas {
-  position: relative;
-}
-.flowcanvas .lanes {
-  position: relative;
-  display: grid;
-  gap: 28px;
-  align-items: start;
-  margin: 0;
-}
-.lane {
-  display: flex;
-  flex-direction: column;
-  gap: 38px;
-  padding: 10px 14px 16px;
-  border-radius: 10px;
-  background: var(--panel);
-}
-.lanehead {
-  text-align: center;
-  font-size: 12.5px;
-  font-weight: 500;
-  color: var(--muted);
-  padding: 0 0 2px;
-  border: 0;
-}
-.flowbox {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 8px 10px;
-  border: 1.5px solid var(--line);
-  border-radius: 7px;
-  background: var(--bg);
-}
-.flowbox.new {
-  border-color: var(--ok);
-}
-.flowbox.changed {
-  border-color: var(--line);
-}
-.flowbox.existing {
-  border-style: dashed;
-  background: transparent;
-}
-.flowbox .boxhead strong {
-  font-size: 12.5px;
-  font-weight: 600;
-}
-.boxfoot {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-}
-.boxpath {
-  padding: 0;
-  border: 0;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--muted);
-  font-size: 11px;
-}
-.boxtext {
-  display: none;
-}
-.flowbox .kind {
-  border: 0;
-  padding: 0;
-  font: 600 9.5px var(--mono);
-  letter-spacing: 0.04em;
-  color: var(--muted);
-}
-.flowbox .kind.new {
-  color: var(--ok);
-}
-.flowlines {
-  position: absolute;
-  left: 0;
-  top: 0;
-  z-index: 2;
-  pointer-events: none;
-}
-.flowedge {
-  fill: none;
-  stroke: var(--muted);
-  stroke-width: 1.2;
-}
-.arrowhead {
-  fill: var(--muted);
-}
-.edgelabel {
-  fill: var(--accent);
-  font: 11px var(--mono);
-  pointer-events: all;
-  cursor: pointer;
-}
-
-.flowcanvas .lanes {
-  justify-content: start;
-}
-
 .trow.focused {
   background: var(--seg-on);
   outline: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
@@ -1271,4 +1162,367 @@ table.diff tr.del td.code .chg,
 table.diff.side td.code.del .chg {
   background: color-mix(in srgb, var(--bad) 38%, var(--bg));
   border-radius: 2px;
+}
+
+/* ---- Summarised ---- */
+.sectionsview {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 18px 22px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.sectionsummary {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+}
+.sectionsbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.sectionsbar .bar6 {
+  flex: 0 0 220px;
+}
+.section {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  padding: 12px 16px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.section.accepted {
+  border-color: var(--ok);
+}
+.sectionhead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sectionhead h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.sectionno {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--muted);
+  flex: none;
+}
+.acceptbtn.on {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+.sectiontext {
+  margin: 0;
+  line-height: 1.55;
+  max-width: 860px;
+}
+.snippet {
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  overflow: hidden;
+}
+.snippath {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: var(--panel);
+  font-size: 12px;
+  padding: 4px 10px;
+}
+.snippet table.diff {
+  font-size: 12px;
+}
+.snippet .note {
+  padding: 8px 10px;
+  margin: 0;
+  font-size: 12px;
+}
+.sectionfoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+.filechip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 8px;
+  border-radius: 12px;
+  font-size: 11.5px;
+}
+.filechip.seen .tick {
+  color: var(--ok);
+}
+.sectionthread {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+.sectionthread > .thread,
+.sectionthread > .draft,
+.sectionthread > .commentform {
+  align-self: stretch;
+}
+.section.leftover {
+  background: var(--panel);
+}
+.restlist {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.restfile {
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--bg);
+}
+.restfile > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  cursor: pointer;
+  list-style: none;
+}
+.restfile > summary::-webkit-details-marker {
+  display: none;
+}
+.restfile .restpath {
+  font-size: 12px;
+}
+.restfile .tick {
+  color: var(--ok);
+}
+.restbody {
+  border-top: 1px solid var(--line);
+  padding: 6px 10px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+}
+.restbody table.diff {
+  align-self: stretch;
+  font-size: 12px;
+}
+.sectionsstatus {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 48px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+/* collapse and the index of the sections */
+.chevbtn {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  flex: none;
+}
+.chevbtn:hover {
+  color: var(--fg);
+}
+.section.collapsed {
+  padding-bottom: 10px;
+}
+.section.collapsed .sectionhead h3 {
+  font-weight: 500;
+}
+.section.collapsed.accepted {
+  opacity: 0.85;
+}
+.section:focus {
+  outline: none;
+}
+.section:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.sectionbody {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.sectionsbar button.small {
+  padding: 2px 8px;
+  font-size: 11.5px;
+}
+.indexhost {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.sectionindex {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.indexlist {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 8px;
+}
+.indexrow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 5px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  text-align: left;
+  font-size: 12.5px;
+}
+.indexrow:hover {
+  background: var(--panel);
+}
+.indexrow.current {
+  background: var(--seg-on);
+  outline: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  outline-offset: -1px;
+}
+.indexrow:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.indexrow .tname {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.indexrow .count {
+  flex: none;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.sectionno.small {
+  width: 18px;
+  height: 18px;
+  font-size: 10.5px;
+}
+.statemark {
+  flex: none;
+  width: 14px;
+  text-align: center;
+  color: var(--muted);
+}
+.statemark.accepted {
+  color: var(--ok);
+}
+.statemark.waiting {
+  color: var(--warn);
+}
+
+/* the header of a section stays at the top of the page while the section scrolls, and the next header pushes it away */
+.sectionhead {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  margin: -12px -16px 0;
+  padding: 12px 16px 8px;
+  background: var(--bg);
+  border-radius: 9px 9px 0 0;
+}
+.section.leftover > .sectionhead {
+  background: var(--panel);
+}
+.section.stuck > .sectionhead {
+  border-bottom: 1px solid var(--line);
+  box-shadow: 0 4px 8px -5px rgba(0, 0, 0, 0.35);
+}
+.section.collapsed {
+  padding-bottom: 0;
+}
+.section.collapsed > .sectionhead {
+  padding-bottom: 12px;
+  border-radius: 9px;
+}
+
+/* compact code excerpts in a section */
+.sectionbody {
+  gap: 6px;
+}
+.snippet {
+  margin: 0;
+}
+.snippath {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 8px;
+  font-size: 12px;
+  font-weight: 400;
+}
+.snippath .fdir {
+  opacity: 0.55;
+}
+.snippet table.diff.snip {
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+.snippet table.diff.snip td {
+  padding: 0 6px;
+}
+.snippet table.diff.snip .ln {
+  min-width: 30px;
+}
+.snippet table.diff.snip .sign {
+  width: 12px;
+  padding: 0 2px;
+}
+tr.foldrow td {
+  background: var(--hunk-bg);
+  padding: 0 6px;
+}
+.foldbtn {
+  border: 0;
+  background: transparent;
+  color: var(--hunk-fg);
+  font-size: 11px;
+  line-height: 1.5;
+  padding: 0;
+  cursor: pointer;
+}
+.foldbtn:hover {
+  text-decoration: underline;
+}
+.sectionfoot {
+  margin-top: 2px;
+  padding-top: 6px;
+}
+
+.filechip.mirror {
+  border-style: dashed;
 }

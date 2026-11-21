@@ -16,7 +16,7 @@ import {
   type CheckResult,
   type CheckedMr,
   type ReviewFile,
-  type ReviewFlowState,
+  type SummarisedState,
   type ReviewSummary
 } from '@shared/review'
 import type { Result } from '@shared/types'
@@ -70,10 +70,10 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
-async function flowState(dir: string): Promise<ReviewFlowState> {
-  if (await exists(join(dir, 'flow-error.txt'))) return 'failed'
+async function summarisedState(dir: string): Promise<SummarisedState> {
+  if (await exists(join(dir, 'sections-error.txt'))) return 'failed'
   try {
-    JSON.parse(await readFile(join(dir, 'flow.json'), 'utf8'))
+    JSON.parse(await readFile(join(dir, 'sections.json'), 'utf8'))
     return 'ready'
   } catch {
     return 'not-written'
@@ -98,7 +98,7 @@ export async function listReviews(root: string, recent: { slug: string; openedAt
     const openedAt = recent.find((r) => r.slug === e.name)?.openedAt ?? null
     const parsed = await readReviewFile(root, e.name)
     if (!parsed.ok) {
-      out.push({ slug: e.name, title: null, mrCount: null, issueCount: null, modifiedAt, openedAt, flow: 'not-written', unreadable: true })
+      out.push({ slug: e.name, title: null, mrCount: null, issueCount: null, modifiedAt, openedAt, summarised: 'not-written', unreadable: true })
       continue
     }
     out.push({
@@ -108,7 +108,7 @@ export async function listReviews(root: string, recent: { slug: string; openedAt
       issueCount: parsed.value.issues.length,
       modifiedAt,
       openedAt,
-      flow: await flowState(dir),
+      summarised: await summarisedState(dir),
       unreadable: false
     })
   }
@@ -174,7 +174,7 @@ export interface CreateInput extends CheckInput {
   overwrite: boolean
 }
 
-/** Step 2: write review.json and nothing else (file 00 section 3.3.6). Comments, flow and Claude results of an old review stay. */
+/** Step 2: write review.json and nothing else (file 00 section 3.3.6). Comments, sections and Claude results of an old review stay. */
 export async function createReview(root: string, input: CreateInput): Promise<Result<{ slug: string }>> {
   const checked = await checkReview(root, input)
   if (!checked.ok) return checked

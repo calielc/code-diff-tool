@@ -10,7 +10,6 @@ import {
 } from 'react'
 import type { CommitInfo } from '@shared/commits'
 import { countKinds, fileKind, visibleKinds, type FileKind } from '@shared/file-kinds'
-import { intraLine, type Seg } from '@shared/intraline'
 import { newCommentId, type PendingComment } from '@shared/comments'
 import type { FileObject, LevelName, LineObj } from '@shared/diff'
 import type { DiffRefs } from '@shared/provider'
@@ -22,11 +21,13 @@ import { Code, SyntaxToggle } from '../highlight/Code'
 import { useFileHighlight } from '../highlight/useFileHighlight'
 import { useReview } from './review-context'
 import { SubmitDialog, reviewable } from './SubmitDialog'
-import { FlowView } from './FlowView'
+import { viewedId } from '@shared/sections'
+import { SectionsStatus, SectionsView } from './SectionsView'
+import { intraMapOf } from './intra-marks'
 import { LineChat } from './LineChat'
 import { CommentForm, DraftCard, ThreadCard } from './ThreadViews'
 
-type ViewName = 'mr' | 'combined' | 'flow'
+type ViewName = 'mr' | 'combined' | 'summarised'
 type LayoutName = 'inline' | 'side' | 'full'
 
 const STATE_CHIP: Record<string, string> = { merged: 'Merged · read-only', closed: 'Closed · read-only', opened: 'Open', locked: 'Locked' }
@@ -52,9 +53,9 @@ interface Entry {
   groupTip: string
   file: FileObject
   scope: string
-  /** The change that owns the file in By MR. Null in Combined, where each line has its own target. */
+  /** The change that owns the file in Linear. Null in Stacked, where each line has its own target. */
   mrKey: string | null
-  /** The changes of the part, in Combined. */
+  /** The changes of the part, in Stacked. */
   partMrs: string[]
   /** The change and the commit whose code the line chat reads. */
   chatMr: string
@@ -93,10 +94,10 @@ function save(key: string, value: unknown): void {
 const iidOf = (key: string): string => key.slice(key.lastIndexOf('!') + 1)
 
 function entriesOf(result: BuildResult, view: ViewName): Entry[] {
-  if (view === 'mr' || view === 'flow') {
+  if (view === 'mr' || view === 'summarised') {
     return result.mrs.flatMap((m) =>
       m.files.map((file) => ({
-        id: `mr:${m.key}|${file.path}`,
+        id: viewedId(m.key, file.path),
         repo: m.repo,
         groupKey: m.key,
         groupLabel: `!${m.snapshot.info.ref.iid}`,
@@ -124,7 +125,7 @@ function entriesOf(result: BuildResult, view: ViewName): Entry[] {
       groupLabel: `Part ${n} · ${label}`,
       groupTip: p.reason ?? 'The first part',
       file,
-      scope: `combined · ${p.repo} · ${nums.join(', ')}`,
+      scope: `stacked · ${p.repo} · ${nums.join(', ')}`,
       mrKey: null,
       partMrs: p.mrs,
       chatMr: p.mrs[0],
@@ -180,7 +181,10 @@ export function DiffTab(props: { visible?: (mrKey: string) => boolean }): React.
   const r = useReview()
   const result = r.data
   const hasCombined = result.combined.length > 0
-  const [view, setView] = useState<ViewName>(() => (store<ViewName>('codediff:view', 'mr') === 'combined' && hasCombined ? 'combined' : 'mr'))
+  const [view, setView] = useState<ViewName>(() => {
+    const saved = store<ViewName>('codediff:view', 'mr')
+    return saved === 'summarised' ? 'summarised' : saved === 'combined' && hasCombined ? 'combined' : 'mr'
+  })
   const [level, setLevel] = useState<LevelName>(() => store<LevelName>('codediff:noise', 'strict'))
   const [filter, setFilter] = useState('')
   const [selected, setSelected] = useState<string | null>(null)
@@ -251,14 +255,18 @@ export function DiffTab(props: { visible?: (mrKey: string) => boolean }): React.
     }
   }
   const [submitOpen, setSubmitOpen] = useState(false)
+  // The place in the left column where the Summarised view draws its index
+  const [indexHost, setIndexHost] = useState<HTMLDivElement | null>(null)
 
   useEffect(() => save('codediff:view', view), [view])
   useEffect(() => save('codediff:noise', level), [level])
 
-  // The flow view shows no tree. Leaving it returns to the By MR view, and a flow that went away does the same.
+  // Opening the Summarised view, or opening the Diff tab with it chosen, writes the page when it is missing or out of date. A build never does.
+  // A failed run is not started again by itself. The reader presses Try again.
+  const sec = r.sections
   useEffect(() => {
-    if (view === 'flow' && !r.flow.flow) setView('mr')
-  }, [view, r.flow.flow])
+    if (view === 'summarised' && !sec.pending && !sec.error && !sec.document) void api.sections.start(r.slug)
+  }, [view, sec.pending, sec.error, sec.document, r.slug])
   const { visible: mrShown } = props
   const all = useMemo(() => entriesOf(result, view).filter((e) => !mrShown || (e.mrKey ? mrShown(e.mrKey) : e.partMrs.some(mrShown))), [result, view, mrShown])
   // A file is noise at a level when it is not binary and has no hunk at that level (file 02 section 2.1).
@@ -329,7 +337,7 @@ export function DiffTab(props: { visible?: (mrKey: string) => boolean }): React.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current?.id])
 
-  // An Open card: switch to By MR, show the file and scroll to the line. A hidden line switches the noise level to Everything.
+  // An Open card: switch to Linear, show the file and scroll to the line. A hidden line switches the noise level to Everything.
   useEffect(() => {
     const n = r.nav
     if (!n) return
@@ -404,7 +412,7 @@ export function DiffTab(props: { visible?: (mrKey: string) => boolean }): React.
   /** The keys of a folder and of every folder below it. */
   const foldersBelow = (n: TreeNode): string[] => (n.kind === 'file' ? [] : [n.key, ...n.children.flatMap(foldersBelow)])
   useEffect(() => {
-    if (view === 'flow') return
+    if (view === 'summarised') return
     const on = (e: KeyboardEvent): void => {
       const t = e.target as HTMLElement | null
       if (e.ctrlKey || e.metaKey || e.altKey) return
@@ -571,7 +579,7 @@ export function DiffTab(props: { visible?: (mrKey: string) => boolean }): React.
   useEffect(() => {
     const on = (e: KeyboardEvent): void => {
       const t = e.target as HTMLElement | null
-      if (e.ctrlKey || e.metaKey || e.altKey || t?.closest('input, textarea, select, [contenteditable]')) return
+      if (view === 'summarised' || e.ctrlKey || e.metaKey || e.altKey || t?.closest('input, textarea, select, [contenteditable]')) return
       if (e.key === 'p') move(-1)
       else if (e.key === 'n') move(1)
       else if (e.key === 'c') walk(1)
@@ -589,11 +597,11 @@ export function DiffTab(props: { visible?: (mrKey: string) => boolean }): React.
     }
     window.addEventListener('keydown', on)
     return () => window.removeEventListener('keydown', on)
-  }, [move, walk, goTo, orderedFiles, current, viewed, commit]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [move, walk, goTo, orderedFiles, current, viewed, commit, view]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const partsBadge = result.combined.length > 0 && new Set(result.combined.map((p) => p.repo)).size < result.combined.length
   const combinedTip = !hasCombined
-    ? 'Combined needs 2+ MRs in the same repo'
+    ? 'Stacked needs 2+ MRs in the same repo'
     : [...result.combined.filter((p) => p.reason).map((p) => `${p.repo}: a part ${p.reason}`), 'Each part combines the MRs that merge cleanly in order.'].join(
         '\n'
       )
@@ -605,21 +613,24 @@ export function DiffTab(props: { visible?: (mrKey: string) => boolean }): React.
           <span className="glabel">View</span>
           <span className="seg">
             <button
-              className={view === 'flow' ? 'on' : ''}
-              disabled={!r.flow.flow}
-              data-testid="view-flow"
+              className={view === 'summarised' ? 'on' : ''}
+              data-testid="view-summarised"
               title={
-                r.flow.pending ? 'The AI is writing Critical thinking' : r.flow.flow ? 'The chain to follow, and what to skip' : 'No Critical thinking yet'
+                r.sections.pending
+                  ? 'The AI is writing the Summarised page'
+                  : r.sections.document
+                    ? 'The parts of the change that matter, in reading order'
+                    : 'The AI writes the page when you open this view'
               }
-              onClick={() => setView('flow')}
+              onClick={() => setView('summarised')}
             >
-              {r.flow.pending && <span className="spin">◐ </span>}Critical thinking
+              {r.sections.pending && <span className="spin">◐ </span>}Summarised
             </button>
             <button className={view === 'mr' ? 'on' : ''} onClick={() => setView('mr')}>
-              By MR
+              Linear
             </button>
             <button className={view === 'combined' ? 'on' : ''} disabled={!hasCombined} title={combinedTip} onClick={() => setView('combined')}>
-              Combined per repo
+              Stacked
               {partsBadge && <span className="parts"> {result.combined.length} parts</span>}
             </button>
           </span>
@@ -634,135 +645,149 @@ export function DiffTab(props: { visible?: (mrKey: string) => boolean }): React.
             ))}
           </span>
         </div>
-        <div className="fgroup" role="group" aria-label="Layout">
-          <span className="glabel">Layout</span>
-          <span className="seg">
-            {(
-              [
-                ['inline', 'Inline'],
-                ['side', 'Side by side'],
-                ['full', 'Full file']
-              ] as const
-            ).map(([id, label]) => (
-              <button key={id} className={layout === id ? 'on' : ''} data-testid={'layout-' + id} onClick={() => setLayout(id)}>
-                {label}
-              </button>
-            ))}
-          </span>
-        </div>
-        <div className="fgroup" role="group" aria-label="Files">
-          <span className="glabel">Files</span>
-          <span className="seg toggles">
-            {(
-              [
-                ['A', 'New'],
-                ['M', 'Modified'],
-                ['D', 'Deleted']
-              ] as const
-            ).map(([st, label]) => (
-              <button
-                key={st}
-                className={statuses.has(st) ? 'on' : ''}
-                aria-pressed={statuses.has(st)}
-                data-testid={'status-' + st}
-                onClick={() => setStatuses((o) => (o.has(st) ? new Set([...o].filter((x) => x !== st)) : new Set(o).add(st)))}
-              >
-                {label} <small>{statusCount(st)}</small>
-              </button>
-            ))}
-          </span>
-        </div>
-        {kindOptions.length > 0 && (
-          <div className="fgroup" role="group" aria-label="Types">
-            <span className="glabel">Types</span>
-            <span className="seg toggles">
-              {kindOptions.map((k) => (
-                <button
-                  key={k.id}
-                  className={kinds.has(k.id) ? 'on' : ''}
-                  aria-pressed={kinds.has(k.id)}
-                  data-testid={'kind-' + k.id}
-                  onClick={() => setKinds((o) => (o.has(k.id) ? new Set([...o].filter((x) => x !== k.id)) : new Set(o).add(k.id)))}
-                >
-                  {k.label} <small>{k.count}</small>
-                </button>
-              ))}
-            </span>
-          </div>
+        {view !== 'summarised' && (
+          <>
+            <div className="fgroup" role="group" aria-label="Layout">
+              <span className="glabel">Layout</span>
+              <span className="seg">
+                {(
+                  [
+                    ['inline', 'Inline'],
+                    ['side', 'Side by side'],
+                    ['full', 'Full file']
+                  ] as const
+                ).map(([id, label]) => (
+                  <button key={id} className={layout === id ? 'on' : ''} data-testid={'layout-' + id} onClick={() => setLayout(id)}>
+                    {label}
+                  </button>
+                ))}
+              </span>
+            </div>
+            <div className="fgroup" role="group" aria-label="Files">
+              <span className="glabel">Files</span>
+              <span className="seg toggles">
+                {(
+                  [
+                    ['A', 'New'],
+                    ['M', 'Modified'],
+                    ['D', 'Deleted']
+                  ] as const
+                ).map(([st, label]) => (
+                  <button
+                    key={st}
+                    className={statuses.has(st) ? 'on' : ''}
+                    aria-pressed={statuses.has(st)}
+                    data-testid={'status-' + st}
+                    onClick={() => setStatuses((o) => (o.has(st) ? new Set([...o].filter((x) => x !== st)) : new Set(o).add(st)))}
+                  >
+                    {label} <small>{statusCount(st)}</small>
+                  </button>
+                ))}
+              </span>
+            </div>
+            {kindOptions.length > 0 && (
+              <div className="fgroup" role="group" aria-label="Types">
+                <span className="glabel">Types</span>
+                <span className="seg toggles">
+                  {kindOptions.map((k) => (
+                    <button
+                      key={k.id}
+                      className={kinds.has(k.id) ? 'on' : ''}
+                      aria-pressed={kinds.has(k.id)}
+                      data-testid={'kind-' + k.id}
+                      onClick={() => setKinds((o) => (o.has(k.id) ? new Set([...o].filter((x) => x !== k.id)) : new Set(o).add(k.id)))}
+                    >
+                      {k.label} <small>{k.count}</small>
+                    </button>
+                  ))}
+                </span>
+              </div>
+            )}
+            <div className="fgroup" role="group" aria-label="Comments">
+              <span className="glabel">Comments</span>
+              <span className="seg toggles">
+                {(
+                  [
+                    ['open', 'Open'],
+                    ['resolved', 'Resolved']
+                  ] as const
+                ).map(([id, label]) => (
+                  <button
+                    key={id}
+                    className={commentFilter.has(id) ? 'on' : ''}
+                    aria-pressed={commentFilter.has(id)}
+                    data-testid={'comments-' + id}
+                    title={id === 'open' ? 'Files and threads with open comments' : 'Files and threads with resolved comments'}
+                    onClick={() => setCommentFilter((o) => (o.has(id) ? new Set([...o].filter((x) => x !== id)) : new Set(o).add(id)))}
+                  >
+                    {label} <small>{threadTotals[id]}</small>
+                  </button>
+                ))}
+              </span>
+            </div>
+            <div className="fgroup checks" role="group" aria-label="Show">
+              <span className="glabel">Show</span>
+              <span className="seg checkseg">
+                <label>
+                  <input type="checkbox" data-testid="hide-viewed" checked={hideViewed} onChange={(e) => setHideViewed(e.target.checked)} /> Hide viewed
+                </label>
+                <label>
+                  <input type="checkbox" data-testid="only-comments" checked={onlyComments} onChange={(e) => setOnlyComments(e.target.checked)} /> Only files
+                  with comments
+                </label>
+              </span>
+            </div>
+          </>
         )}
-        <div className="fgroup" role="group" aria-label="Comments">
-          <span className="glabel">Comments</span>
-          <span className="seg toggles">
-            {(
-              [
-                ['open', 'Open'],
-                ['resolved', 'Resolved']
-              ] as const
-            ).map(([id, label]) => (
-              <button
-                key={id}
-                className={commentFilter.has(id) ? 'on' : ''}
-                aria-pressed={commentFilter.has(id)}
-                data-testid={'comments-' + id}
-                title={id === 'open' ? 'Files and threads with open comments' : 'Files and threads with resolved comments'}
-                onClick={() => setCommentFilter((o) => (o.has(id) ? new Set([...o].filter((x) => x !== id)) : new Set(o).add(id)))}
-              >
-                {label} <small>{threadTotals[id]}</small>
-              </button>
-            ))}
-          </span>
-        </div>
-      </div>
-      <div className="checkrow">
-        <label>
-          <input type="checkbox" data-testid="hide-viewed" checked={hideViewed} onChange={(e) => setHideViewed(e.target.checked)} /> Hide viewed
-        </label>
-        <label>
-          <input type="checkbox" checked={r.hideResolved} onChange={(e) => r.setHideResolved(e.target.checked)} /> Hide resolved threads
-        </label>
-        <label>
-          <input type="checkbox" data-testid="only-comments" checked={onlyComments} onChange={(e) => setOnlyComments(e.target.checked)} /> Only files with
-          comments
-        </label>
       </div>
       <div ref={layoutRef} className={dragging ? 'difflayout dragging' : 'difflayout'} style={{ '--tree-width': `${treeWidth}px` } as React.CSSProperties}>
-        <aside className="filetree" hidden={view === 'flow'}>
-          <input aria-label="Filter files" placeholder="Filter files" value={filter} onChange={(e) => setFilter(e.target.value)} />
-          <div className="progress" title={`${doneCount} of ${shown.length} files viewed`}>
-            <div className="bar6">
-              <div style={{ width: `${shown.length ? Math.round((doneCount / shown.length) * 100) : 0}%` }} />
-            </div>
-            <span className="muted">
-              {doneCount} of {shown.length} viewed
-            </span>
-          </div>
-          <ul className="tree" data-testid="tree">
-            {tree.map((n) => row(n, 0))}
-          </ul>
-          {noise.length > 0 && (
-            <div className="noiseblock">
-              <button className="link" onClick={() => setNoiseOpen((o) => !o)}>
-                {noise.length} {noise.length === 1 ? 'file' : 'files'} hidden: noise only at this level
-              </button>
-              {noiseOpen && (
-                <ul>
-                  {noise.map((e) => (
-                    <li key={e.id} className="muted" title={e.file.path}>
-                      {e.file.path}
-                    </li>
-                  ))}
-                </ul>
+        <aside
+          className="filetree"
+          hidden={view === 'summarised' && !r.sections.document}
+          aria-label={view === 'summarised' ? 'The sections of the page' : undefined}
+        >
+          {view === 'summarised' ? (
+            <div ref={setIndexHost} className="indexhost" />
+          ) : (
+            <>
+              <input aria-label="Filter files" placeholder="Filter files" value={filter} onChange={(e) => setFilter(e.target.value)} />
+              <div className="progress" title={`${doneCount} of ${shown.length} files viewed`}>
+                <div className="bar6">
+                  <div style={{ width: `${shown.length ? Math.round((doneCount / shown.length) * 100) : 0}%` }} />
+                </div>
+                <span className="muted">
+                  {doneCount} of {shown.length} viewed
+                </span>
+              </div>
+              <ul className="tree" data-testid="tree">
+                {tree.map((n) => row(n, 0))}
+              </ul>
+              {noise.length > 0 && (
+                <div className="noiseblock">
+                  <button className="link" onClick={() => setNoiseOpen((o) => !o)}>
+                    {noise.length} {noise.length === 1 ? 'file' : 'files'} hidden: noise only at this level
+                  </button>
+                  {noiseOpen && (
+                    <ul>
+                      {noise.map((e) => (
+                        <li key={e.id} className="muted" title={e.file.path}>
+                          {e.file.path}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
               )}
-            </div>
+            </>
           )}
         </aside>
 
-        {view !== 'flow' && (
+        {!(view === 'summarised' && !r.sections.document) && (
           <div
             className="splitter"
             role="separator"
             aria-orientation="vertical"
-            aria-label="Resize the file tree"
+            aria-label={view === 'summarised' ? 'Resize the index' : 'Resize the file tree'}
             aria-valuenow={treeWidth}
             aria-valuemin={200}
             aria-valuemax={Math.max(200, Math.floor(areaWidth * 0.6))}
@@ -777,14 +802,20 @@ export function DiffTab(props: { visible?: (mrKey: string) => boolean }): React.
 
         <section className="rightcard">
           <div className="rightscroll">
-            {view === 'flow' && r.flow.flow ? (
-              <FlowView
-                flow={r.flow.flow}
-                onOpen={(mr, path, line) => {
-                  setView('mr')
-                  r.requestOpen(mr, path, line)
-                }}
-              />
+            {view === 'summarised' ? (
+              r.sections.document ? (
+                <SectionsView
+                  doc={r.sections.document}
+                  level={level}
+                  indexHost={indexHost}
+                  onOpen={(mr, path, line) => {
+                    setView('mr')
+                    r.requestOpen(mr, path, line)
+                  }}
+                />
+              ) : (
+                <SectionsStatus state={r.sections} />
+              )
             ) : (
               <div className="filepanel">
                 {current ? (
@@ -816,10 +847,10 @@ export function DiffTab(props: { visible?: (mrKey: string) => boolean }): React.
                 ? `${draftCount} ${draftCount === 1 ? 'draft' : 'drafts'} not posted yet. Post or delete each one.`
                 : 'Hover a line and press + to comment. A comment is posted at once.'}
             </span>
-            <button data-testid="prev-file" disabled={visible.length < 2} onClick={() => move(-1)}>
+            <button data-testid="prev-file" disabled={visible.length < 2 || view === 'summarised'} onClick={() => move(-1)}>
               Previous <kbd>p</kbd>
             </button>
-            <button data-testid="next-file" disabled={visible.length < 2} onClick={() => move(1)}>
+            <button data-testid="next-file" disabled={visible.length < 2 || view === 'summarised'} onClick={() => move(1)}>
               Next <kbd>n</kbd>
             </button>
             <button data-testid="prev-comment" onClick={() => walk(-1)}>
@@ -900,30 +931,7 @@ function FileBody(props: {
   const file = commitReady ? atCommit.file! : entry.file
   const lv = file.levels[level]
   // The characters that really changed in a removed line and the added line that replaces it, found for each pair of a run
-  const intraMap = useMemo(() => {
-    const out = new Map<LineObj, Seg[]>()
-    for (const h of lv.hunks) {
-      let i = 0
-      while (i < h.length) {
-        if (h[i].t === ' ') {
-          i++
-          continue
-        }
-        const dels: LineObj[] = []
-        const adds: LineObj[] = []
-        while (i < h.length && h[i].t === '-') dels.push(h[i++])
-        while (i < h.length && h[i].t === '+') adds.push(h[i++])
-        for (let k = 0; k < Math.min(dels.length, adds.length); k++) {
-          const r = intraLine(dels[k].x, adds[k].x)
-          if (r) {
-            out.set(dels[k], r.old)
-            out.set(adds[k], r.new)
-          }
-        }
-      }
-    }
-    return out
-  }, [lv])
+  const intraMap = useMemo(() => intraMapOf(lv.hunks), [lv])
   // The colours of the code come from the whole old and new file, in a worker, so the first render is plain text
   const hl = useFileHighlight(file, lv)
   /** The text of a line, with its syntax colours and the changed characters of a modified line marked. */
@@ -1010,8 +1018,7 @@ function FileBody(props: {
     return err
   }
 
-  const threadShown = (t: { resolved: boolean }): boolean =>
-    !(r.hideResolved && t.resolved) && (props.commentFilter.size === 0 || props.commentFilter.has(t.resolved ? 'resolved' : 'open'))
+  const threadShown = (t: { resolved: boolean }): boolean => props.commentFilter.size === 0 || props.commentFilter.has(t.resolved ? 'resolved' : 'open')
   const visibleThreads = (mrKey: string, path: string, oldPath: string, line: { o: number | null; n: number | null }): ReturnType<typeof threadsAtLine> => {
     const m = r.mrByKey(mrKey)
     return m ? threadsAtLine(m.snapshot.threads, path, oldPath, line).filter(threadShown) : []

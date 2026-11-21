@@ -12,6 +12,8 @@ export function CommentForm(props: {
   initial?: string
   submitLabel: 'Comment' | 'Save'
   onSubmit(text: string): Promise<string | null>
+  /** When set, the form also offers to keep the text as a draft that is posted later. */
+  onSaveDraft?(text: string): Promise<string | null>
   onCancel(): void
 }): React.JSX.Element {
   const [text, setText] = useState(props.initial ?? '')
@@ -20,12 +22,12 @@ export function CommentForm(props: {
   const ref = useRef<HTMLTextAreaElement>(null)
   useEffect(() => ref.current?.focus(), [])
 
-  const submit = async (): Promise<void> => {
+  const submit = async (asDraft = false): Promise<void> => {
     const trimmed = text.trim()
     if (!trimmed || busy) return // an empty text does nothing
     setBusy(true)
     setError(null)
-    const err = await props.onSubmit(trimmed)
+    const err = await (asDraft && props.onSaveDraft ? props.onSaveDraft(trimmed) : props.onSubmit(trimmed))
     setBusy(false)
     if (err) setError(err)
   }
@@ -70,6 +72,11 @@ export function CommentForm(props: {
         <button type="button" onClick={props.onCancel}>
           Cancel
         </button>
+        {props.onSaveDraft && (
+          <button type="button" data-testid="save-draft" disabled={busy} title="Keeps it in the review. You post it later." onClick={() => void submit(true)}>
+            Save draft
+          </button>
+        )}
         <button type="submit" className="primary" disabled={busy}>
           {props.submitLabel}
         </button>
@@ -89,7 +96,7 @@ export function ThreadCard(props: { mrKey: string; thread: Thread; mrOpen: boole
 
   const first = thread.notes[0]
   const last = thread.notes[thread.notes.length - 1]
-  const snippet = first.body.replace(/\s+/g, ' ').slice(0, 140)
+  const snippet = first.body.replace(/\*\*/g, '').replace(/\s+/g, ' ').slice(0, 140) // a preview in plain text, so no bold marks
   const replies = thread.notes.length - 1
 
   const toggleResolved = async (): Promise<void> => {

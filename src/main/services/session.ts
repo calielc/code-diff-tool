@@ -2,7 +2,7 @@ import { issueFile, criteriaFromFile } from '@shared/issues'
 import type { IssueData } from '@shared/issues'
 import type { BuildResult } from '@shared/review'
 import { readComments } from './comments'
-import { startFlow } from './flow'
+import { loadSections } from './sections'
 import { writeContext, type ReviewContext } from './context'
 import { reviewDir } from './reviews'
 import { startSummaries, summariesOf } from './summaries'
@@ -85,7 +85,7 @@ export function startSession(root: string, slug: string, result: BuildResult, cl
     }
   )
   sessions.set(slug, session)
-  // The flow is written in the background when it is missing or out of date. Tests start it only when they ask.
-  if (process.env['CODEDIFF_TEST'] !== '1' || process.env['CODEDIFF_TEST_FLOW'] === '1') void startFlow(session)
+  // The saved Summarised page is read and checked. The AI tool writes it only when the reader opens the Summarised view.
+  void loadSections(session)
   return session
 }

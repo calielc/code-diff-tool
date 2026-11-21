@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
+import { SECTIONS_PROMPT_VERSION } from '../../src/shared/sections'
 import { forgeEnv, startFakeForge, type FakeForge, type Fixture } from '../fakes/fake-forge'
 
 // Takes screenshots of the main screens, to compare them with the design. Runs only with SHOTS=<folder>.
@@ -117,6 +118,19 @@ test('screenshots of the main screens', async () => {
               position: { new_path: '.config/tools.json', old_path: '.config/tools.json', new_line: 7 }
             }
           ]
+        },
+        {
+          id: 'c'.repeat(40),
+          notes: [
+            {
+              id: 14,
+              body: '**Section: The CI job builds and publishes the clients**\n\nShould the publish job run on main only?',
+              resolvable: true,
+              resolved: false,
+              author: { username: 'ann', name: 'Ann Lee' },
+              created_at: '2026-11-03T13:00:00Z'
+            }
+          ]
         }
       ]
     },
@@ -149,58 +163,40 @@ test('screenshots of the main screens', async () => {
     'GET rest/api/3/issue/APP-101/comment': { json: { total: 0, comments: [] } }
   }
   forge = await startFakeForge(fixture)
-  // a saved flow, so the Critical thinking view has something to show
-  const flowDir = join(root, '.code-diff', 'reviews', 'APP-101')
-  mkdirSync(flowDir, { recursive: true })
+  // a saved page, so the Summarised view has something to show
+  const pageDir = join(root, '.code-diff', 'reviews', 'APP-101')
+  mkdirSync(pageDir, { recursive: true })
   const K = 'backend/api-service!104'
-  const R = 'backend/api-service'
-  const flow = {
+  const page104 = {
     summary:
-      'Users of the list page and admins of the settings page now reach the service through a generated client that the service publishes from two manual CI jobs.',
-    lanes: [R],
-    steps: [
+      'The service now builds an API client for C# and for TypeScript from its contract, and publishes both from two manual CI jobs. The change adds the tool, the job and a new entry point text.',
+    sections: [
       {
-        id: 's1',
-        mr: K,
-        path: '.config/tools.json',
-        lines: [[6, 12]],
-        title: 'compute-client-version',
-        kind: 'new',
-        text: 'New tool entry.',
-        next: [{ to: 's2', label: 'CLIENT_VERSION dotenv' }]
+        id: 'tools',
+        title: 'A new tool generates the clients',
+        text: 'The tool manifest gains the Kiota tool next to the Entity Framework tool. Every build machine now installs the same version, so the clients do not drift between a laptop and the pipeline.',
+        snippets: [{ mr: K, path: '.config/tools.json', lines: [6, 13] }]
       },
       {
-        id: 's2',
-        mr: K,
-        path: 'ci/build-client.sh',
-        lines: [[1, 3]],
-        title: 'generate-and-publish-package',
-        kind: 'new',
-        text: 'Publishes.',
-        next: [{ to: 's3', label: 'GET /api/v1/items' }]
+        id: 'ci',
+        title: 'The CI job builds and publishes the clients',
+        text: 'A new script runs the generator and stops at the first error. The two manual jobs call it, so a person decides when a new client version goes out.',
+        snippets: [{ mr: K, path: 'ci/build-client.sh', lines: [1, 3] }]
       },
-      { id: 's3', repo: R, title: 'ItemsController', kind: 'existing', text: 'unchanged', next: [{ to: 's4', label: 'bind team_filter' }] },
-      { id: 's4', mr: K, path: 'src/Api/Program.cs', lines: [[7, 7]], title: 'Program.Main', kind: 'changed', text: 'Prints new.' }
-    ],
-    review: [
-      { mr: K, path: '.config/tools.json', line: 7, why: 'The new tool entry.' },
-      { mr: K, path: 'ci/build-client.sh', line: 1, why: 'The publish script.' },
-      { mr: K, path: 'src/Api/Program.cs', line: 7, why: 'The entry point.' }
-    ],
-    skip: [
       {
-        why: 'Documentation and tests',
-        items: [
-          { mr: K, path: 'docs/api-clients.md' },
-          { mr: K, path: 'README.md' },
-          { mr: K, path: 'src/Api/Old.cs' },
-          { mr: K, path: 'test/Api.Tests/ProgramTests.cs' }
+        id: 'entry',
+        title: 'The entry point changes, and an unused class goes away',
+        text: 'Main prints the new text. The class Old had no caller left, so the change removes it.',
+        snippets: [
+          { mr: K, path: 'src/Api/Program.cs', lines: [7, 7] },
+          { mr: K, path: 'src/Api/Old.cs', lines: [1, 1], side: 'old' }
         ]
       }
-    ]
+    ],
+    restText: 'Two documents and a test class with an empty method. They hold no logic, so a quick look is enough.'
   }
-  writeFileSync(join(flowDir, 'flow.json'), JSON.stringify(flow))
-  writeFileSync(join(flowDir, 'flow-issues.json'), JSON.stringify(['APP-101']))
+  writeFileSync(join(pageDir, 'sections.json'), JSON.stringify(page104))
+  writeFileSync(join(pageDir, 'sections-basis.json'), JSON.stringify({ issues: ['APP-101'], heads: { [K]: head }, version: SECTIONS_PROMPT_VERSION }))
   const rdir = join(root, '.code-diff', 'reviews', 'APP-101')
   mkdirSync(rdir, { recursive: true })
   writeFileSync(
@@ -217,7 +213,6 @@ test('screenshots of the main screens', async () => {
     env: {
       ...process.env,
       CODEDIFF_USER_DATA: ud,
-      CODEDIFF_TEST_FLOW: '1',
       ...forgeEnv(forge.url),
       FAKE_CLAUDE_ANSWER: JSON.stringify({
         checklist: [
@@ -250,13 +245,16 @@ test('screenshots of the main screens', async () => {
   await expect(page.getByTestId('diff-table').locator('[class*="tk-"]').first()).toBeVisible()
   await shot('diff')
 
-  await page.getByTestId('view-flow').click()
-  await shot('critical-thinking')
-  await page
-    .getByTestId('view-flow')
-    .click()
-    .catch(() => undefined)
-  await page.getByRole('button', { name: 'By MR' }).click()
+  await page.setViewportSize({ width: 1600, height: 1500 }) // a tall window, so that the picture shows the index and several sections
+  await page.getByTestId('view-summarised').click()
+  await expect(page.getByTestId('sections-view')).toBeVisible()
+  await page.getByTestId('accept-tools').click() // an accepted section is collapsed to its header
+  await expect(page.getByTestId('section-tools')).toHaveAttribute('data-collapsed', 'true')
+  await expect(page.getByTestId('section-thread-ci').getByTestId('thread')).toBeVisible()
+  await shot('summarised')
+  await page.setViewportSize({ width: 1600, height: 1000 })
+  await page.getByTestId('accept-tools').click() // undo, so the other pictures show no viewed file
+  await page.getByRole('button', { name: 'Linear', exact: true }).click()
   await page.getByTestId('layout-side').click()
   await page.getByTestId('file-src/Api/Program.cs').click()
   await expect(page.getByTestId('diff-table').locator('.tk-kw').first()).toBeVisible()

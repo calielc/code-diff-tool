@@ -12,7 +12,7 @@ The app helps a reviewer read the code changes of one piece of work. A piece of 
 
 ## 2. Reviews
 
-The home screen lists your reviews with their name, title, number of changes, number of issues, last opened time and the state of Critical thinking. Every column sorts. A filter box narrows the list.
+The home screen lists your reviews with their name, title, number of changes, number of issues, last opened time and the state of the Summarised page (Ready, Not written or Failed). A new review shows Not written until you open the Summarised view. Every column sorts. A filter box narrows the list.
 
 - **New review** asks for the URLs of the merge or pull requests, the issue keys, an optional spec file, and a name. The check step reads each change and shows what the review will hold. A change with no local clone is skipped, and the list says so. Create and open builds the review.
 - A review is built when it opens. The build shows its stages: finding the clones, checking your login, reading the issues, reading the code changes, fetching the missing commits, diffing the files and preparing the review. A reload builds it again.
@@ -26,7 +26,7 @@ The header shows the title of the review, a short line about it, the AI button a
 - The Code changes tab shows the number of changes, and the open and total threads.
 - The Diff tab shows how many files you viewed, and the number of your drafts.
 - The Acceptance criteria tab shows one dot for each criterion, coloured by its state.
-- A banner shows when new commits arrive on a change, when Critical thinking is out of date, or when the AI could not write it.
+- A banner shows when new commits arrive on a change, when the Summarised page is out of date, or when the AI could not write it.
 
 ## 4. Issues
 
@@ -55,15 +55,15 @@ The table has one row for each change with its number, stack position, title and
 
 ### 6.1 The toolbar
 
-- **View**: Critical thinking, By MR, or Combined per repo. Combined shows the files of all the changes of one repo as one diff, when they merge cleanly.
+- **View**: Summarised, Linear, or Stacked. Summarised is a page of sections, described in section 7. Linear shows the files of each change by itself. Stacked shows the files of all the changes of one repo as one diff, when they merge cleanly. The Summarised view has no file tree, and it shows only the View and Noise groups.
 - **Noise**: Code only, Keep mechanical, or Everything. Code only hides blank lines, white space, imports, comments and mechanical modifiers. A file with no change at that level is hidden, and the tree says how many.
 - **Layout**: Inline, Side by side, or Full file.
 - **Files**: New, Modified and Deleted, each with its count.
 - **Types**: Code, Tests, Config, Docs, Images and Binary, each with its count. A file has one type. The app checks in this order and the first match wins: Images (by extension: png, jpg, jpeg, gif, webp, bmp, ico, svg, avif, tiff, heic and similar), then Binary (a file that git marks as binary, or a known binary extension such as zip, dll, exe, pdf, fonts, jar and wasm), then Docs, Tests, Config, and Code for the rest. An image is never Binary, and a picture in a `tests` folder is an Image. An SVG is an Image, and the diff still shows its text lines. The diff of another image, or of any binary file, shows the note "Binary file, no text diff." and no preview.
 - The Types group shows only the options that have files. An option with no file is not shown, and the group is not shown when the review has no file at all. The counts come from the files that the View and Noise settings show, so the other filters do not change them. An option that is on stays visible when its count falls to 0, so you can turn it off.
-- **Comments**: Open and Resolved, each with the number of threads. With Open on, the tree shows only the files with open threads, and the diff shows only the open threads. Resolved works the same way.
+- **Comments**: Open and Resolved, each with the number of threads. With Open on, the tree shows only the files with open threads, and the diff shows only the open threads, so resolved threads are hidden. Resolved works the same way.
 - Filters with buttons (Files, Types and Comments) narrow the list only when a button is on. With no button on, every file shows.
-- Three checkboxes: Hide viewed, Hide resolved threads and Only files with comments.
+- **Show**: a group at the right end of the toolbar with two checkboxes, Hide viewed and Only files with comments.
 
 ### 6.2 The file tree
 
@@ -91,14 +91,66 @@ The header shows the path, the state of the change, the commits of the file and 
 - **Comments.** The `+` button opens a form. A comment on an open change goes to the host at once. A draft stays in the review, and you post it later or delete it. A merged change takes no new comment.
 - **The review bar** at the bottom has Previous and Next for the files, the comment buttons that go to the next and the prior comment, and Submit review. Submit review sends your drafts, an optional summary and your decision (approve, request changes or comment) to each change.
 
-## 7. Critical thinking
+## 7. Summarised
 
-![Critical thinking](docs/images/critical-thinking.png)
+![The Summarised view](docs/images/summarised.png)
 
-An AI tool reads the whole review and writes a flow: a summary, boxes for the code that matters in one column for each repo, and arrows that show how one step calls the next. A new box is green. A changed box is plain. An existing box that no change touched has a dashed border. A box opens its file at its first line. Below the diagram are the files to read in order, with the reason for each, and the groups of files that you can skip.
+The Summarised view is a page of sections for a bug hunt. It shows the places where a bug can be spotted or a wrong decision can be found, in reading order, and leaves the noise out. A reviewer who reads and accepts every section, "Everything else" included, has seen the whole change.
 
-- The flow is checked against the real diffs. A file that is neither in the reading order nor in a skip group makes the flow wrong, and the tool must fix it. The app asks up to three times.
-- A flow that no longer matches the changes is hidden, and a banner says that the AI is writing it again.
+**When the page is written.** An AI tool writes the page when you open the Summarised view, and not when the review is built. Open it with the View button of the Diff tab. The Diff tab also opens it when Summarised is your saved choice.
+
+- The tool is Claude Code with the model `sonnet` at `medium` effort. The choice is for cost and speed, because you wait for the page when you open the view.
+- While the tool writes, the view says so, and a banner shows on every tab. It takes a few minutes. If you leave the view, the run goes on and saves the page, and the page is there when you come back. The app never starts two runs for one review.
+- The page is saved in the review. When you open the view again, a saved page that still fits is shown at once, and no run starts. A page is out of date when a change has new commits, when the issues changed, when a snippet no longer points at a change, or when the app has new rules for the page. Then the app holds the page back and writes it again when the view is open. After new commits arrive, press Refresh, and the open view writes the page again.
+- If the tool fails, the view shows the reason and a **Try again** button. The app does not try again by itself. A try that gives no answer in 10 minutes is stopped.
+
+**What the page holds.** The AI tool is told to pick code by one test: could a bug hide here, or could a wrong decision be spotted here? That means logic and branching, data flow, error handling, concurrency and ordering, security and permission rules, changes of a contract or of public behaviour, queries, configuration that changes behaviour, and a test only when it shows the intent or a missing case. It leaves out declarations that only mirror another change, wiring and plumbing, renames, formatting, imports, logging, comments, generated code, lock files, version bumps and test scaffolding.
+
+- A page has at most 10 sections, "Everything else" included. The tool writes at most 9, usually 3 to 7, and fewer for a small change. If it writes more, the app asks it to merge or drop points, and after the last try it keeps the first 9 and says so in "Everything else".
+- When no change needs thought, the page has only "Everything else", with a short sentence.
+
+**A section.** It has:
+
+- a title and one short paragraph for a bug hunt: what the code does now, what changed, and what to check.
+- the code, as compact excerpts of the diff, with the syntax colours of the file panel. A snippet shows the changed lines of its range with at most one unchanged line around each change. Longer runs of unchanged lines fold into a row that opens on a click, and a long excerpt shows its first rows and a row "Show N more lines". The excerpts follow the Noise buttons. A section draws one block for each file, with the ranges in the order of the file.
+- a footer with the files of the section. A click on a file opens it in the Linear view. A file shows a tick when it is viewed.
+- an **Accept** button, and its own thread.
+
+**Mirrors.** When several changes say the same thing, such as an interface and the class that implements it, the section shows the one place where the real change is, and lists the others in its footer as mirrors. A mirror has a dashed chip and no excerpt. Accept covers it like the other files.
+
+**Everything else.** The last section is always "Everything else", and the app computes it from the real diffs. It holds every changed file that no section shows, and every changed line that no snippet picks. A change that a section already draws is never drawn again on the page. Changes that are only imports, comments or white space do not count, because the Code only level hides them. The AI tool does not list these files, and it may add one short sentence that names the categories that it left out.
+
+- A file that is only partly left over shows only the lines that no section shows. Click a file to open its changes, and click "Open the file in the Linear view" for the whole file.
+- If the sections show every change, the section does not appear.
+- It has an Accept button and a thread, like any section.
+- If a second section picks only lines that an earlier section draws, it says "These changes are shown in section N."
+
+**The index.** The left column shows an index of the sections, in the place of the file tree. At the top is the progress, "N of M accepted". Each row has the number, the title, a mark (○ not accepted, ◐ accepted while a file waits for another section, ✓ accepted), how many of its files are viewed, and a mark for an open thread or a draft. "Everything else" is the last row.
+
+- A click on a row goes to the section, opens it if it is collapsed, and moves the focus to it. The row of the section in view is highlighted while you scroll.
+- The Up and Down keys walk the rows, Home and End go to the first and the last, and Enter goes to the section. The keys `n`, `p` and `v` do nothing in this view.
+- The index has the width of the file tree, and the splitter resizes it. In a window narrower than 800 pixels it sits above the page, as the file tree does.
+
+**Collapse and the sticky header.** Each section has a chevron that collapses it to its header and opens it again. A collapsed section still shows its number, title, "N of M files viewed", the Accept button, and marks for its open threads and drafts. "Collapse all" and "Expand all" sit near the progress line. The state is saved for each review, and a section with no saved state is open, unless it is accepted.
+
+- The header of a section stays at the top of the page while you scroll through the section, and the next header pushes it away.
+- Accept collapses the section and moves on: the next section that is not accepted goes to the top of the page. If none is left, the page goes to its end. Un-accept opens the section again and keeps its header where it is on the screen. A section that you open after the Accept stays open until you change it.
+- A section that becomes accepted or not accepted in another way, such as a mark in the tree, collapses or opens in the same way, and the page does not scroll.
+
+**Accept and Viewed.** Accept marks the files of the section as viewed, with the same rules as the Viewed box of the Linear view: the HEAD mark counts for the commits before it, the tree and its counter show the mark, and the marks stay in the review on this machine.
+
+- A file that more than one section holds becomes viewed only when all of them are accepted. This includes a file that is partly in a section and partly in "Everything else". The first Accept leaves the file unviewed, and the tooltip of the file names the sections that it waits for. This way a file is never marked as read while one of its changes is not.
+- The button turns into "Accepted". Press it again to take the accept back. The files of that section lose their viewed mark, because the section is no longer read. Another section that you accepted stays accepted.
+- If you remove the viewed mark of a file in the tree, the sections that hold only that file stop being accepted. Accept sets the marks again.
+- The top of the page shows how many sections are accepted and how many files are viewed. The line under it says how many files are in the sections and how many in "Everything else".
+
+**The thread of a section.** The button "Comment on this section" opens a form. The comment goes to the host as a comment on the change, as the comments of the conversation do. It starts with the line `**Section: <title>**`, so people who read the change on the host see which section it is about. The app finds the threads by that line and shows them on the section, with their replies and their state. You can resolve and reopen a thread there, and you can also see it under the row in the Code changes tab.
+
+- The comment goes to the open change that owns most files of the section. A merged or closed change takes no comment, and the section then shows its old threads only.
+- **Save draft** keeps the comment in the review. The draft shows on the section, and you can edit it, delete it, or post it. Submit review posts it with the other drafts.
+- If the AI writes the page again with a new title for a section, its old thread stays on the change but shows only in the Code changes tab.
+
+**Checks.** The page is checked against the real diffs. Every snippet must point at a file of the review and hold a changed line, and its range must not be far wider than the changes in it. A mirror must be a changed file of the review. A section has a title, one paragraph and at least one snippet. The check never asks the tool to cover every file, because "Everything else" holds what the sections leave out. When the check fails, the tool must fix the page, and each message names the exact problem, for example the lines that did change. The app asks up to three times.
 
 ## 8. Acceptance criteria
 

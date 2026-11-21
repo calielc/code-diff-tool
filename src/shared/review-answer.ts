@@ -1,6 +1,6 @@
 import type { PendingComment } from './comments'
 import type { LineObj } from './diff'
-import { relaxJson } from './flow'
+import { relaxJson } from './sections'
 import type { DiffRefs } from './provider'
 
 // Checking the answer of an AI review or an acceptance criteria check, and making drafts of it (file 04 sections 7.10 and 8.4).

@@ -1,7 +1,7 @@
 import type { ChangeSnapshot } from './provider'
 import type { LlmConfig, ToolId, CustomTool } from './llm'
 import type { ChatEvent, ChatRequest } from './chat'
-import type { FlowState } from './flow'
+import type { SectionsState } from './sections'
 import type { LaunchRequest } from './launch'
 import type { CommitInfo } from './commits'
 import type { FileObject } from './diff'
@@ -124,9 +124,11 @@ export interface CodeDiffApi {
     cancel(id: string): Promise<void>
     onEvent(cb: (e: ChatEvent) => void): () => void
   }
-  flow: {
-    get(slug: string): Promise<FlowState>
-    onState(cb: (m: { slug: string; state: FlowState }) => void): () => void
+  sections: {
+    get(slug: string): Promise<SectionsState>
+    /** The reader opened the Summarised view: write the page when it is missing or out of date. It returns at once. */
+    start(slug: string): Promise<void>
+    onState(cb: (m: { slug: string; state: SectionsState }) => void): () => void
   }
   ai: {
     get(slug: string): Promise<AiStateView | null>

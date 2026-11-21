@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { PendingComment, ThreadsAnswer } from '@shared/comments'
 import type { Person } from '@shared/provider'
 import type { BuildResult, BuiltMr } from '@shared/review'
-import type { FlowState } from '@shared/flow'
+import { acceptSection, unacceptSection, type Accepted, type SectionsDocument, type SectionsState } from '@shared/sections'
 import type { AiStateView } from '@shared/ai'
 import type { WatchEvent } from '@shared/watch'
 import { api } from '../api'
@@ -14,8 +14,6 @@ export interface ReviewCtx {
   data: BuildResult
   people: Record<string, Person>
   drafts: Record<string, PendingComment>
-  hideResolved: boolean
-  setHideResolved(v: boolean): void
   mrByKey(key: string): BuiltMr | undefined
   toast(text: string): void
   applyThreads(key: string, answer: ThreadsAnswer): void
@@ -38,13 +36,16 @@ export interface ReviewCtx {
   requestOpen(mr: string, path: string, line: number | null): void
   viewedRequest: { mr: string; paths: string[]; nonce: number } | null
   requestViewed(mr: string, paths: string[]): void
-  /** The Critical thinking flow. The saved flow is withheld while a run is pending. */
-  flow: FlowState
+  /** The Summarised page. The saved page is withheld while a run is pending. */
+  sections: SectionsState
   /** The AI review and the acceptance criteria check. Null until the first answer. */
   ai: AiStateView | null
   /** The files marked as viewed, by entry id. Kept on this machine for each review. */
   viewed: Set<string>
   setViewed: React.Dispatch<React.SetStateAction<Set<string>>>
+  /** The sections that the reviewer accepted. Accepting and un-accepting change the viewed marks of the files of the section, by the rules in the shared module. */
+  accepted: Accepted
+  setSectionAccepted(doc: SectionsDocument, id: string, on: boolean): void
 }
 
 const Ctx = createContext<ReviewCtx | null>(null)
@@ -59,7 +60,6 @@ export function ReviewProvider(props: { slug: string; result: BuildResult; onRel
   const [data, setData] = useState<BuildResult>(props.result)
   const [livePeople, setLivePeople] = useState<Record<string, Person>>({})
   const [drafts, setDrafts] = useState<Record<string, PendingComment>>({})
-  const [hideResolved, setHideResolved] = useState(false)
   const [toastText, setToastText] = useState<string | null>(null)
   const [banner, setBanner] = useState<string[] | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -67,12 +67,12 @@ export function ReviewProvider(props: { slug: string; result: BuildResult; onRel
   const [nav, setNav] = useState<ReviewCtx['nav']>(null)
   const [viewedRequest, setViewedRequest] = useState<ReviewCtx['viewedRequest']>(null)
   const nonce = useRef(0)
-  const [flow, setFlow] = useState<FlowState>({ pending: false, context: null, error: null, flow: null, problems: [] })
+  const [sections, setSections] = useState<SectionsState>({ pending: false, context: null, error: null, document: null, problems: [] })
 
-  // The flow arrives with no reload, because a reload loses chats and unsent comments.
+  // The sections arrive with no reload, because a reload loses chats and unsent comments.
   useEffect(() => {
-    void api.flow.get(slug).then(setFlow)
-    return api.flow.onState((m) => m.slug === slug && setFlow(m.state))
+    void api.sections.get(slug).then(setSections)
+    return api.sections.onState((m) => m.slug === slug && setSections(m.state))
   }, [slug, props.result])
 
   const [viewed, setViewed] = useState<Set<string>>(() => {
@@ -89,6 +89,36 @@ export function ReviewProvider(props: { slug: string; result: BuildResult; onRel
       /* storage can be blocked: the marks then last until the window closes */
     }
   }, [slug, viewed])
+  // The sections that the reviewer accepted, each with the files it had then. Kept on this machine for each review, as the viewed marks are.
+  const [accepted, setAccepted] = useState<Accepted>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(`codediff:accepted:${slug}`) ?? '{}') as Accepted
+    } catch {
+      return {}
+    }
+  })
+  const acceptedRef = useRef(accepted)
+  acceptedRef.current = accepted
+  useEffect(() => {
+    try {
+      localStorage.setItem(`codediff:accepted:${slug}`, JSON.stringify(accepted))
+    } catch {
+      /* storage can be blocked */
+    }
+  }, [slug, accepted])
+  const setSectionAccepted = useCallback((doc: SectionsDocument, id: string, on: boolean) => {
+    if (on) {
+      const r = acceptSection(doc, acceptedRef.current, id)
+      acceptedRef.current = r.accepted
+      setAccepted(r.accepted)
+      setViewed((v) => new Set([...v, ...r.mark]))
+    } else {
+      const r = unacceptSection(doc, acceptedRef.current, id)
+      acceptedRef.current = r.accepted
+      setAccepted(r.accepted)
+      setViewed((v) => new Set([...v].filter((k) => !r.unmark.includes(k))))
+    }
+  }, [])
   const [ai, setAi] = useState<AiStateView | null>(null)
   const announced = useRef<string | null>(null)
   useEffect(() => {
@@ -166,8 +196,6 @@ export function ReviewProvider(props: { slug: string; result: BuildResult; onRel
     data,
     people,
     drafts,
-    hideResolved,
-    setHideResolved,
     mrByKey: (key) => data.mrs.find((m) => m.key === key),
     toast,
     applyThreads,
@@ -225,7 +253,9 @@ export function ReviewProvider(props: { slug: string; result: BuildResult; onRel
     requestOpen: (mr, path, line) => setNav({ mr, path, line, nonce: ++nonce.current }),
     viewedRequest,
     requestViewed: (mr, paths) => setViewedRequest({ mr, paths, nonce: ++nonce.current }),
-    flow,
+    sections,
+    accepted,
+    setSectionAccepted,
     ai,
     viewed,
     setViewed

@@ -316,15 +316,19 @@ function Screen(props: { onHome: () => void }): React.JSX.Element {
           New commits on {r.refreshBanner.map((k) => `!${k.slice(k.lastIndexOf('!') + 1)}`).join(', ')}. <button onClick={r.reload}>Refresh</button>
         </div>
       )}
-      {(r.flow.pending || r.flow.error) && (
-        <div className="banner warn" data-testid="flow-banner" title={r.flow.error ?? undefined}>
-          {r.flow.error
-            ? 'The AI could not write Critical thinking. Reload the review to try again.'
-            : r.flow.problems.length > 0
-              ? `Critical thinking is out of date: the MRs changed since it was written (${r.flow.problems.length} problem(s)). The AI is writing it again.`
-              : r.flow.context === 'gathering'
-                ? 'Gathering context for Critical thinking…'
-                : 'The AI is writing Critical thinking…'}
+      {(r.sections.pending || r.sections.error) && (
+        <div
+          className="banner warn"
+          data-testid="sections-banner"
+          title={r.sections.error ?? (r.sections.problems.length > 0 ? r.sections.problems.slice(0, 8).join('\n') : undefined)}
+        >
+          {r.sections.error
+            ? 'The AI could not write the Summarised page. Open the Summarised view and press Try again.'
+            : r.sections.problems.length > 0
+              ? `The Summarised page is out of date: the changes moved since it was written (${r.sections.problems.length} problem(s)). The AI is writing it again.`
+              : r.sections.context === 'gathering'
+                ? 'Gathering context for the Summarised page…'
+                : 'The AI is writing the Summarised page…'}
         </div>
       )}
       <div className="tabs" role="tablist">

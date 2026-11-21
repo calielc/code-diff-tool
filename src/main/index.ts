@@ -7,7 +7,7 @@ import { registerChatHandlers } from './ipc/chat'
 import { registerCommentHandlers } from './ipc/comments'
 import { registerDevHandlers } from './ipc/dev'
 import { registerReviewHandlers } from './ipc/reviews'
-import { registerFlowHandlers } from './ipc/flow'
+import { registerSectionsHandlers } from './ipc/sections'
 import { registerAiHandlers } from './ipc/ai'
 import { registerCommitHandlers } from './ipc/commits'
 import { currentTheme, registerThemeHandlers, setTheme } from './ipc/theme'
@@ -96,7 +96,7 @@ if (!app.requestSingleInstanceLock()) {
     registerAccessHandlers()
     registerLlmHandlers()
     registerChatHandlers()
-    registerFlowHandlers()
+    registerSectionsHandlers()
     registerAiHandlers()
     registerCommitHandlers()
     registerLaunchHandlers()

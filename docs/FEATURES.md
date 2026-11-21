@@ -55,7 +55,7 @@ The table has one row for each change with its number, stack position, title and
 
 ### 6.1 The toolbar
 
-- **View**: Critical thinking, By MR, or Combined per repo. Combined shows the files of all the changes of one repo as one diff, when they merge cleanly.
+- **View**: Critical thinking, Linear, or Stacked. Linear shows the files of each change by itself. Stacked shows the files of all the changes of one repo as one diff, when they merge cleanly.
 - **Noise**: Code only, Keep mechanical, or Everything. Code only hides blank lines, white space, imports, comments and mechanical modifiers. A file with no change at that level is hidden, and the tree says how many.
 - **Layout**: Inline, Side by side, or Full file.
 - **Files**: New, Modified and Deleted, each with its count.

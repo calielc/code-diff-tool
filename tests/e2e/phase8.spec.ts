@@ -126,7 +126,7 @@ test('the flow arrives without a reload and shows the chain, the reading order a
   await expect(page.getByTestId('flow-review')).toContainText('!12 a.txt:2')
   await expect(page.getByTestId('flow-review')).toContainText('Check the new value.')
   await expect(page.getByTestId('flow-skip')).toContainText('Documentation')
-  // a box opens its file at the first line, in the By MR view
+  // a box opens its file at the first line, in the Linear view
   await page
     .getByTestId('step-s1')
     .getByRole('button', { name: /a\.txt:2/ })

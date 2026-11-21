@@ -219,25 +219,25 @@ test.describe.serial('the rows of the file tree', () => {
 
   test('in both views, at the default and at the narrowest width, every row has its name left, its numbers at the right edge and fits its box', async () => {
     // Arrange: the default width first, because the narrowest width stays once it is set
-    await page.getByRole('button', { name: 'By MR' }).click()
+    await page.getByRole('button', { name: 'Linear', exact: true }).click()
     await openAll(page)
 
-    // Act and assert: the default width, By MR then Combined
-    await expectRowsFit(page, 'By MR view at the default width')
-    await page.getByRole('button', { name: 'Combined per repo' }).click()
+    // Act and assert: the default width, Linear then Stacked
+    await expectRowsFit(page, 'Linear view at the default width')
+    await page.getByRole('button', { name: 'Stacked' }).click()
     await openAll(page)
-    await expectRowsFit(page, 'Combined per repo view at the default width')
+    await expectRowsFit(page, 'Stacked view at the default width')
     // the MR name is not cut at a wide pane
     const group = tree(page).locator('.trow.group', { hasText: '!12' })
     expect(await group.locator('.tname').evaluate((e) => e.scrollWidth - e.clientWidth), 'the label is cut at a wide pane').toBeLessThanOrEqual(0)
 
-    // Act and assert: the narrowest width, Combined then By MR
+    // Act and assert: the narrowest width, Stacked then Linear
     await narrowest(page)
-    await expectRowsFit(page, 'Combined per repo view at the narrowest width')
+    await expectRowsFit(page, 'Stacked view at the narrowest width')
     // the MR name shrinks with an ellipsis before the numbers
     expect(await group.locator('.tname').evaluate((e) => e.clientWidth), 'the label has no room at all').toBeGreaterThan(20)
-    await page.getByRole('button', { name: 'By MR' }).click()
+    await page.getByRole('button', { name: 'Linear', exact: true }).click()
     await openAll(page)
-    await expectRowsFit(page, 'By MR view at the narrowest width')
+    await expectRowsFit(page, 'Linear view at the narrowest width')
   })
 })

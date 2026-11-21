@@ -50,9 +50,9 @@ interface Entry {
   groupTip: string
   file: FileObject
   scope: string
-  /** The change that owns the file in By MR. Null in Combined, where each line has its own target. */
+  /** The change that owns the file in Linear. Null in Stacked, where each line has its own target. */
   mrKey: string | null
-  /** The changes of the part, in Combined. */
+  /** The changes of the part, in Stacked. */
   partMrs: string[]
   /** The change and the commit whose code the line chat reads. */
   chatMr: string
@@ -122,7 +122,7 @@ function entriesOf(result: BuildResult, view: ViewName): Entry[] {
       groupLabel: `Part ${n} · ${label}`,
       groupTip: p.reason ?? 'The first part',
       file,
-      scope: `combined · ${p.repo} · ${nums.join(', ')}`,
+      scope: `stacked · ${p.repo} · ${nums.join(', ')}`,
       mrKey: null,
       partMrs: p.mrs,
       chatMr: p.mrs[0],
@@ -253,7 +253,7 @@ export function DiffTab(props: { visible?: (mrKey: string) => boolean }): React.
   useEffect(() => save('codediff:view', view), [view])
   useEffect(() => save('codediff:noise', level), [level])
 
-  // The flow view shows no tree. Leaving it returns to the By MR view, and a flow that went away does the same.
+  // The flow view shows no tree. Leaving it returns to the Linear view, and a flow that went away does the same.
   useEffect(() => {
     if (view === 'flow' && !r.flow.flow) setView('mr')
   }, [view, r.flow.flow])
@@ -326,7 +326,7 @@ export function DiffTab(props: { visible?: (mrKey: string) => boolean }): React.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current?.id])
 
-  // An Open card: switch to By MR, show the file and scroll to the line. A hidden line switches the noise level to Everything.
+  // An Open card: switch to Linear, show the file and scroll to the line. A hidden line switches the noise level to Everything.
   useEffect(() => {
     const n = r.nav
     if (!n) return
@@ -590,7 +590,7 @@ export function DiffTab(props: { visible?: (mrKey: string) => boolean }): React.
 
   const partsBadge = result.combined.length > 0 && new Set(result.combined.map((p) => p.repo)).size < result.combined.length
   const combinedTip = !hasCombined
-    ? 'Combined needs 2+ MRs in the same repo'
+    ? 'Stacked needs 2+ MRs in the same repo'
     : [...result.combined.filter((p) => p.reason).map((p) => `${p.repo}: a part ${p.reason}`), 'Each part combines the MRs that merge cleanly in order.'].join(
         '\n'
       )
@@ -613,10 +613,10 @@ export function DiffTab(props: { visible?: (mrKey: string) => boolean }): React.
               {r.flow.pending && <span className="spin">◐ </span>}Critical thinking
             </button>
             <button className={view === 'mr' ? 'on' : ''} onClick={() => setView('mr')}>
-              By MR
+              Linear
             </button>
             <button className={view === 'combined' ? 'on' : ''} disabled={!hasCombined} title={combinedTip} onClick={() => setView('combined')}>
-              Combined per repo
+              Stacked
               {partsBadge && <span className="parts"> {result.combined.length} parts</span>}
             </button>
           </span>

@@ -150,27 +150,27 @@ test('combines changes to different files, and splits parts when two changes con
     ...mr(14, s.shas.base, s.shas.mr3, '2026-01-03T00:00:00Z')
   }
   const { app, page } = await open(s, [12, 13, 14], fx)
-  const combined = page.getByRole('button', { name: /^Combined/ })
+  const combined = page.getByRole('button', { name: /^Stacked/ })
   await expect(combined).toBeEnabled()
   await expect(combined).toContainText('2 parts')
   await expect(combined).toHaveAttribute('title', /team\/backend\/x|backend\/x: a part starts at !14, which conflicts with the part before it \(!12, !13\)/)
   await combined.click()
   await page.getByTestId('file-docs/other.txt').click()
-  await expect(page.getByTestId('file-scope')).toContainText('combined · backend/x · !12, !13')
+  await expect(page.getByTestId('file-scope')).toContainText('stacked · backend/x · !12, !13')
   // the second part is the conflicting change on its own
   await expect(page.getByText('Part 2 · !14')).toBeVisible()
   await expect(page.getByText('Part 1 · !12, !13')).toBeVisible()
   // by MR again: the same path stays open when it exists
-  await page.getByRole('button', { name: 'By MR' }).click()
+  await page.getByRole('button', { name: 'Linear', exact: true }).click()
   await expect(page.getByTestId('file-scope')).toContainText('!13 · backend/x')
   await app.close()
 })
 
-test('Combined is disabled with one change in the repo', async () => {
+test('Stacked is disabled with one change in the repo', async () => {
   const s = setup({ mr1: { 'src/a.txt': 'one\nTWO\nthree\n' } }, base)
   const { app, page } = await open(s, [12], mr(12, s.shas.base, s.shas.mr1, '2026-01-01T00:00:00Z'))
-  const combined = page.getByRole('button', { name: /^Combined/ })
+  const combined = page.getByRole('button', { name: /^Stacked/ })
   await expect(combined).toBeDisabled()
-  await expect(combined).toHaveAttribute('title', 'Combined needs 2+ MRs in the same repo')
+  await expect(combined).toHaveAttribute('title', 'Stacked needs 2+ MRs in the same repo')
   await app.close()
 })

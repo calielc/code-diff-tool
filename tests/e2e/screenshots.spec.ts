@@ -255,7 +255,7 @@ test('screenshots of the main screens', async () => {
     .getByTestId('view-flow')
     .click()
     .catch(() => undefined)
-  await page.getByRole('button', { name: 'By MR' }).click()
+  await page.getByRole('button', { name: 'Linear', exact: true }).click()
   await page.getByTestId('layout-side').click()
   await shot('side-by-side')
   await page.getByTestId('layout-full').click()

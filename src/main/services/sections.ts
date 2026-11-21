@@ -13,9 +13,23 @@ import {
   type SectionsDocument,
   type SectionsState
 } from '@shared/sections'
+import type { Effort, Model } from '../processes/claude'
 import { answer, capabilities, llmState, missingMessage } from '../processes/llm'
 import { atomicWrite, reviewDir } from './reviews'
 import type { Session } from './session'
+
+/**
+ * How the AI tool writes the page. They are named here, in one place, so a change of model is one line. The page is written when the
+ * reader opens the view, so a fast and cheap model suits it. A weaker model gets an explicit prompt, and the checks send exact problems back.
+ */
+export const SECTIONS_MODEL: Model = 'sonnet'
+export const SECTIONS_EFFORT: Effort = 'medium'
+/** The most turns of the tool in one try. */
+export const SECTIONS_MAX_TURNS = 80
+/** The tries for one page: the answer, and two fixes of the problems that the checker found. */
+export const SECTIONS_TRIES = 3
+/** A try that gives no answer in this time is stopped, and the run fails with a message. */
+export const SECTIONS_TRY_TIMEOUT_MS = 10 * 60_000
 
 const states = new Map<string, SectionsState>()
 /** The newest session of each review. A rebuild replaces it. */
@@ -112,20 +126,37 @@ async function run(session: Session): Promise<void> {
     const id = randomUUID() // one session for the whole run
     let prompt = SECTIONS_PROMPT
     let previous = ''
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      const text = await answer({
-        workingDirectory: ctx.dir,
-        session: id,
-        resume: attempt > 1 && capabilities().resume,
-        model: 'opus',
-        effort: 'medium',
-        maxTurns: 80,
-        tools: 'Read,Grep,Glob',
-        instructions: SECTIONS_INSTRUCTIONS,
-        extraDirectories: ctx.repoDirs,
-        // a tool with no session gets its earlier answer back with the problems
-        prompt: attempt > 1 && !capabilities().resume ? `${SECTIONS_PROMPT}\n\nYour earlier answer:\n\n${previous}\n\n${prompt}` : prompt
-      })
+    for (let attempt = 1; attempt <= SECTIONS_TRIES; attempt++) {
+      const stop = new AbortController()
+      const timer = setTimeout(() => stop.abort(), tryTimeoutMs)
+      let text: string
+      try {
+        text = await answer(
+          {
+            workingDirectory: ctx.dir,
+            session: id,
+            resume: attempt > 1 && capabilities().resume,
+            model: SECTIONS_MODEL,
+            effort: SECTIONS_EFFORT,
+            maxTurns: SECTIONS_MAX_TURNS,
+            tools: 'Read,Grep,Glob',
+            instructions: SECTIONS_INSTRUCTIONS,
+            extraDirectories: ctx.repoDirs,
+            // a tool with no session gets its earlier answer back with the problems
+            prompt: attempt > 1 && !capabilities().resume ? `${SECTIONS_PROMPT}\n\nYour earlier answer:\n\n${previous}\n\n${prompt}` : prompt
+          },
+          stop.signal
+        )
+      } catch (e) {
+        // The timer stopped the tool, so the reader gets the reason and not the message of a tool that was killed
+        if (stop.signal.aborted) {
+          const waited = tryTimeoutMs >= 60_000 ? `${Math.round(tryTimeoutMs / 60_000)} minutes` : `${(tryTimeoutMs / 1000).toFixed(1)} seconds`
+          throw new Error(`The AI tool gave no answer in ${waited}, so the run was stopped.`, { cause: e })
+        }
+        throw e
+      } finally {
+        clearTimeout(timer)
+      }
       const check = checkSections(text, facts)
       if (check.document) {
         await atomicWrite(join(dir, 'sections.json'), JSON.stringify(check.document))
@@ -136,7 +167,7 @@ async function run(session: Session): Promise<void> {
         if (current && current !== session) return void (await loadSections(current))
         return void set(slug, { pending: false, document: check.document, problems: [], error: null })
       }
-      if (attempt === 3) throw new Error(giveUpMessage(check.problems))
+      if (attempt === SECTIONS_TRIES) throw new Error(giveUpMessage(check.problems))
       previous = text
       prompt = problemPrompt(check.problems)
     }
@@ -147,6 +178,12 @@ async function run(session: Session): Promise<void> {
   } finally {
     running.delete(slug)
   }
+}
+
+let tryTimeoutMs = SECTIONS_TRY_TIMEOUT_MS
+/** For the tests: a short time limit, or no argument to restore the real one. */
+export function setSectionsTimeoutForTests(ms?: number): void {
+  tryTimeoutMs = ms ?? SECTIONS_TRY_TIMEOUT_MS
 }
 
 /** For the tests. */

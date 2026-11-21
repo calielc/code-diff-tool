@@ -152,6 +152,20 @@ export interface SectionsCheck {
   problems: string[]
 }
 
+/** The numbers as ranges, as in "2, 10-12", for a message that tells the tool where the changes are. A long list is cut. */
+export function rangesOf(numbers: Iterable<number>): string {
+  const sorted = [...new Set(numbers)].sort((a, b) => a - b)
+  if (sorted.length === 0) return 'none (the file has no change on that side)'
+  const out: string[] = []
+  for (let i = 0; i < sorted.length;) {
+    let j = i
+    while (j + 1 < sorted.length && sorted[j + 1] === sorted[j] + 1) j++
+    out.push(j > i ? `${sorted[i]}-${sorted[j]}` : String(sorted[i]))
+    i = j + 1
+  }
+  return out.length > 12 ? `${out.slice(0, 12).join(', ')} and ${out.length - 12} more` : out.join(', ')
+}
+
 const inRange = (n: number, [from, to]: [number, number]): boolean => n >= from && n <= to
 
 /**
@@ -202,7 +216,11 @@ export function checkSections(answer: string, facts: SectionFacts): SectionsChec
     for (const sn of s.snippets) {
       const f = facts.files.get(fileKey(sn.mr, sn.path))
       if (!f) {
-        problems.push(`${at}: ${sn.mr} has no changed file ${sn.path}`)
+        problems.push(
+          facts.filesByMr.has(sn.mr)
+            ? `${at}: ${sn.path} is not a changed file of ${sn.mr}. Use a path as the .diff files name it`
+            : `${at}: ${sn.mr} is not a change of this review. The keys are ${[...facts.filesByMr.keys()].join(', ')}`
+        )
         continue
       }
       const side = sn.side ?? 'new'
@@ -211,7 +229,9 @@ export function checkSections(answer: string, facts: SectionFacts): SectionsChec
       else if (to - from + 1 > LIMITS.snippetLines)
         problems.push(`${at}: lines ${from}-${to} of ${sn.path} are more than ${LIMITS.snippetLines} lines. Split the snippet`)
       else if (![...(side === 'old' ? f.rawOld : f.rawNew)].some((n) => inRange(n, sn.lines)))
-        problems.push(`${at}: lines ${from}-${to} of ${sn.path} on the ${side} side hold no change`)
+        problems.push(
+          `${at}: lines ${from}-${to} of ${sn.path} on the ${side} side hold no change. The changed lines on that side are ${rangesOf(side === 'old' ? f.rawOld : f.rawNew)}`
+        )
     }
     return { id: s.id, title: s.title.trim(), text: s.text.trim(), snippets: s.snippets }
   })
@@ -305,12 +325,13 @@ export const SECTIONS_PROMPT = [
   '}',
   '```',
   '',
-  '- Be selective. Write few sections, usually 2 to 6, and 12 at most. A section is a change that a reviewer must think about: new or changed behaviour, a contract, data or a schema, security, error handling, logic that is not obvious, and tests of risky logic. Each section has one short paragraph, and the paragraph says what changed in words a colleague would use and what to check.',
+  '- Be selective. Prefer few sections: usually 2 to 6, never more than 12. When you doubt that a change needs thought, leave it out, because the app puts it in "Everything else".',
+  '- A section is a change that a reviewer must think about: new or changed behaviour, a contract, data or a schema, security, error handling, logic that is not obvious, and tests of risky logic. Each section has one short paragraph, and the paragraph says what changed in words a colleague would use and what to check.',
   '- Leave out what needs no thought: boilerplate, renames, moves, formatting, generated code, imports, lock files, version bumps, repeated configuration, translated copies, documents that only restate the code, and every other mechanical change. Do not list these files and do not write a section for them.',
   '- The app adds the section "Everything else" itself. It holds every file and every change that no snippet of yours shows, and the reviewer accepts it like any other section. So a file that you do not mention is not lost. Never write a section with the title "Everything else".',
   '- If no change needs a reviewer to think, write `"sections": []` and say why in the summary.',
   '- Order: the core of the change first, then what supports it, then tests. The order is the reading order.',
-  '- A snippet shows lines of one changed file, as a small excerpt: the lines that carry the idea. `lines` are line numbers of the new file, taken from the `new` column of the `.diff` file. Use `"side": "old"` and the `old` column for removed code with no replacement. A snippet holds at most 120 lines and must hold a changed line. A section has 1 to 12 snippets, and the same lines may appear in two sections when both need them.',
+  '- A snippet shows lines of one changed file, as a small excerpt: the lines that carry the idea. Never guess a line number and never count lines yourself. Open the `.diff` file of the file in your working folder (`mrN/<path>.diff`, named in `index.md`) and copy the numbers from it. Each line of it reads `<t> <old> <new> | <text>`, and `t` is `+` for an added line, `-` for a removed line and a space for an unchanged line. `lines` are numbers of the `new` column, and the range must hold at least one `+` line. For removed code with no replacement use `"side": "old"`, the numbers of the `old` column, and a range that holds a `-` line. `mr` is the MR key from `index.md`, exactly as written, and `path` is the path of the file, exactly as written. A snippet holds at most 120 lines. A section has 1 to 12 snippets, and the same lines may appear in two sections when both need them.',
   '- Every claim comes from the diff. Leave out what you cannot back with a file and a line.',
   '- Plain English, short sentences, active voice. Write each paragraph as one block of text, with no list and no heading.'
 ].join('\n')

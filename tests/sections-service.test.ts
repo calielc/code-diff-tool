@@ -5,7 +5,17 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { setLlmConfig } from '../src/main/processes/llm'
 import { startBuild } from '../src/main/services/build'
-import { loadSections, requestSections, resetSectionsMemory, sectionsStateOf } from '../src/main/services/sections'
+import {
+  SECTIONS_EFFORT,
+  SECTIONS_MAX_TURNS,
+  SECTIONS_MODEL,
+  SECTIONS_TRIES,
+  loadSections,
+  requestSections,
+  resetSectionsMemory,
+  sectionsStateOf,
+  setSectionsTimeoutForTests
+} from '../src/main/services/sections'
 import { reviewDir } from '../src/main/services/reviews'
 import { sessionOf } from '../src/main/services/session'
 import { resetWorkspaceCache } from '../src/main/services/workspace'
@@ -93,6 +103,7 @@ beforeEach(async () => {
 })
 afterEach(async () => {
   for (const k of ['FAKE_CLAUDE_LOG', 'FAKE_CLAUDE_ANSWER', 'FAKE_CLAUDE_BAD_FIRST', 'FAKE_CLAUDE_SLEEP_MS']) delete process.env[k]
+  setSectionsTimeoutForTests()
   await stopFakeForge(forge)
 })
 
@@ -130,7 +141,8 @@ describe('opening the Summarised view', () => {
     expect(JSON.parse(readFileSync(join(dir, 'sections.json'), 'utf8')).sections[0].id).toBe('s1')
     expect(JSON.parse(readFileSync(join(dir, 'sections-basis.json'), 'utf8'))).toEqual({ issues: [], heads: { 'backend/x!12': head } })
     const c = calls()[0]
-    expect(arg(c.args, '--model')).toBe('opus')
+    expect([SECTIONS_MODEL, SECTIONS_EFFORT, SECTIONS_MAX_TURNS, SECTIONS_TRIES]).toEqual(['sonnet', 'medium', 80, 3]) // the choice of the owner, named in one place
+    expect(arg(c.args, '--model')).toBe('sonnet')
     expect(arg(c.args, '--effort')).toBe('medium')
     expect(arg(c.args, '--max-turns')).toBe('80')
     expect(c.args).toContain('--add-dir')
@@ -204,6 +216,24 @@ describe('opening the Summarised view', () => {
     expect(existsSync(join(dir, 'sections-error.txt'))).toBe(false)
   })
 
+  it('stops a try that gives no answer in time, and fails with the reason, and a second request can try again', async () => {
+    process.env.FAKE_CLAUDE_SLEEP_MS = '4000'
+    setSectionsTimeoutForTests(500)
+    await requestSections('R-1')
+    expect(sectionsStateOf('R-1')).toMatchObject({
+      pending: false,
+      document: null,
+      error: 'The AI tool gave no answer in 0.5 seconds, so the run was stopped.'
+    })
+    expect(calls()).toHaveLength(1) // no second try after a timeout
+    expect(readFileSync(join(dir, 'sections-error.txt'), 'utf8')).toMatch(/gave no answer/)
+    // the review is free again: the next request starts a new run
+    delete process.env.FAKE_CLAUDE_SLEEP_MS
+    setSectionsTimeoutForTests()
+    await requestSections('R-1')
+    expect(sectionsStateOf('R-1').document).not.toBeNull()
+  })
+
   it('writes the install message when the tool is missing', async () => {
     process.env.CODEDIFF_FAKE_CLAUDE = JSON.stringify(['definitely-not-a-real-program-xyz'])
     await requestSections('R-1')
@@ -233,7 +263,7 @@ describe('a saved page, when the view is opened', () => {
     process.env.FAKE_CLAUDE_SLEEP_MS = '500'
     await begin()
     expect(sectionsStateOf('R-1')).toMatchObject({ pending: true, document: null })
-    expect(sectionsStateOf('R-1').problems).toEqual(["section 's1': lines 99-99 of a.txt on the new side hold no change"])
+    expect(sectionsStateOf('R-1').problems).toEqual(["section 's1': lines 99-99 of a.txt on the new side hold no change. The changed lines on that side are 2"])
     await waitDone()
     expect(sectionsStateOf('R-1').document?.sections[0].snippets[0].lines).toEqual([2, 2])
   })

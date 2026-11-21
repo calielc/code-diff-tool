@@ -15,6 +15,7 @@ import {
   giveUpMessage,
   isAccepted,
   problemPrompt,
+  rangesOf,
   relaxJson,
   restOf,
   sectionCommentBody,
@@ -136,13 +137,37 @@ describe('the checks that stay', () => {
     d.sections[1].snippets[0].path = 'src/Nope.cs'
     d.sections[0].snippets[0].lines = [100, 110]
     const p = check(d).problems
-    expect(p).toContain("section 'api': backend/x!1 has no changed file src/Nope.cs")
-    expect(p).toContain("section 'hook': lines 100-110 of src/hook.ts on the new side hold no change")
+    expect(p).toContain("section 'api': src/Nope.cs is not a changed file of backend/x!1. Use a path as the .diff files name it")
+    // the message tells the tool where the changes are, so one retry can fix the range
+    expect(p).toContain("section 'hook': lines 100-110 of src/hook.ts on the new side hold no change. The changed lines on that side are 3-4")
+  })
+  it('a change that is not in the review, with the keys that are', () => {
+    const d = good()
+    d.sections[0].snippets[0].mr = 'backend/x!9'
+    expect(check(d).problems).toEqual(["section 'hook': backend/x!9 is not a change of this review. The keys are backend/x!1, web/y!2"])
+  })
+  it('lists the changed lines as ranges for a message, and cuts a long list', () => {
+    expect(rangesOf([40, 2, 3, 4, 10, 12])).toBe('2-4, 10, 12, 40')
+    expect(rangesOf([])).toBe('none (the file has no change on that side)')
+    expect(rangesOf(Array.from({ length: 30 }, (_, i) => i * 2 + 1))).toBe('1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23 and 18 more')
+  })
+  it('a title or a paragraph that is missing is named', () => {
+    const d = good()
+    delete d.sections[0].title
+    d.sections[1].text = ''
+    const p = check(d)
+    expect(p.problems).toEqual(['The answer is not a valid sections document: section 1: title is not a string.'])
+    const e = good()
+    e.sections[1].text = ' '
+    e.sections[0].title = ' '
+    expect(check(e).problems).toEqual(["section 'hook' has an empty title", "section 'api' has an empty text"])
   })
   it('a removed line is found on the old side only', () => {
     const d = good()
     delete d.sections[1].snippets[2].side
-    expect(check(d).problems).toContain("section 'api': lines 5-6 of src/Gone.cs on the new side hold no change")
+    expect(check(d).problems).toContain(
+      "section 'api': lines 5-6 of src/Gone.cs on the new side hold no change. The changed lines on that side are none (the file has no change on that side)"
+    )
   })
   it('a range that is too long, a section with no snippet, and too many snippets', () => {
     const d = good()

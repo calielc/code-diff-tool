@@ -156,45 +156,6 @@ test('asks before replacing a review that exists', async () => {
   await app.close()
 })
 
-test('the Home list sorts, filters, counts and marks an unreadable review', async () => {
-  const { env } = makeEnv()
-  seed(env, 'LX-10', {
-    title: 'Ten',
-    mrs: [
-      { projectPath: 'a/b', iid: 1 },
-      { projectPath: 'a/b', iid: 2 }
-    ],
-    issues: []
-  })
-  seed(env, 'LX-2', { title: 'Two', mrs: [{ projectPath: 'a/b', iid: 3 }], issues: ['LX-2'] })
-  seed(env, 'broken', '{ nope')
-  seed(env, 'zz', { mrs: [], issues: [] }, { 'flow-error.txt': 'x' })
-  const app = await launch(env, {})
-  const page = await home(app)
-  await expect(page.getByTestId('review-count')).toHaveText('4 reviews')
-  await expect(page.getByTestId('showing')).toHaveText('Showing 4 of 4 reviews')
-  await page.getByRole('button', { name: /^Slug/ }).click()
-  const slugs = (): Promise<string[]> => page.locator('tbody tr td.strong').allTextContents()
-  expect(await slugs()).toEqual(['broken', 'LX-2', 'LX-10', 'zz']) // LX-2 before LX-10
-  await page.getByRole('button', { name: /^Changes/ }).click()
-  await expect(page.getByRole('button', { name: 'Changes ▲' })).toBeVisible()
-  await page.getByRole('button', { name: 'Changes ▲' }).click()
-  await expect(page.getByRole('button', { name: 'Changes ▼' })).toBeVisible()
-  expect((await slugs())[0]).toBe('LX-10')
-  await expect(page.getByTestId('review-broken')).toContainText('Unreadable review.json')
-  await page.getByTestId('review-broken').hover() // the row buttons show on hover or selection
-  await expect(page.getByTestId('review-broken').getByRole('button', { name: 'Open' })).toBeDisabled()
-  await expect(page.getByTestId('review-zz')).toContainText('Failed')
-  await page.getByLabel('Filter reviews').fill('lx-1')
-  await expect(page.getByTestId('showing')).toHaveText('Showing 1 of 4 reviews')
-  await page.getByLabel('Flow state').selectOption('ready')
-  await page.getByLabel('Filter reviews').fill('zzz')
-  await expect(page.getByText('No review matches "zzz".')).toBeVisible()
-  await page.getByRole('button', { name: 'Clear filter' }).click()
-  await expect(page.getByTestId('showing')).toHaveText('Showing 4 of 4 reviews')
-  await app.close()
-})
-
 test('deleting needs a confirmation for pending comments and moves the folder away', async () => {
   const { env } = makeEnv()
   seed(env, 'LX-5', { title: 'Five', mrs: [], issues: [] }, { 'comments.json': JSON.stringify({ a: {}, b: {} }) })

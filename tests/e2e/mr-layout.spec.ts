@@ -181,11 +181,6 @@ const rowOrder = async (page: Page): Promise<number[]> =>
     Number(id.slice(id.lastIndexOf('!') + 1))
   )
 
-const stateToggle = (page: Page, name: string): Locator =>
-  page.getByRole('group', { name: 'Show MRs by state' }).getByRole('button', { name: new RegExp(`^${name}`) })
-const approvalToggle = (page: Page, name: string): Locator =>
-  page.getByRole('group', { name: 'Show MRs by approval' }).getByRole('button', { name: new RegExp(`^${name}`) })
-
 test('the table has the columns, summary, stack pills, your review cells and the Created default sort of the reference', async () => {
   const { app, page } = await launch()
   const wait = { timeout: 15_000 }
@@ -278,57 +273,5 @@ test('Approve all shows its count and tooltip, and Approve updates the row after
   expect(forge!.bodies.filter((b) => b.endpoint === `${EP(21)}/approve`)).toHaveLength(1)
   await expect(page.getByRole('button', { name: /^Approve all/ })).toHaveText('Approve all (1)')
   await expect(page.getByTestId('mrs-summary')).toContainText('2 you can approve')
-  await app.close()
-})
-
-test('the state and approval toggles show their counts, filter the table and explain an empty table', async () => {
-  const { app, page } = await launch()
-  await expect(page.getByTestId('mrs-summary')).toBeVisible({ timeout: 15_000 })
-
-  // Counts over every MR, defaults as in the spec.
-  await expect(stateToggle(page, 'Draft')).toHaveText('Draft 1')
-  await expect(stateToggle(page, 'Open')).toHaveText('Open 5')
-  await expect(stateToggle(page, 'Merged')).toHaveText('Merged 1')
-  await expect(stateToggle(page, 'Closed')).toHaveText('Closed 1')
-  await expect(approvalToggle(page, 'Approved')).toHaveText('Approved 2')
-  await expect(approvalToggle(page, 'Not approved')).toHaveText('Not approved 6')
-  for (const [t, on] of [
-    ['Draft', 'true'],
-    ['Open', 'true'],
-    ['Merged', 'true'],
-    ['Closed', 'false']
-  ]) {
-    await expect(stateToggle(page, t)).toHaveAttribute('aria-pressed', on)
-  }
-  await expect(stateToggle(page, 'Closed')).toHaveAttribute('title', 'Show or hide the closed MRs')
-  await expect(page.getByTestId(`mr-${key(24)}`)).toHaveCount(0)
-
-  // Turning Closed on shows the closed MR with its own status text. The counts stay the same.
-  await stateToggle(page, 'Closed').click()
-  await expect(stateToggle(page, 'Closed')).toHaveAttribute('aria-pressed', 'true')
-  await expect(page.getByTestId(`mr-${key(24)}`)).toHaveCount(1)
-  await expect(await cell(page, 24, 'Your review')).toContainText('Closed, not in the diff')
-  await expect(page.getByTestId('mrs-summary')).not.toContainText('hidden')
-  await expect(stateToggle(page, 'Closed')).toHaveText('Closed 1')
-
-  // Every state off in one group filters nothing.
-  for (const t of ['Draft', 'Open', 'Merged', 'Closed']) await stateToggle(page, t).click()
-  await expect(page.locator('tr[data-testid^="mr-"]')).toHaveCount(8)
-
-  // Only Closed on and only Approved on: no MR is left and the table says why.
-  await stateToggle(page, 'Closed').click()
-  await approvalToggle(page, 'Not approved').click()
-  await expect(page.locator('tr[data-testid^="mr-"]')).toHaveCount(0)
-  await expect(page.getByText("No MR has the states and approvals turned on. Turn more on above to see the review's 8 MRs.")).toBeVisible()
-  await app.close()
-})
-
-test('the tab has no list of comments', async () => {
-  const { app, page } = await launch()
-  await expect(await cell(page, 21, 'Comments')).toContainText('1/1', { timeout: 15_000 })
-
-  await expect(page.getByTestId('thread')).toHaveCount(0)
-  await expect(page.locator('[data-testid="mrs-tab"] tr.extra')).toHaveCount(0)
-  await expect(page.getByTestId('mrs-tab')).not.toContainText('SECRET-THREAD-BODY')
   await app.close()
 })

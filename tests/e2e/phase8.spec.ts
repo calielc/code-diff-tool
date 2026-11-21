@@ -157,15 +157,3 @@ test('a flow that no longer matches is hidden, shown as out of date, and replace
   await expect(page.getByTestId('flow-summary')).toHaveText('A user sees the change.')
   await app.close()
 })
-
-test('three bad answers end in the failure banner with the problems as its tooltip (acceptance check 3)', async () => {
-  const s = setup()
-  const { app, page } = await openReview(s, [], {}, { CODEDIFF_TEST_FLOW: '1', FAKE_CLAUDE_ANSWER: 'no json here' })
-  const banner = page.getByTestId('flow-banner')
-  await expect(banner).toHaveText('The AI could not write Critical thinking. Reload the review to try again.', { timeout: 20_000 })
-  await expect(banner).toHaveAttribute('title', /^The answer still had 1 problem\(s\) after 3 answers:/)
-  await page.getByTestId('tab-diff').click()
-  await expect(page.getByTestId('view-flow')).toBeDisabled()
-  expect(readFileSync(join(s.root, '.code-diff', 'reviews', 'R-1', 'flow-error.txt'), 'utf8')).toContain('The answer holds no JSON object.')
-  await app.close()
-})

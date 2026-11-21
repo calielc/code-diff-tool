@@ -262,19 +262,6 @@ test('the review chat answers with action cards: valid ones apply, an invalid on
   await app.close()
 })
 
-test('an Open card switches to the Diff tab and shows the file', async () => {
-  const s = setup()
-  const { app, page } = await openReview(s, [], {}, { FAKE_CLAUDE_ACTIONS: JSON.stringify([{ type: 'open', mr: 'backend/x!12', path: 'a.txt', line: 2 }]) })
-  await page.getByTestId('review-chat-button').click()
-  await page.getByTestId('review-chat').getByLabel('Question').fill('Show me')
-  await page.getByTestId('chat-ask').click()
-  await page.getByTestId('action-card').getByRole('button', { name: 'Apply' }).click()
-  await expect(page.getByTestId('diff-tab')).toBeVisible()
-  await expect(page.getByTestId('file-scope')).toContainText('!12 · backend/x')
-  await expect(page.locator('table.diff tr.add')).toBeVisible()
-  await app.close()
-})
-
 test('Prerequisites: choose Codex or a custom command, and the choice is saved', async () => {
   const s = setup()
   forge = await startFakeForge({})

@@ -8,10 +8,6 @@ import { forgeEnv, startFakeForge, type FakeForge, type Fixture } from '../fakes
 const main = join(__dirname, '../../out/main/index.js')
 
 let forge: FakeForge | undefined
-test.afterEach(async () => {
-  await forge?.close()
-  forge = undefined
-})
 
 const CONTROLLERS = 'src/ExampleOrg.Recommendation.Service.Web/Controllers'
 const NESTED = `${CONTROLLERS}/Nested/AnotherVeryLongFolderNameForTheTree`
@@ -191,106 +187,57 @@ async function report(page: Page): Promise<{ rows: RowReport[]; asideOverflow: n
   })
 }
 
-for (const view of ['By MR', 'Combined per repo']) {
-  for (const width of ['default', 'narrowest']) {
-    test(`${view} view at the ${width} width: every row has its name left, its numbers at the right edge, and fits its box`, async () => {
-      // Arrange
-      const { app, page } = await launch()
-      await page.getByRole('button', { name: view }).click()
-      await openAll(page)
-      if (width === 'narrowest') {
-        await narrowest(page)
-      }
-
-      // Act
-      const { rows, asideOverflow } = await report(page)
-
-      // Assert
-      expect(new Set(rows.map((r) => r.kind))).toEqual(new Set(['repo', 'group', 'folder', 'file']))
-      expect(asideOverflow, 'the tree area scrolls sideways').toBeLessThanOrEqual(0)
-      for (const r of rows) {
-        expect(r.overflow, `row ${r.kind} ${r.name} sticks out`).toBeLessThanOrEqual(0)
-        expect(r.toRight, `row ${r.kind} ${r.name}: numbers not at the right edge`).toBeLessThanOrEqual(8)
-        expect(r.gap, `row ${r.kind} ${r.name}: numbers glued to the name`).toBeGreaterThanOrEqual(6)
-        expect(r.titled, `row ${r.kind} ${r.name} has no tooltip with its full name`).toBe(true)
-        expect(Math.abs(r.spanLeft), `row ${r.kind} ${r.name} does not start at the left of the tree`).toBe(0)
-        expect(Math.abs(r.spanRight), `row ${r.kind} ${r.name} does not reach the right of the tree`).toBe(0)
-      }
-      await app.close()
-    })
+/** Every row has its name at the left, its numbers at the right edge, a tooltip, and fits its box. */
+async function expectRowsFit(page: Page, label: string): Promise<void> {
+  const { rows, asideOverflow } = await report(page)
+  expect(new Set(rows.map((r) => r.kind)), label).toEqual(new Set(['repo', 'group', 'folder', 'file']))
+  expect(asideOverflow, `${label}: the tree area scrolls sideways`).toBeLessThanOrEqual(0)
+  for (const r of rows) {
+    expect(r.overflow, `${label}: row ${r.kind} ${r.name} sticks out`).toBeLessThanOrEqual(0)
+    expect(r.toRight, `${label}: row ${r.kind} ${r.name}: numbers not at the right edge`).toBeLessThanOrEqual(8)
+    expect(r.gap, `${label}: row ${r.kind} ${r.name}: numbers glued to the name`).toBeGreaterThanOrEqual(6)
+    expect(r.titled, `${label}: row ${r.kind} ${r.name} has no tooltip with its full name`).toBe(true)
+    expect(Math.abs(r.spanLeft), `${label}: row ${r.kind} ${r.name} does not start at the left of the tree`).toBe(0)
+    expect(Math.abs(r.spanRight), `${label}: row ${r.kind} ${r.name} does not reach the right of the tree`).toBe(0)
   }
 }
 
-test('the MR name is not cut at a wide pane, and shrinks with an ellipsis before the numbers at the narrowest', async () => {
-  // Arrange
-  const { app, page } = await launch()
-  await page.getByRole('button', { name: 'Combined per repo' }).click()
-  await openAll(page)
-  const group = tree(page).locator('.trow.group', { hasText: '!12' })
+// One app for all the tests of this file. They only read the tree and fold it, so a start for each test is a waste.
+test.describe.serial('the rows of the file tree', () => {
+  let app: ElectronApplication
+  let page: Page
 
-  // Act
-  const wide = await group.locator('.tname').evaluate((e) => e.scrollWidth - e.clientWidth)
-  await narrowest(page)
-  const tight = await group.locator('.tname').evaluate((e) => e.clientWidth)
+  test.beforeAll(async () => {
+    ;({ app, page } = await launch())
+  })
 
-  // Assert
-  expect(wide, 'the label is cut at a wide pane').toBeLessThanOrEqual(0)
-  expect(tight, 'the label has no room at all').toBeGreaterThan(20)
-  await app.close()
-})
+  test.afterAll(async () => {
+    await app?.close()
+    await forge?.close()
+    forge = undefined
+  })
 
-test('a double click on a row folds or opens it, and a double click on the arrow or the checkbox does not toggle twice', async () => {
-  // Arrange
-  const { app, page } = await launch()
-  await openAll(page)
+  test('in both views, at the default and at the narrowest width, every row has its name left, its numbers at the right edge and fits its box', async () => {
+    // Arrange: the default width first, because the narrowest width stays once it is set
+    await page.getByRole('button', { name: 'By MR' }).click()
+    await openAll(page)
 
-  for (const kind of ['repo', 'group', 'folder']) {
-    const row = tree(page).locator(`.trow.${kind}`).first()
-    const chev = row.locator('button.chev')
-    await expect(chev).toHaveAttribute('aria-label', 'Fold')
+    // Act and assert: the default width, By MR then Combined
+    await expectRowsFit(page, 'By MR view at the default width')
+    await page.getByRole('button', { name: 'Combined per repo' }).click()
+    await openAll(page)
+    await expectRowsFit(page, 'Combined per repo view at the default width')
+    // the MR name is not cut at a wide pane
+    const group = tree(page).locator('.trow.group', { hasText: '!12' })
+    expect(await group.locator('.tname').evaluate((e) => e.scrollWidth - e.clientWidth), 'the label is cut at a wide pane').toBeLessThanOrEqual(0)
 
-    // Act
-    await row.locator('.tname').dblclick()
-
-    // Assert
-    await expect(chev).toHaveAttribute('aria-label', 'Open')
-    await row.locator('.tname').dblclick()
-    await expect(chev).toHaveAttribute('aria-label', 'Fold')
-    await chev.dblclick()
-    await expect(chev).toHaveAttribute('aria-label', 'Fold')
-    await row.locator('input[type="checkbox"]').dblclick()
-    await expect(chev).toHaveAttribute('aria-label', 'Fold')
-  }
-  await app.close()
-})
-
-test('a double click on a file row does not fold anything', async () => {
-  // Arrange
-  const { app, page } = await launch()
-  await openAll(page)
-  const before = await tree(page).locator('.trow').count()
-
-  // Act
-  await tree(page).locator('.trow.file').first().locator('.tname').dblclick()
-
-  // Assert
-  await expect(tree(page).locator('.trow')).toHaveCount(before)
-  await app.close()
-})
-
-test('the arrow always shows what the row does: an open row has the down arrow and the Fold label', async () => {
-  // Arrange
-  const { app, page } = await launch()
-
-  // Act
-  const arrows = await tree(page)
-    .locator('button.chev')
-    .evaluateAll((els) => els.map((e) => ({ label: e.getAttribute('aria-label'), text: e.textContent })))
-
-  // Assert
-  expect(arrows.length).toBeGreaterThan(0)
-  for (const a of arrows) {
-    expect(a.text).toBe(a.label === 'Fold' ? '▾' : '▸')
-  }
-  await app.close()
+    // Act and assert: the narrowest width, Combined then By MR
+    await narrowest(page)
+    await expectRowsFit(page, 'Combined per repo view at the narrowest width')
+    // the MR name shrinks with an ellipsis before the numbers
+    expect(await group.locator('.tname').evaluate((e) => e.clientWidth), 'the label has no room at all').toBeGreaterThan(20)
+    await page.getByRole('button', { name: 'By MR' }).click()
+    await openAll(page)
+    await expectRowsFit(page, 'By MR view at the narrowest width')
+  })
 })

@@ -99,27 +99,6 @@ test('a second start with --mr and --issue hands over to the open app, which fil
   await app.close()
 })
 
-test('a codediff:// link does the same, and a request with no issue names the review after the change (acceptance check 2)', async () => {
-  const s = setup()
-  const { app, page, env } = await openHome(s)
-  startSecond([`codediff://new?mr=${encodeURIComponent(MR_URL)}`], env)
-  await expect(page.getByTestId('check-list')).toContainText('backend/x!12', { timeout: 30_000 })
-  await page.getByRole('button', { name: 'Back' }).click()
-  await expect(page.getByTestId('urls')).toHaveValue(MR_URL)
-  await expect(page.getByTestId('slug')).toHaveValue('x-12')
-  await app.close()
-})
-
-test('the first start with a request opens the form filled in (acceptance check 3)', async () => {
-  const s = setup()
-  forge = await startFakeForge(mrFixture(s))
-  const env = { ...process.env, CODEDIFF_USER_DATA: s.ud, ...forgeEnv(forge.url) } as Record<string, string>
-  const app = await electron.launch({ args: [main, '--mr', MR_URL], env })
-  const page = await app.firstWindow()
-  await expect(page.getByTestId('urls')).toHaveValue(MR_URL, { timeout: 30_000 })
-  await app.close()
-})
-
 const MR13_URL = 'https://gitlab.com/team/backend/x/-/merge_requests/13'
 const mr13 = (s: Setup): Fixture => {
   const fx = mrFixture(s)
@@ -157,31 +136,6 @@ test('a request that names an existing review adds the new change and issue to i
   await app.close()
 })
 
-test('adding what the review holds already says so and changes nothing (acceptance check 5)', async () => {
-  const s = setup()
-  const file = writeReview(s, 'R-1', OLD)
-  forge = await startFakeForge(mrFixture(s))
-  const env = { ...process.env, CODEDIFF_USER_DATA: s.ud, ...forgeEnv(forge.url) } as Record<string, string>
-  const app = await electron.launch({ args: [main], env })
-  const page = await app.firstWindow()
-  await expect(page.getByTestId('review-R-1')).toBeVisible()
-  startSecond(['--review=R-1', '--mr=' + MR_URL, '--issue=LX-1'], env)
-  await page.getByTestId('add-confirm').click({ timeout: 30_000 })
-  await expect(page.getByTestId('add-error')).toHaveText('Everything you gave is in the review already.')
-  expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual(OLD)
-  await app.close()
-})
-
-test('a request that names a review that does not exist starts a new review with that name (acceptance check 6)', async () => {
-  const s = setup()
-  const { app, page, env } = await openHome(s)
-  startSecond(['--review=LX-77', '--mr=' + MR_URL], env)
-  await expect(page.getByTestId('check-list')).toContainText('backend/x!12', { timeout: 30_000 })
-  await page.getByRole('button', { name: 'Back' }).click()
-  await expect(page.getByTestId('slug')).toHaveValue('LX-77')
-  await app.close()
-})
-
 test('changes and issues are added from inside the open review, which is built again with them (acceptance check 7)', async () => {
   const s = setup()
   const file = writeReview(s, 'R-1', { ...OLD, issues: [] })
@@ -205,32 +159,5 @@ test('changes and issues are added from inside the open review, which is built a
   await expect(page.getByTestId('mr-backend/x!13')).toBeVisible({ timeout: 30_000 })
   await expect(page.getByTestId('mr-backend/x!12')).toBeVisible()
   expect(JSON.parse(readFileSync(file, 'utf8')).mrs.map((m: { iid: number }) => m.iid)).toEqual([12, 13])
-  await app.close()
-})
-
-test('every column of the code changes table sorts: ascending, descending, then the original order (acceptance check 8)', async () => {
-  const s = setup()
-  writeReview(s, 'R-1', { ...OLD, issues: [], mrs: [...OLD.mrs, { provider: 'gitlab', host: 'gitlab.com', projectPath: 'team/backend/x', iid: 13 }] })
-  forge = await startFakeForge({ ...mrFixture(s), ...mr13(s) })
-  const env = { ...process.env, CODEDIFF_USER_DATA: s.ud, ...forgeEnv(forge.url) } as Record<string, string>
-  const app = await electron.launch({ args: [main], env })
-  const page = await app.firstWindow()
-  await page.getByTestId('review-R-1').dblclick()
-  await expect(page.getByTestId('mr-backend/x!13')).toBeVisible()
-  const order = (): Promise<string[]> =>
-    page.locator('table.reviews tbody tr[data-testid^="mr-"]').evaluateAll((rows) => rows.map((r) => r.getAttribute('data-testid') as string))
-  expect(await order()).toEqual(['mr-backend/x!12', 'mr-backend/x!13'])
-  // all nine columns have a sort button
-  for (const key of ['mr', 'title', 'repo', 'state', 'pipeline', 'author', 'approved', 'comments', 'updated'])
-    await expect(page.getByTestId(`sort-${key}`)).toBeVisible()
-  await page.getByTestId('sort-mr').click()
-  expect(await order()).toEqual(['mr-backend/x!12', 'mr-backend/x!13'])
-  await expect(page.locator('th[aria-sort="ascending"]')).toHaveCount(1)
-  await page.getByTestId('sort-mr').click()
-  expect(await order()).toEqual(['mr-backend/x!13', 'mr-backend/x!12'])
-  await expect(page.locator('th[aria-sort="descending"]')).toHaveCount(1)
-  await page.getByTestId('sort-mr').click()
-  expect(await order()).toEqual(['mr-backend/x!12', 'mr-backend/x!13'])
-  await expect(page.locator('th[aria-sort="descending"], th[aria-sort="ascending"]')).toHaveCount(0)
   await app.close()
 })

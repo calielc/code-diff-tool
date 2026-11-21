@@ -96,7 +96,7 @@ export function ThreadCard(props: { mrKey: string; thread: Thread; mrOpen: boole
 
   const first = thread.notes[0]
   const last = thread.notes[thread.notes.length - 1]
-  const snippet = first.body.replace(/\s+/g, ' ').slice(0, 140)
+  const snippet = first.body.replace(/\*\*/g, '').replace(/\s+/g, ' ').slice(0, 140) // a preview in plain text, so no bold marks
   const replies = thread.notes.length - 1
 
   const toggleResolved = async (): Promise<void> => {

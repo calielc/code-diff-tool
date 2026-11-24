@@ -92,8 +92,7 @@ test('a second start with --mr and --issue hands over to the open app, which fil
   await page.getByRole('button', { name: 'Back' }).click()
   await expect(page.getByTestId('urls')).toHaveValue(MR_URL)
   await expect(page.getByTestId('issues')).toHaveValue('LX-7')
-  await expect(page.getByTestId('slug')).toHaveValue('LX-7')
-  await expect(page.getByTestId('title')).toHaveValue('From outside')
+  await expect(page.getByTestId('name')).toHaveValue('From outside')
   // nothing was created
   await expect(page.getByTestId('review-count')).toContainText('0')
   await app.close()

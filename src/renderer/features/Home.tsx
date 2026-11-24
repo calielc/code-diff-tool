@@ -5,7 +5,7 @@ import { api } from '../api'
 import { AddToReview } from './AddToReview'
 import { NewReview } from './NewReview'
 
-type SortKey = 'slug' | 'title' | 'mrs' | 'issues' | 'lastOpened' | 'summarised'
+type SortKey = 'title' | 'mrs' | 'issues' | 'lastOpened' | 'summarised'
 type SummarisedFilter = 'all' | SummarisedState
 
 const SUMMARISED_LABEL: Record<SummarisedState, string> = { writing: 'Writing…', failed: 'Failed', ready: 'Ready', 'not-written': 'Not written' }
@@ -16,8 +16,6 @@ const when = (iso: string): string => new Date(iso).toLocaleString(undefined, { 
 
 function compare(a: ReviewSummary, b: ReviewSummary, key: SortKey): number {
   switch (key) {
-    case 'slug':
-      return collator.compare(a.slug, b.slug)
     case 'title':
       return collator.compare(a.title ?? a.slug, b.title ?? b.slug)
     case 'mrs':
@@ -77,8 +75,7 @@ export function Home(props: {
   const rows = useMemo(() => {
     const text = filter.toLowerCase()
     const kept = (reviews ?? []).filter(
-      (r) =>
-        (summarised === 'all' || r.summarised === summarised) && (!text || r.slug.toLowerCase().includes(text) || (r.title ?? '').toLowerCase().includes(text))
+      (r) => (summarised === 'all' || r.summarised === summarised) && (!text || (r.title ?? r.slug).toLowerCase().includes(text))
     )
     const sign = sort.dir === 'asc' ? 1 : -1
     // Equal values sort by slug ascending in either direction.
@@ -172,8 +169,7 @@ export function Home(props: {
           <table className="reviews">
             <thead>
               <tr>
-                {head('slug', 'Slug')}
-                {head('title', 'Title')}
+                {head('title', 'Name')}
                 {head('mrs', 'Changes', true)}
                 {head('issues', 'Issues', true)}
                 {head('lastOpened', 'Last opened')}
@@ -190,8 +186,7 @@ export function Home(props: {
                   onClick={() => setSelected(r.slug)}
                   onDoubleClick={() => open(r)}
                 >
-                  <td className="mono strong">{r.slug}</td>
-                  <td className={r.unreadable ? 'bad-text' : 'cut'} title={r.title ?? r.slug}>
+                  <td className={r.unreadable ? 'bad-text' : 'cut strong'} title={r.title ?? r.slug}>
                     {r.unreadable ? 'Unreadable review.json' : (r.title ?? r.slug)}
                   </td>
                   <td className="num">{r.mrCount ?? '–'}</td>

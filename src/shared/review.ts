@@ -211,3 +211,29 @@ export function branchStatus(info: Pick<ChangeInfo, 'state' | 'draft' | 'targetB
   if (n === 0) return { kind: 'level', label: 'Up to date', title: `Level with ${target}`, sortValue: 0 }
   return { kind: 'behind', label: `${n} behind`, title: `${n} ${n === 1 ? 'commit' : 'commits'} behind ${target}. Rebase or merge to catch up.`, sortValue: n }
 }
+
+/** The name a review gets when the reviewer types none: the first issue key, else the first change as `<repo>-<number>`. */
+export function suggestReviewName(input: { issueKeys: string[]; refs: ChangeRef[] }): string {
+  if (input.issueKeys.length > 0) {
+    return input.issueKeys[0]
+  }
+  const first = input.refs[0]
+  return first ? `${first.project.slice(first.project.lastIndexOf('/') + 1)}-${first.iid}` : ''
+}
+
+/** A folder name made from a review name, free among the existing slugs. */
+export function slugFromName(name: string, existing: string[]): string {
+  const base =
+    name
+      .replace(/[^A-Za-z0-9._-]+/g, '-')
+      .replace(/^[^A-Za-z0-9]+/, '')
+      .replace(/-+$/, '')
+      .slice(0, 60)
+      .replace(/-+$/, '') || 'review'
+  const taken = new Set(existing.map((s) => s.toLowerCase()))
+  let slug = base
+  for (let n = 2; taken.has(slug.toLowerCase()); n++) {
+    slug = `${base}-${n}`
+  }
+  return slug
+}

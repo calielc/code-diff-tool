@@ -6,7 +6,7 @@ import type { Result } from '@shared/types'
 import { readAppState, writeAppState } from '../services/app-state'
 import { cancelBuild, isBuilding, startBuild } from '../services/build'
 import { addSpecFiles } from '../services/issues'
-import { addToReview, checkDeletable, checkReview, createReview, listReviews, pendingCommentCount } from '../services/reviews'
+import { addToReview, checkDeletable, checkReview, createReview, listReviews, pendingCommentCount, renameReview } from '../services/reviews'
 import { takePick } from './issues'
 import { handle } from './guard'
 
@@ -65,6 +65,11 @@ export function registerReviewHandlers(): void {
 
   handle(CH.reviewsCancelBuild, slug, (s) => {
     cancelBuild(s)
+  })
+
+  handle(CH.reviewsRename, z.object({ slug, title: z.string().trim().min(1).max(200) }), async (input): Promise<Result<{ title: string }>> => {
+    const root = await rootOrError()
+    return root.ok ? renameReview(root.value, input.slug, input.title) : root
   })
 
   handle(CH.reviewsDeleteInfo, slug, async (s): Promise<Result<{ path: string; pending: number }>> => {

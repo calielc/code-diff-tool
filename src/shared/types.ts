@@ -92,6 +92,7 @@ export interface CodeDiffApi {
     onBuildProgress(cb: (p: BuildProgress) => void): () => void
     deleteInfo(slug: string): Promise<Result<{ path: string; pending: number }>>
     delete(slug: string): Promise<Result<true>>
+    rename(slug: string, title: string): Promise<Result<{ title: string }>>
   }
   comments: {
     list(slug: string): Promise<Record<string, PendingComment>>

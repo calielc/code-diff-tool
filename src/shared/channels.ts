@@ -17,6 +17,7 @@ export const CH = {
   reviewsBuildProgress: 'reviews:buildProgress',
   reviewsDeleteInfo: 'reviews:deleteInfo',
   reviewsDelete: 'reviews:delete',
+  reviewsRename: 'reviews:rename',
   commentsList: 'comments:list',
   commentsSave: 'comments:save',
   commentsRemove: 'comments:remove',

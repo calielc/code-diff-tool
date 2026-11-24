@@ -26,7 +26,8 @@ const api: CodeDiffApi = {
       return () => ipcRenderer.removeListener(CH.reviewsBuildProgress, listener)
     },
     deleteInfo: (slug) => ipcRenderer.invoke(CH.reviewsDeleteInfo, slug),
-    delete: (slug) => ipcRenderer.invoke(CH.reviewsDelete, slug)
+    delete: (slug) => ipcRenderer.invoke(CH.reviewsDelete, slug),
+    rename: (slug, title) => ipcRenderer.invoke(CH.reviewsRename, { slug, title })
   },
   comments: {
     list: (slug) => ipcRenderer.invoke(CH.commentsList, slug),

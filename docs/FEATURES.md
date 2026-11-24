@@ -21,7 +21,7 @@ The home screen lists your reviews with their name, title, number of changes, nu
 
 ## 3. The screen of a review
 
-The header shows the title of the review, a short line about it, the AI button and the Reload button. The tabs are Code changes, Summarised, Diff, Issues and Acceptance criteria. Most tabs show a count. The keys `1` to `5` pick a tab, and Ctrl+Tab and Ctrl+Shift+Tab go through them.
+The header shows the name of the review, a short line about it, the AI button and the Reload button. A click on the name turns it into an input: Enter or leaving the input saves it, and Escape cancels. The tabs are Code changes, Summarised, Diff, Issues and Acceptance criteria. Most tabs show a count. The keys `1` to `5` pick a tab, and Ctrl+Tab and Ctrl+Shift+Tab go through them.
 
 - The Code changes tab shows the number of changes, and the open and total threads.
 - The Diff tab shows how many files you viewed, and the number of your drafts.

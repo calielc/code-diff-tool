@@ -21,6 +21,7 @@ import {
 } from '@shared/review'
 import type { Result } from '@shared/types'
 import { readInfo } from '../clients/forge'
+import { withLock } from './lock'
 import { locateClone, scanClones } from './workspace'
 
 /** All state lives in the workspace root under `.code-diff/`, which git can ignore. */
@@ -258,6 +259,24 @@ export async function checkDeletable(root: string, slug: string, isBuilding: (sl
   }
   if (isBuilding(slug)) return { ok: false, error: 'The review is building. Cancel the build first.' }
   return { ok: true, value: dir }
+}
+
+/** Set the title of a review. Nothing else in review.json changes, and the slug stays. */
+export async function renameReview(root: string, slug: string, title: string): Promise<Result<{ title: string }>> {
+  const clean = title.trim().slice(0, 200).trim()
+  if (!clean) return { ok: false, error: 'Enter a name.' }
+  if (!SLUG_RE.test(slug)) return { ok: false, error: `'${slug}' is not a slug.` }
+  const file = join(reviewDir(root, slug), 'review.json')
+  return withLock(async () => {
+    let content: Record<string, unknown>
+    try {
+      content = JSON.parse(await readFile(file, 'utf8'))
+    } catch (e) {
+      return { ok: false, error: (e as NodeJS.ErrnoException).code === 'ENOENT' ? 'No such review.' : 'review.json cannot be read' }
+    }
+    await atomicWrite(file, JSON.stringify({ ...content, title: clean }))
+    return { ok: true, value: { title: clean } }
+  })
 }
 
 export { reviewTitle, changeKey, rm }

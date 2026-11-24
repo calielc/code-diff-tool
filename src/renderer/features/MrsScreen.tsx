@@ -100,6 +100,104 @@ function loadFilters(): MrFilters {
   }
 }
 
+/** The name of the review in the header. A click turns it into an input: Enter or a blur saves, Escape cancels. */
+function ReviewName(props: { slug: string; name: string; onSaved: (title: string) => void }): React.JSX.Element {
+  const [draft, setDraft] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const input = useRef<HTMLInputElement>(null)
+  const finished = useRef(false)
+  const editing = draft !== null
+  useEffect(() => {
+    if (editing) {
+      input.current?.focus()
+      input.current?.select()
+    }
+  }, [editing])
+
+  const start = (): void => {
+    finished.current = false
+    setError(null)
+    setDraft(props.name)
+  }
+  const stop = (): void => {
+    finished.current = true
+    setDraft(null)
+    setError(null)
+  }
+  const save = async (): Promise<void> => {
+    if (finished.current || draft === null) {
+      return
+    }
+    const title = draft.trim().slice(0, 200)
+    if (!title) {
+      return setError('Enter a name.')
+    }
+    finished.current = true
+    if (title === props.name) {
+      return stop()
+    }
+    const r = await api.reviews.rename(props.slug, title)
+    if (r.ok) {
+      props.onSaved(r.value.title)
+      return stop()
+    }
+    finished.current = false
+    setError(r.error)
+  }
+
+  if (!editing) {
+    return (
+      <h1>
+        <button className="renamebtn" data-testid="review-name" title="Click to rename" onClick={start}>
+          <span className="renametext">{props.name}</span>
+          <svg
+            className="editicon"
+            data-testid="review-name-icon"
+            aria-hidden="true"
+            viewBox="0 0 16 16"
+            width="14"
+            height="14"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+          >
+            <path d="M11.5 2.5l2 2L5 13l-3 1 1-3z" strokeLinejoin="round" />
+            <path d="M10 4l2 2" />
+          </svg>
+        </button>
+      </h1>
+    )
+  }
+  return (
+    <span className="renamebox">
+      <input
+        ref={input}
+        className="renameinput"
+        data-testid="review-name-input"
+        aria-label="Review name"
+        style={{ width: `${Math.max(20, draft.length + 1)}ch` }}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => void save()}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault()
+            void save()
+          } else if (e.key === 'Escape') {
+            e.stopPropagation()
+            stop()
+          }
+        }}
+      />
+      {error && (
+        <span className="bad-text small" role="alert" data-testid="review-name-error">
+          {error}
+        </span>
+      )}
+    </span>
+  )
+}
+
 /** The review after a build: the MRs tab and the Diff tab, with live data from the watcher. */
 export function MrsScreen(props: { result: BuildResult; slug: string; onHome: () => void; onReload: () => void }): React.JSX.Element {
   return (
@@ -113,6 +211,8 @@ function Screen(props: { onHome: () => void }): React.JSX.Element {
   const r = useReview()
   const [tab, setTabState] = useState<Tab>(() => lastTab.get(r.slug) ?? 'mrs')
   const setTab = (t: Tab): void => (lastTab.set(r.slug, t), setTabState(t))
+  const [name, setName] = useState(r.data.title)
+  useEffect(() => setName(r.data.title), [r.data.title])
   const [submitFor, setSubmitFor] = useState<string | null>(null)
   const { data } = r
   const draftCount = Object.keys(r.drafts).length
@@ -301,7 +401,7 @@ function Screen(props: { onHome: () => void }): React.JSX.Element {
         <button className="ghost" onClick={props.onHome} title="Back to the reviews">
           ← Reviews
         </button>
-        <h1>{data.title}</h1>
+        <ReviewName slug={r.slug} name={name} onSaved={setName} />
         <span className="sub" data-testid="subtitle">
           {data.mrs.length} {data.mrs.length === 1 ? 'change' : 'changes'} in {repoCount} {repoCount === 1 ? 'repo' : 'repos'} · signed in as {data.viewer}
           {data.issues.length > 0 && ` · ${data.issues.map((t) => t.key).join(', ')}`}

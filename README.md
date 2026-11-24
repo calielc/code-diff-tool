@@ -11,11 +11,12 @@ The picture shows made-up data. `docs/FEATURES.md` describes every feature with 
 - A review holds one or more code changes (merge requests or pull requests, from any mix of repos and hosts) and one or more issues (Jira issues or spec files).
 - The Issues tab lists the issues with their status and acceptance criteria. You can paste Jira keys or add spec files (`.md`, `.txt` or `.html`).
 - The Code changes tab lists the changes with their state, pipeline, approvals, threads and review status. It shows if a change is behind its target branch. Every column sorts. You can approve, mark as ready or mark as draft from the table.
+- The tabs are Code changes, Summarised, Diff, Issues and Acceptance criteria.
 - The Diff tab shows the files of all the changes in a tree. You can read the diff inline, side by side or as a full file. A noise filter hides blank lines, comments and imports. The characters that changed inside a line are marked.
 - Filters by file status, file type and comments (open or resolved). A filter with no button on shows everything.
 - You can pick one commit of a change and see only what it changed, and mark files and commits as viewed. Marking HEAD as viewed marks the commits before it.
 - Comments, replies and review submissions go to GitLab or GitHub. Your comments stay as drafts until you post them.
-- Summarised is a page that an AI tool writes when you open the view, with the model sonnet. It is a page of at most 10 sections for a bug hunt: only the places where a bug can be spotted, in reading order, each with one paragraph, compact code, its files and its own thread. The app adds the last section, "Everything else", with every file and change that the page leaves out. Accept a section to mark its files as viewed and collapse it. An index in the left column goes to each section.
+- Summarised is a page that an AI tool writes when you open the Summarised tab, with the model sonnet. It is a page of at most 10 sections for a bug hunt: only the places where a bug can be spotted, in reading order, each with one paragraph, compact code, its files and its own thread. The app adds the last section, "Everything else", with every file and change that the page leaves out. Accept a section to mark its files as viewed and collapse it. An index in the left column goes to each section.
 - The Acceptance criteria tab checks each criterion of the issues against the code, and can suggest a comment for a criterion that is not met.
 - The AI review reads the whole review and leaves draft comments for you to read first. A chat panel answers questions about the change. Claude Code is the default AI tool. Codex and a custom command also work.
 - Themes: System, Tokyo Night, Dracula, Nord, Gruvbox Dark, Solarized Dark and Paper.
@@ -35,7 +36,7 @@ The app is not affiliated with Anthropic, OpenAI, GitLab, GitHub or Atlassian. I
 
 ## Keys
 
-- Tabs: `1` to `4` pick a tab. Ctrl+Tab and Ctrl+Shift+Tab go to the next and the prior tab.
+- Tabs: `1` to `5` pick a tab. Ctrl+Tab and Ctrl+Shift+Tab go to the next and the prior tab.
 - File tree: the arrow keys move through the rows, Left and Right fold and unfold, and `*` unfolds everything below the row.
 - Files: `n` and `p` open the next and the prior file. `v` marks the open file as viewed and goes on to the next file. Shift+V takes the mark away. With a commit chosen, `v` and Shift+V act on that commit only.
 - Comments: `c` goes to the next comment in the open file.

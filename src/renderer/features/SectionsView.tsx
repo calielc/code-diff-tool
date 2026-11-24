@@ -327,7 +327,7 @@ function reportRepeatedRows(excerpts: Record<string, FileExcerpt[]>): void {
   }
 }
 
-/** What the Summarised view shows while there is no page: the run, the reason for a failure, or a button to start. */
+/** What the Summarised tab shows while there is no page: the run, the reason for a failure, or a button to start. */
 export function SectionsStatus(props: { state: SectionsState }): React.JSX.Element {
   const r = useReview()
   const s = props.state
@@ -578,7 +578,7 @@ function SectionsIndex(props: { doc: SectionsDocument; activeId: string | null; 
 }
 
 /**
- * The Summarised view: a page of sections in reading order. Each section has a title, one paragraph, some code, the files it involves
+ * The Summarised tab: a page of sections in reading order. Each section has a title, one paragraph, some code, the files it involves
  * and its own thread. Accepting a section marks its files as viewed and collapses it. The last section is "Everything else", which the
  * app computes from the diffs: every file and every change that no section shows. The index of the sections goes to the left column.
  */

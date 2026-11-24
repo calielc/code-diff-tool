@@ -30,14 +30,15 @@ import { AddChanges } from './AddChanges'
 import { AiPanel } from './AiPanel'
 import { Avatar, useAvatars } from './ui'
 
-type Tab = 'mrs' | 'diff' | 'issues' | 'ac'
+type Tab = 'mrs' | 'summarised' | 'diff' | 'issues' | 'ac'
 // The tab of each review, kept while the review is built again, so a reload does not lose your place.
 const lastTab = new Map<string, Tab>()
 
 const TABS: { id: Tab; label: string; testId: string }[] = [
-  { id: 'issues', label: 'Issues', testId: 'tab-issues' },
   { id: 'mrs', label: 'Code changes', testId: 'tab-mrs' },
+  { id: 'summarised', label: 'Summarised', testId: 'tab-summarised' },
   { id: 'diff', label: 'Diff', testId: 'tab-diff' },
+  { id: 'issues', label: 'Issues', testId: 'tab-issues' },
   { id: 'ac', label: 'Acceptance criteria', testId: 'tab-ac' }
 ]
 
@@ -258,7 +259,7 @@ function Screen(props: { onHome: () => void }): React.JSX.Element {
   const fileIds = data.mrs.flatMap((m) => m.files.map((f) => `mr:${m.key}|${f.path}`))
   const fileTotal = fileIds.length
   const viewedCount = fileIds.filter((id) => r.viewed.has(id)).length
-  // The keys 1 to 4 switch the tab, unless the reviewer is typing. Ctrl+Tab and Ctrl+Shift+Tab walk through the tabs.
+  // The keys 1 to 5 switch the tab, unless the reviewer is typing. Ctrl+Tab and Ctrl+Shift+Tab walk through the tabs.
   const tabNow = useRef(tab)
   tabNow.current = tab
   useEffect(() => {
@@ -323,7 +324,7 @@ function Screen(props: { onHome: () => void }): React.JSX.Element {
           title={r.sections.error ?? (r.sections.problems.length > 0 ? r.sections.problems.slice(0, 8).join('\n') : undefined)}
         >
           {r.sections.error
-            ? 'The AI could not write the Summarised page. Open the Summarised view and press Try again.'
+            ? 'The AI could not write the Summarised page. Open the Summarised tab and press Try again.'
             : r.sections.problems.length > 0
               ? `The Summarised page is out of date: the changes moved since it was written (${r.sections.problems.length} problem(s)). The AI is writing it again.`
               : r.sections.context === 'gathering'
@@ -381,8 +382,9 @@ function Screen(props: { onHome: () => void }): React.JSX.Element {
         ))}
       </div>
 
-      {tab === 'diff' && <DiffTab visible={visibleKey} />}
-      {tab !== 'diff' && (
+      {tab === 'diff' && <DiffTab mode="diff" visible={visibleKey} />}
+      {tab === 'summarised' && <DiffTab mode="summarised" visible={visibleKey} />}
+      {tab !== 'diff' && tab !== 'summarised' && (
         <div className="tabpane">
           {tab === 'issues' && (
             <div className="panelcard">

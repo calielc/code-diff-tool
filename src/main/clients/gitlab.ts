@@ -125,7 +125,8 @@ export async function readMr(ref: ChangeRef): Promise<ChangeSnapshot> {
   const people: Record<string, Person> = {}
   const [viewer, mr, approvals, discussions, reviewers] = await Promise.all([
     currentUser(ref.host),
-    forgeApi(gl(ref), base, 'GET') as Promise<J>,
+    // GitLab leaves diverged_commits_count out of the MR unless the request asks for it.
+    forgeApi(gl(ref), base, 'GET', { fields: { include_diverged_commits_count: 'true' } }) as Promise<J>,
     forgeApi(gl(ref), `${base}/approvals`, 'GET') as Promise<J>,
     forgePaged<J>(gl(ref), `${base}/discussions`),
     forgePaged<J>(gl(ref), `${base}/reviewers`)

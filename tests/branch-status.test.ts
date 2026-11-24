@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { readPull } from '../src/main/clients/github'
-import { mapMr } from '../src/main/clients/gitlab'
+import { mapMr, readMr } from '../src/main/clients/gitlab'
 import { setCredentialProvider } from '../src/main/clients/rest-api'
 import type { ChangeRef } from '../src/shared/provider'
 import { branchStatus } from '../src/shared/review'
@@ -164,6 +164,38 @@ describe('GitLab reader: behindTarget', () => {
     // Assert
     expect(info.state).toBe(state)
     expect(info.behindTarget).toBeNull()
+  })
+})
+
+describe('GitLab reader: asks GitLab for the behind count', () => {
+  const ep = `projects/${encodeURIComponent('team/x')}/merge_requests/4`
+  let forge: FakeForge | undefined
+  afterEach(async () => {
+    await stopFakeForge(forge)
+    forge = undefined
+  })
+
+  // GitLab leaves diverged_commits_count out of an MR unless the request sets include_diverged_commits_count.
+  it('sends include_diverged_commits_count with the read of the MR and keeps the number GitLab answers', async () => {
+    // Arrange
+    forge = await useFakeForge({
+      'GET user': { json: { username: 'me' } },
+      [`GET ${ep}`]: {
+        json: { state: 'opened', source_branch: 'feat/x', target_branch: 'main', author: { username: 'ann', name: 'Ann Lee' }, diverged_commits_count: 5 }
+      },
+      [`GET ${ep}/approvals`]: { json: { approved_by: [], user_can_approve: false } },
+      [`GET ${ep}/discussions`]: { json: [] },
+      [`GET ${ep}/reviewers`]: { json: [] }
+    })
+
+    // Act
+    const snapshot = await readMr(glRef)
+
+    // Assert
+    const read = forge.calls.filter((c) => c.method === 'GET' && c.endpoint === ep)
+    expect(read).toHaveLength(1)
+    expect(read[0].query['include_diverged_commits_count']).toBe('true')
+    expect(snapshot.info.behindTarget).toBe(5)
   })
 })
 

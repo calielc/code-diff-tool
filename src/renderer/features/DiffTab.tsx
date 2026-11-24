@@ -22,6 +22,7 @@ import { useFileHighlight } from '../highlight/useFileHighlight'
 import { useReview } from './review-context'
 import { SubmitDialog, reviewable } from './SubmitDialog'
 import { viewedId } from '@shared/sections'
+import { linkedViewedIds, stackedId, type LinkedPart } from '@shared/viewed-links'
 import { SectionsStatus, SectionsView } from './SectionsView'
 import { intraMapOf } from './intra-marks'
 import { LineChat } from './LineChat'
@@ -91,7 +92,18 @@ function save(key: string, value: unknown): void {
   }
 }
 
+const partIdOf = (repo: string, n: number): string => `${repo}~${n}`
 const iidOf = (key: string): string => key.slice(key.lastIndexOf('!') + 1)
+
+/** The parts of the Stacked view, with the ids that its files use. */
+function partsOf(result: BuildResult): LinkedPart[] {
+  const partNo = new Map<string, number>()
+  return result.combined.map((p) => {
+    const n = (partNo.get(p.repo) ?? 0) + 1
+    partNo.set(p.repo, n)
+    return { id: partIdOf(p.repo, n), mrs: p.mrs }
+  })
+}
 
 function entriesOf(result: BuildResult, view: ViewName): Entry[] {
   if (view === 'mr' || view === 'summarised') {
@@ -119,9 +131,9 @@ function entriesOf(result: BuildResult, view: ViewName): Entry[] {
     const nums = p.mrs.map((k) => `!${iidOf(k)}`)
     const label = p.mrs.length > 3 ? `${nums[0]} … (${p.mrs.length} MRs)` : nums.join(', ')
     return p.files.map((file) => ({
-      id: `cb:${p.repo}~${n}|${file.path}`,
+      id: stackedId(partIdOf(p.repo, n), file.path),
       repo: p.repo,
-      groupKey: `${p.repo}~${n}`,
+      groupKey: partIdOf(p.repo, n),
       groupLabel: `Part ${n} · ${label}`,
       groupTip: p.reason ?? 'The first part',
       file,
@@ -369,9 +381,12 @@ export function DiffTab(props: { mode: 'summarised' | 'diff'; visible?: (mrKey: 
   const toggleViewed = (entries: Entry[], on: boolean): void =>
     setViewed((v) => {
       const n = new Set(v)
+      const parts = partsOf(result)
       for (const e of entries) {
-        if (on) n.add(e.id)
-        else n.delete(e.id)
+        for (const id of linkedViewedIds({ id: e.id, mrKey: e.mrKey, partMrs: e.partMrs, path: e.file.path }, on, parts)) {
+          if (on) n.add(id)
+          else n.delete(id)
+        }
       }
       return n
     })

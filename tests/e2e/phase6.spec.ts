@@ -254,7 +254,7 @@ test('a new review can start with spec files, and a refused file is shown before
   await expect(page.getByRole('heading', { name: 'Reviews' })).toBeVisible()
   await page.getByTestId('new-review').click()
   await page.getByTestId('urls').fill('https://gitlab.com/team/backend/x/-/merge_requests/12')
-  await page.getByTestId('slug').fill('S-1')
+  await page.getByTestId('name').fill('S-1')
   await page.getByTestId('pick-specs').click()
   await expect(page.getByTestId('spec-names')).toContainText('Checkout.md, doc.pdf')
   await page.getByTestId('check').click()

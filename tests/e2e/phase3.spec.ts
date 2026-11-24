@@ -1,6 +1,6 @@
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -99,11 +99,9 @@ test('the form shows its field messages before anything is read', async () => {
   await page.getByTestId('new-review').click()
   await page.getByTestId('check').click()
   await expect(page.getByTestId('url-error')).toHaveText('Enter at least one merge request or pull request URL.')
-  await expect(page.getByTestId('slug-error')).toHaveText('Enter a slug, for example the issue key.')
+  await expect(page.getByTestId('name-error')).toHaveText('Enter a name, or add an issue or a change.')
   await page.getByTestId('urls').fill('https://example.com/nope')
   await expect(page.getByTestId('url-error').first()).toContainText("Line 1: 'https://example.com/nope' is not a merge request or pull request URL.")
-  await page.getByTestId('slug').fill('-bad')
-  await expect(page.getByTestId('slug-error')).toContainText("'-bad' is not a slug")
   await page.getByTestId('issues').fill('lx2813 LX-2813')
   await expect(page.getByText('1 merged into the same key.')).toBeVisible()
   await app.close()
@@ -116,7 +114,6 @@ test('creates a review from a merge request, builds it and shows the table', asy
   await page.getByTestId('new-review').click()
   await page.getByTestId('urls').fill('https://gitlab.com/team/backend/x/-/merge_requests/12/diffs?tab=1\nhttps://gitlab.com/team/other/-/merge_requests/7')
   await page.getByTestId('issues').fill('lx2813')
-  await page.getByRole('button', { name: 'Use LX-2813' }).click()
   await page.getByTestId('check').click()
   const list = page.getByTestId('check-list')
   await expect(list).toContainText('backend/x!12 (opened) Title 12')
@@ -138,21 +135,20 @@ test('creates a review from a merge request, builds it and shows the table', asy
   await app.close()
 })
 
-test('asks before replacing a review that exists', async () => {
+test('a review with the same name is not replaced: the new one gets a free slug', async () => {
   const { env, shas } = makeEnv()
   seed(env, 'LX-1', { title: 'Old', mrs: [{ projectPath: 'team/backend/x', iid: 12 }], issues: [] }, { 'comments.json': '{}' })
   const app = await launch(env, mr('team/backend/x', 12, 'merged', shas.a, shas.b)) // a merged change counts as live
   const page = await home(app)
   await page.getByTestId('new-review').click()
   await page.getByTestId('urls').fill('https://gitlab.com/team/backend/x/-/merge_requests/12')
-  await page.getByTestId('slug').fill('LX-1')
+  await page.getByTestId('name').fill('LX-1')
   await page.getByTestId('check').click()
-  await expect(page.getByText('A review with this slug exists.')).toBeVisible()
   await page.getByTestId('create').click()
-  await expect(page.getByRole('heading', { name: 'Replace review LX-1?' })).toBeVisible()
-  await page.getByTestId('replace').click()
   await expect(page.getByTestId('mrs-tab')).toBeVisible()
-  expect(existsSync(join(env.root, '.code-diff', 'reviews', 'LX-1', 'comments.json'))).toBe(true) // the old files stay
+  expect(existsSync(join(env.root, '.code-diff', 'reviews', 'LX-1-2', 'review.json'))).toBe(true)
+  expect(JSON.parse(readFileSync(join(env.root, '.code-diff', 'reviews', 'LX-1', 'review.json'), 'utf8')).title).toBe('Old') // the old review stays
+  expect(existsSync(join(env.root, '.code-diff', 'reviews', 'LX-1', 'comments.json'))).toBe(true)
   await app.close()
 })
 

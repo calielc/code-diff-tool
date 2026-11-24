@@ -67,7 +67,7 @@ The table has one row for each change with its number, stack position, title and
 
 ### 6.2 The file tree
 
-The tree groups the files by repo, change and folder. A box on each row marks the file or the whole folder as viewed. The bar above the tree shows how many files you viewed. A row shows the status of the file (A, M, D or R), its counts of added and removed lines, and its open threads. A field filters the files by name.
+The tree groups the files by repo, change and folder. A box on each row marks the file or the whole folder as viewed. In the Stacked view, a mark on a file also marks the same path in every change of that part, so the Linear view shows it under each change. Taking the mark away in either view clears it in the other: a stacked file shows as viewed only while none of its changes lost its mark. A mark on one change in Linear stays on that change. The bar above the tree shows how many files you viewed. A row shows the status of the file (A, M, D or R), its counts of added and removed lines, and its open threads. A field filters the files by name.
 
 - The arrow keys move through the rows. Up and Down open the file that the focus reaches. Left folds a folder or moves to the parent. Right unfolds a folder or moves to its first child. `*` unfolds everything below the row.
 - `n` and `p` open the next and the prior file in the order of the tree. `v` marks the open file as viewed and goes to the next file. Shift+V takes the mark away.

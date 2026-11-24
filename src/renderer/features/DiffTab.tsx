@@ -17,7 +17,7 @@ import type { BuildResult } from '@shared/review'
 import { draftAtLine, fileThreads, isFileDraft, positionMatchesLine, threadCounts, threadOnFile, threadsAtLine } from '@shared/threads'
 import { clampTreeWidth, nextTreeWidth, parseStoredTreeWidth, treeWidthFromPointer } from '@shared/tree-width'
 import { api } from '../api'
-import { Code, SyntaxToggle } from '../highlight/Code'
+import { Code, SyntaxNotice } from '../highlight/Code'
 import { useFileHighlight } from '../highlight/useFileHighlight'
 import { useReview } from './review-context'
 import { SubmitDialog, reviewable } from './SubmitDialog'
@@ -1369,7 +1369,7 @@ function FileBody(props: {
           <span className="counts">
             <span className="plus">+{lv.add}</span> <span className="minus">−{lv.del}</span>
           </span>
-          <SyntaxToggle notice={hl.notice} />
+          <SyntaxNotice notice={hl.notice} />
           <label className="viewedbtn">
             <input type="checkbox" data-testid="viewed-now" checked={viewedNow} onChange={(e) => setViewedNow(e.target.checked)} /> Viewed
             {commit ? ' ' + commit.slice(0, 7) : ''} <kbd>v</kbd>

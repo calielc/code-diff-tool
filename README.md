@@ -63,6 +63,8 @@ The installers for Windows and macOS are on the Releases page of this repository
 
 `npm run dev` starts the app with hot reload. A change in the interface shows at once. A change in the main process restarts the app.
 
+To run the app from the source with no setup, use `npm run app`. The files `launch.sh`, `launch.ps1` and `launch.cmd` in the root of the repository do the same, from any folder, for bash, PowerShell and cmd. The script pulls the newest code when you are on `main` with no local changes. It installs the packages when the lock file changed, builds the code and starts the app. It removes the `ELECTRON_*`, `CLAUDE_*` and `NODE_ENV` variables that a parent shell can pass on. Point a shortcut at one of the files to start the app from the source code.
+
 Other commands:
 
 - `npm test` runs the unit tests.

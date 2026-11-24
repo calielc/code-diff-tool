@@ -176,14 +176,13 @@ const nameTip = (n: TreeNode): string => (n.tip && n.tip !== n.name ? `${n.name}
 
 const filesOf = (n: TreeNode): Entry[] => (n.entry ? [n.entry] : n.children.flatMap(filesOf))
 
-/** `visible` tells which MRs the toggles of the Code changes tab show. */
-export function DiffTab(props: { visible?: (mrKey: string) => boolean }): React.JSX.Element {
+/** `visible` tells which MRs the toggles of the Code changes tab show. `mode` is `summarised` for the Summarised tab, which always shows the page of sections. */
+export function DiffTab(props: { mode: 'summarised' | 'diff'; visible?: (mrKey: string) => boolean }): React.JSX.Element {
   const r = useReview()
   const result = r.data
   const hasCombined = result.combined.length > 0
   const [view, setView] = useState<ViewName>(() => {
-    const saved = store<ViewName>('codediff:view', 'mr')
-    return saved === 'summarised' ? 'summarised' : saved === 'combined' && hasCombined ? 'combined' : 'mr'
+    return props.mode === 'summarised' ? 'summarised' : store<ViewName>('codediff:view', 'mr') === 'combined' && hasCombined ? 'combined' : 'mr'
   })
   const [level, setLevel] = useState<LevelName>(() => store<LevelName>('codediff:noise', 'strict'))
   const [filter, setFilter] = useState('')
@@ -255,13 +254,15 @@ export function DiffTab(props: { visible?: (mrKey: string) => boolean }): React.
     }
   }
   const [submitOpen, setSubmitOpen] = useState(false)
-  // The place in the left column where the Summarised view draws its index
+  // The place in the left column where the Summarised tab draws its index
   const [indexHost, setIndexHost] = useState<HTMLDivElement | null>(null)
 
-  useEffect(() => save('codediff:view', view), [view])
+  useEffect(() => {
+    if (props.mode === 'diff') save('codediff:view', view)
+  }, [view, props.mode])
   useEffect(() => save('codediff:noise', level), [level])
 
-  // Opening the Summarised view, or opening the Diff tab with it chosen, writes the page when it is missing or out of date. A build never does.
+  // Opening the Summarised tab writes the page when it is missing or out of date. A build never does.
   // A failed run is not started again by itself. The reader presses Try again.
   const sec = r.sections
   useEffect(() => {
@@ -340,7 +341,7 @@ export function DiffTab(props: { visible?: (mrKey: string) => boolean }): React.
   // An Open card: switch to Linear, show the file and scroll to the line. A hidden line switches the noise level to Everything.
   useEffect(() => {
     const n = r.nav
-    if (!n) return
+    if (!n || props.mode === 'summarised') return
     setView('mr')
     setFilter('')
     const entry = entriesOf(result, 'mr').find((e) => e.mrKey === n.mr && (e.file.path === n.path || e.file.oldPath === n.path))
@@ -609,32 +610,20 @@ export function DiffTab(props: { visible?: (mrKey: string) => boolean }): React.
   return (
     <div className="difftab" data-testid="diff-tab">
       <div className="difftoolbar">
-        <div className="fgroup" role="group" aria-label="View">
-          <span className="glabel">View</span>
-          <span className="seg">
-            <button
-              className={view === 'summarised' ? 'on' : ''}
-              data-testid="view-summarised"
-              title={
-                r.sections.pending
-                  ? 'The AI is writing the Summarised page'
-                  : r.sections.document
-                    ? 'The parts of the change that matter, in reading order'
-                    : 'The AI writes the page when you open this view'
-              }
-              onClick={() => setView('summarised')}
-            >
-              {r.sections.pending && <span className="spin">◐ </span>}Summarised
-            </button>
-            <button className={view === 'mr' ? 'on' : ''} onClick={() => setView('mr')}>
-              Linear
-            </button>
-            <button className={view === 'combined' ? 'on' : ''} disabled={!hasCombined} title={combinedTip} onClick={() => setView('combined')}>
-              Stacked
-              {partsBadge && <span className="parts"> {result.combined.length} parts</span>}
-            </button>
-          </span>
-        </div>
+        {props.mode === 'diff' && (
+          <div className="fgroup" role="group" aria-label="View">
+            <span className="glabel">View</span>
+            <span className="seg">
+              <button className={view === 'mr' ? 'on' : ''} onClick={() => setView('mr')}>
+                Linear
+              </button>
+              <button className={view === 'combined' ? 'on' : ''} disabled={!hasCombined} title={combinedTip} onClick={() => setView('combined')}>
+                Stacked
+                {partsBadge && <span className="parts"> {result.combined.length} parts</span>}
+              </button>
+            </span>
+          </div>
+        )}
         <div className="fgroup" role="group" aria-label="Noise">
           <span className="glabel">Noise</span>
           <span className="seg">
@@ -804,15 +793,7 @@ export function DiffTab(props: { visible?: (mrKey: string) => boolean }): React.
           <div className="rightscroll">
             {view === 'summarised' ? (
               r.sections.document ? (
-                <SectionsView
-                  doc={r.sections.document}
-                  level={level}
-                  indexHost={indexHost}
-                  onOpen={(mr, path, line) => {
-                    setView('mr')
-                    r.requestOpen(mr, path, line)
-                  }}
-                />
+                <SectionsView doc={r.sections.document} level={level} indexHost={indexHost} onOpen={r.requestOpen} />
               ) : (
                 <SectionsStatus state={r.sections} />
               )

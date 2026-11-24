@@ -12,7 +12,7 @@ The app helps a reviewer read the code changes of one piece of work. A piece of 
 
 ## 2. Reviews
 
-The home screen lists your reviews with their name, title, number of changes, number of issues, last opened time and the state of the Summarised page (Ready, Not written or Failed). A new review shows Not written until you open the Summarised view. Every column sorts. A filter box narrows the list.
+The home screen lists your reviews with their name, title, number of changes, number of issues, last opened time and the state of the Summarised page (Ready, Not written or Failed). A new review shows Not written until you open the Summarised tab. Every column sorts. A filter box narrows the list.
 
 - **New review** asks for the URLs of the merge or pull requests, the issue keys, an optional spec file, and a name. The check step reads each change and shows what the review will hold. A change with no local clone is skipped, and the list says so. Create and open builds the review.
 - A review is built when it opens. The build shows its stages: finding the clones, checking your login, reading the issues, reading the code changes, fetching the missing commits, diffing the files and preparing the review. A reload builds it again.
@@ -21,7 +21,7 @@ The home screen lists your reviews with their name, title, number of changes, nu
 
 ## 3. The screen of a review
 
-The header shows the title of the review, a short line about it, the AI button and the Reload button. The tabs are Issues, Code changes, Diff and Acceptance criteria. Each tab shows a count. The keys `1` to `4` pick a tab, and Ctrl+Tab and Ctrl+Shift+Tab go through them.
+The header shows the title of the review, a short line about it, the AI button and the Reload button. The tabs are Code changes, Summarised, Diff, Issues and Acceptance criteria. Most tabs show a count. The keys `1` to `5` pick a tab, and Ctrl+Tab and Ctrl+Shift+Tab go through them.
 
 - The Code changes tab shows the number of changes, and the open and total threads.
 - The Diff tab shows how many files you viewed, and the number of your drafts.
@@ -55,7 +55,7 @@ The table has one row for each change with its number, stack position, title and
 
 ### 6.1 The toolbar
 
-- **View**: Summarised, Linear, or Stacked. Summarised is a page of sections, described in section 7. Linear shows the files of each change by itself. Stacked shows the files of all the changes of one repo as one diff, when they merge cleanly. The Summarised view has no file tree, and it shows only the View and Noise groups.
+- **View**: Linear or Stacked. Linear shows the files of each change by itself. Stacked shows the files of all the changes of one repo as one diff, when they merge cleanly. The Summarised page has its own tab, described in section 7. It has no file tree, and it shows only the Noise group.
 - **Noise**: Code only, Keep mechanical, or Everything. Code only hides blank lines, white space, imports, comments and mechanical modifiers. A file with no change at that level is hidden, and the tree says how many.
 - **Layout**: Inline, Side by side, or Full file.
 - **Files**: New, Modified and Deleted, each with its count.
@@ -93,11 +93,11 @@ The header shows the path, the state of the change, the commits of the file and 
 
 ## 7. Summarised
 
-![The Summarised view](docs/images/summarised.png)
+![The Summarised tab](docs/images/summarised.png)
 
-The Summarised view is a page of sections for a bug hunt. It shows the places where a bug can be spotted or a wrong decision can be found, in reading order, and leaves the noise out. A reviewer who reads and accepts every section, "Everything else" included, has seen the whole change.
+The Summarised tab is a page of sections for a bug hunt. It shows the places where a bug can be spotted or a wrong decision can be found, in reading order, and leaves the noise out. A reviewer who reads and accepts every section, "Everything else" included, has seen the whole change.
 
-**When the page is written.** An AI tool writes the page when you open the Summarised view, and not when the review is built. Open it with the View button of the Diff tab. The Diff tab also opens it when Summarised is your saved choice.
+**When the page is written.** An AI tool writes the page when you open the Summarised tab, and not when the review is built.
 
 - The tool is Claude Code with the model `sonnet` at `medium` effort. The choice is for cost and speed, because you wait for the page when you open the view.
 - While the tool writes, the view says so, and a banner shows on every tab. It takes a few minutes. If you leave the view, the run goes on and saves the page, and the page is there when you come back. The app never starts two runs for one review.

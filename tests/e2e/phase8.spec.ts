@@ -146,13 +146,12 @@ test.describe.serial('the Summarised page', () => {
     await forge.close()
   })
 
-  test('a build does not write the page. Opening the view does, with the running state in between', async () => {
-    await page.getByTestId('tab-diff').click()
-    await expect(page.getByTestId('view-summarised')).toBeEnabled()
+  test('a build does not write the page. Opening the Summarised tab does, with the running state in between', async () => {
+    await expect(page.getByTestId('tab-summarised')).toBeVisible()
     expect(runs(s)).toBe(0) // the build started no AI tool
     expect(existsSync(join(s.root, '.code-diff', 'reviews', 'R-1', 'sections.json'))).toBe(false)
     await expect(page.getByTestId('sections-banner')).toHaveCount(0)
-    await page.getByTestId('view-summarised').click()
+    await page.getByTestId('tab-summarised').click()
     await expect(page.getByTestId('sections-status')).toContainText('The AI is writing the Summarised page')
     await expect(page.getByTestId('sections-banner')).toContainText('The AI is writing the Summarised page')
     await expect(page.getByTestId('sections-view')).toBeVisible({ timeout: 20_000 })
@@ -173,7 +172,7 @@ test.describe.serial('the Summarised page', () => {
     await expect(page.getByTestId('rest-file-a.txt')).toContainText('1 change that no section shows')
     await expect(page.getByTestId('rest-file-b.txt')).toContainText('the whole file')
     await expect(page.getByTestId('sections-progress')).toContainText('0 of 3 sections accepted · 0 of 2 files viewed')
-    await expect(tree('a.txt')).toBeHidden() // the Summarised view shows no tree
+    await expect(tree('a.txt')).toBeHidden() // the Summarised tab shows no tree
   })
 
   test('Everything else shows its code when a file opens', async () => {
@@ -215,11 +214,12 @@ test.describe.serial('the Summarised page', () => {
     await expect(page.getByTestId('section-progress-everything-else')).toHaveText('2 of 2 files viewed')
     await expect(page.getByTestId('sections-progress')).toContainText('3 of 3 sections accepted · 2 of 2 files viewed')
     // the Linear view shows the same marks, with its own counter
+    await page.getByTestId('tab-diff').click()
     await page.getByRole('button', { name: 'Linear', exact: true }).click()
     await expect(tree('a.txt')).toHaveClass(/viewed/)
     await expect(tree('b.txt')).toHaveClass(/viewed/)
     await expect(page.locator('.filetree .progress')).toContainText('2 of 2 viewed')
-    await page.getByTestId('view-summarised').click()
+    await page.getByTestId('tab-summarised').click()
     await expect(page.getByTestId('section-s1')).toHaveAttribute('data-collapsed', 'true') // the collapsed state stays when the view opens again
   })
 
@@ -232,18 +232,20 @@ test.describe.serial('the Summarised page', () => {
     await expect(page.getByTestId('section-s1')).toHaveAttribute('data-accepted', 'true') // a.txt waits for Everything else
     await expect(page.getByTestId('section-s2')).toHaveAttribute('data-accepted', 'true')
     await expect(page.getByTestId('sections-progress')).toContainText('2 of 3 sections accepted · 0 of 2 files viewed')
+    await page.getByTestId('tab-diff').click()
     await page.getByRole('button', { name: 'Linear', exact: true }).click()
     await expect(tree('a.txt')).not.toHaveClass(/viewed/)
     await expect(tree('b.txt')).not.toHaveClass(/viewed/)
-    await page.getByTestId('view-summarised').click()
+    await page.getByTestId('tab-summarised').click()
     await page.getByTestId('accept-everything-else').click() // accept it again, which marks both files
     await expect(page.getByTestId('sections-progress')).toContainText('3 of 3 sections accepted · 2 of 2 files viewed')
   })
 
   test('a file that the reviewer un-marks in the tree takes the section that holds only that file out of the accepted state, and opens it', async () => {
+    await page.getByTestId('tab-diff').click()
     await page.getByRole('button', { name: 'Linear', exact: true }).click()
     await tree('b.txt').getByTitle('Viewed').uncheck()
-    await page.getByTestId('view-summarised').click()
+    await page.getByTestId('tab-summarised').click()
     await expect(page.getByTestId('section-everything-else')).toHaveAttribute('data-accepted', 'false')
     await expect(page.getByTestId('section-everything-else')).toHaveAttribute('data-collapsed', 'false')
     await expect(page.getByTestId('section-s1')).toHaveAttribute('data-accepted', 'true') // b.txt is not a file of s1
@@ -300,7 +302,7 @@ test.describe.serial('the Summarised page', () => {
   })
 })
 
-test('a page that no longer matches is held back at the build, and written again when the saved choice opens the view', async () => {
+test('a page that no longer matches is held back at the build, and written again when the Summarised tab opens', async () => {
   const s = setup()
   const dir = join(s.root, '.code-diff', 'reviews', 'R-1')
   mkdirSync(dir, { recursive: true })
@@ -316,9 +318,8 @@ test('a page that no longer matches is held back at the build, and written again
   await expect(page.getByTestId('mrs-tab')).toBeVisible()
   await expect(page.getByTestId('sections-banner')).toHaveCount(0)
   expect(runs(s)).toBe(0)
-  // the reader's saved choice is the Summarised view, so opening the Diff tab writes the page
-  await page.evaluate(() => localStorage.setItem('codediff:view', JSON.stringify('summarised')))
-  await page.getByTestId('tab-diff').click()
+  // opening the Summarised tab writes the page
+  await page.getByTestId('tab-summarised').click()
   await expect(page.getByTestId('sections-status')).toContainText('The AI is writing the Summarised page')
   await expect(page.getByTestId('sections-banner')).toContainText(
     'The Summarised page is out of date: the changes moved since it was written (1 problem(s)). The AI is writing it again.'
@@ -333,8 +334,7 @@ test('a page that no longer matches is held back at the build, and written again
 test('a failed run shows the reason with a way to try again, and the banner', async () => {
   const s = setup()
   const { app, page, forge } = await openReview(s, {}, { FAKE_CLAUDE_ANSWER: 'no json here' })
-  await page.getByTestId('tab-diff').click()
-  await page.getByTestId('view-summarised').click()
+  await page.getByTestId('tab-summarised').click()
   await expect(page.getByTestId('sections-error')).toBeVisible({ timeout: 20_000 })
   await expect(page.getByTestId('sections-status')).toContainText('The answer still had 1 problem(s) after 3 answers')
   await expect(page.getByTestId('sections-banner')).toContainText('press Try again')

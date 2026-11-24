@@ -163,7 +163,7 @@ test('screenshots of the main screens', async () => {
     'GET rest/api/3/issue/APP-101/comment': { json: { total: 0, comments: [] } }
   }
   forge = await startFakeForge(fixture)
-  // a saved page, so the Summarised view has something to show
+  // a saved page, so the Summarised tab has something to show
   const pageDir = join(root, '.code-diff', 'reviews', 'APP-101')
   mkdirSync(pageDir, { recursive: true })
   const K = 'backend/api-service!104'
@@ -246,7 +246,7 @@ test('screenshots of the main screens', async () => {
   await shot('diff')
 
   await page.setViewportSize({ width: 1600, height: 1500 }) // a tall window, so that the picture shows the index and several sections
-  await page.getByTestId('view-summarised').click()
+  await page.getByTestId('tab-summarised').click()
   await expect(page.getByTestId('sections-view')).toBeVisible()
   await page.getByTestId('accept-tools').click() // an accepted section is collapsed to its header
   await expect(page.getByTestId('section-tools')).toHaveAttribute('data-collapsed', 'true')
@@ -254,6 +254,7 @@ test('screenshots of the main screens', async () => {
   await shot('summarised')
   await page.setViewportSize({ width: 1600, height: 1000 })
   await page.getByTestId('accept-tools').click() // undo, so the other pictures show no viewed file
+  await page.getByTestId('tab-diff').click()
   await page.getByRole('button', { name: 'Linear', exact: true }).click()
   await page.getByTestId('layout-side').click()
   await page.getByTestId('file-src/Api/Program.cs').click()

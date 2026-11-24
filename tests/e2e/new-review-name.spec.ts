@@ -108,3 +108,29 @@ test('an empty Name with nothing else shows the name error and runs no check', a
   await expect(page.getByTestId('check-list')).toHaveCount(0)
   await close()
 })
+
+for (const modifier of ['Shift', 'Control', 'Alt']) {
+  test(`${modifier}+Enter in the URL box adds a new line and does not leave the dialog`, async () => {
+    const { page, close } = await start()
+    const urls = page.getByTestId('urls')
+    await urls.fill(URL_X)
+    await urls.press('End')
+    await urls.press(`${modifier}+Enter`)
+    await urls.pressSequentially('second')
+    await expect(urls).toHaveValue(`${URL_X}\nsecond`)
+    await expect(page.getByTestId('name')).toBeVisible()
+    await expect(page.getByTestId('mrs-tab')).toHaveCount(0)
+    await close()
+  })
+}
+
+test('Enter in the dialog presses Check, then Create and open', async () => {
+  const { page, close } = await start()
+  await page.getByTestId('urls').fill(URL_X)
+  await page.getByTestId('urls').press('Enter')
+  await expect(page.getByTestId('check-list')).toBeVisible({ timeout: SHORT })
+  await page.getByTestId('create').focus()
+  await page.keyboard.press('Enter')
+  await expect(page.getByTestId('mrs-tab')).toBeVisible()
+  await close()
+})

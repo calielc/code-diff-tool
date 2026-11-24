@@ -77,11 +77,32 @@ export function NewReview(props: { initial?: LaunchRequest | null; onClose: () =
     else props.onCreated(r.value.slug)
   }
 
+  // Enter runs the next step. Shift, Ctrl, Alt or Cmd with Enter adds a new line. The keys never reach the page behind the dialog.
+  const onKey = (e: React.KeyboardEvent): void => {
+    if (e.key === 'Escape') return close()
+    if (e.key !== 'Enter' || e.nativeEvent.isComposing) return
+    const target = e.target as HTMLElement
+    if (target.tagName === 'BUTTON') return
+    e.stopPropagation()
+    if (e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) {
+      if (target instanceof HTMLTextAreaElement) {
+        e.preventDefault()
+        target.setRangeText('\n', target.selectionStart, target.selectionEnd, 'end')
+        target.dispatchEvent(new Event('input', { bubbles: true }))
+      }
+      return
+    }
+    e.preventDefault()
+    if (busy) return
+    if (checked) void create()
+    else void check()
+  }
+
   const included = checked?.mrs.filter((m) => !m.skipped).length ?? 0
   const skipped = (checked?.mrs.length ?? 0) - included
 
   return (
-    <div className="modal-back" role="dialog" aria-modal="true" aria-label="New review" onKeyDown={(e) => e.key === 'Escape' && close()}>
+    <div className="modal-back" role="dialog" aria-modal="true" aria-label="New review" onKeyDown={onKey}>
       <div className="modal">
         <header>
           <h2>New review</h2>

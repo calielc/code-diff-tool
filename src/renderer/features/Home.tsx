@@ -105,7 +105,7 @@ export function Home(props: {
       filterRef.current?.focus()
       return
     }
-    if ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'SELECT') return
+    if (['INPUT', 'SELECT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) return
     const i = rows.findIndex((r) => r.slug === selected)
     if (e.key === 'ArrowDown') setSelected(rows[Math.min(rows.length - 1, i + 1)]?.slug ?? null)
     else if (e.key === 'ArrowUp') setSelected(rows[Math.max(0, i - 1)]?.slug ?? null)

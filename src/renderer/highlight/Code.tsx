@@ -2,7 +2,6 @@ import { Fragment, memo, useEffect, useMemo, useState } from 'react'
 import type { Seg } from '@shared/intraline'
 import { limitReason, piecesOf, type TokenLine } from '@shared/syntax-tokens'
 import { highlightMany } from './client'
-import { setSyntaxColours, useSyntaxColours } from './settings'
 
 /**
  * One line of code. Each piece is a React element or a string, so the text of a repository is never read as HTML.
@@ -28,11 +27,10 @@ export const Code = memo(function Code({ text, tokens, segs }: { text: string; t
 
 /** The text of a code fence of the chat. The fence is coloured as a whole text when its language is known. */
 export function CodeBlock({ text, lang }: { text: string; lang: string | null }): React.JSX.Element {
-  const on = useSyntaxColours()
   const lines = useMemo(() => text.split('\n'), [text])
   const [done, setDone] = useState<{ lines: string[]; tokens: TokenLine[] } | null>(null)
   useEffect(() => {
-    if (!on || !lang || limitReason(lines)) return
+    if (!lang || limitReason(lines)) return
     let live = true
     void highlightMany([{ lang, lines }]).then(([tokens]) => {
       if (live && tokens) setDone({ lines, tokens })
@@ -40,8 +38,8 @@ export function CodeBlock({ text, lang }: { text: string; lang: string | null })
     return () => {
       live = false
     }
-  }, [on, lang, lines])
-  const tokens = on && done?.lines === lines ? done.tokens : null
+  }, [lang, lines])
+  const tokens = done?.lines === lines ? done.tokens : null
   return (
     <>
       {lines.map((line, i) => (
@@ -54,19 +52,11 @@ export function CodeBlock({ text, lang }: { text: string; lang: string | null })
   )
 }
 
-/** The switch of the syntax colours for the file panel, with the reason when a file is too big to colour. */
-export function SyntaxToggle({ notice }: { notice: string | null }): React.JSX.Element {
-  const on = useSyntaxColours()
-  return (
-    <>
-      {on && notice && (
-        <span className="muted small" data-testid="syntax-notice">
-          {notice}
-        </span>
-      )}
-      <label className="viewedbtn" title="Colour the code by its language">
-        <input type="checkbox" data-testid="syntax-toggle" checked={on} onChange={(e) => setSyntaxColours(e.target.checked)} /> Colours
-      </label>
-    </>
-  )
+/** The reason a file is too big to colour, for the file panel. */
+export function SyntaxNotice({ notice }: { notice: string | null }): React.JSX.Element | null {
+  return notice ? (
+    <span className="muted small" data-testid="syntax-notice">
+      {notice}
+    </span>
+  ) : null
 }

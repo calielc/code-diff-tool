@@ -82,7 +82,7 @@ async function launch(): Promise<{ app: ElectronApplication; page: Page }> {
   return { app, page }
 }
 
-// One app for all the tests of this file. They only read the diff and flip the colours, so a start for each test is a waste.
+// One app for all the tests of this file. They only read the diff, so a start for each test is a waste.
 test.describe.serial('syntax colours in the diff', () => {
   let app: ElectronApplication
   let page: Page
@@ -131,20 +131,17 @@ test.describe.serial('syntax colours in the diff', () => {
     await page.getByTestId('file-src/calc.ts').click()
   })
 
-  test('the switch turns the colours off and on, and the choice stays after the page loads again', async () => {
-    const table = page.getByTestId('diff-table')
-    await expect(table.locator('.tk-kw').first()).toBeVisible()
-    await page.getByTestId('syntax-toggle').uncheck()
-    await expect(table.locator('[class*="tk-"]')).toHaveCount(0)
-    // the marks of the changed characters stay without colours
-    await expect(table.locator('.chg').first()).toBeVisible()
+  test('there is no switch, and an old stored choice of false does not turn the colours off', async () => {
+    await expect(page.getByTestId('syntax-toggle')).toHaveCount(0, { timeout: 3000 })
+    await expect(page.getByTestId('diff-table').locator('.tk-kw').first()).toBeVisible()
+    await page.evaluate(() => localStorage.setItem('codediff:syntax', JSON.stringify(false)))
     await page.reload()
     await page.getByTestId('review-R-1').dblclick()
     await page.getByTestId('tab-diff').click()
     await page.getByTestId('file-src/calc.ts').click()
     await expect(page.getByTestId('diff-table')).toContainText('export function')
-    await expect(page.getByTestId('syntax-toggle')).not.toBeChecked()
-    await page.getByTestId('syntax-toggle').check()
+    await expect(page.getByTestId('syntax-toggle')).toHaveCount(0)
     await expect(page.getByTestId('diff-table').locator('.tk-kw').first()).toBeVisible()
+    await page.evaluate(() => localStorage.removeItem('codediff:syntax'))
   })
 })

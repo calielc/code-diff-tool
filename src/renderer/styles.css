@@ -1191,3 +1191,10 @@ button.ask {
   justify-content: flex-end;
   margin-top: 8px;
 }
+tr.minegroup td {
+  font-weight: 600;
+  background: var(--panel);
+}
+tr.minegroup button.link {
+  color: inherit;
+}

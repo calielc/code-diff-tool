@@ -31,7 +31,7 @@ This file describes how the app is built. The product features are in `docs/FEAT
 - `src/main/services`: the build of a review, the session, the issues and their summaries, the review context folder, the exports of commits, the watcher, the AI runs, the sections of the Summarised page, the commits of a file, the credentials and the state of the app.
 - `src/main/processes`: the AI tools. `llm.ts` is the facade. `claude.ts`, `codex.ts` and `custom.ts` are the adapters. `run.ts` starts a process, limits its output and time, and kills its whole tree when a build or a run is cancelled.
 - `src/main/ipc`: one file for each area. Each handler checks the sender, checks its arguments with `zod` and calls a service.
-- `src/renderer/features`: the screens. `review-context.tsx` holds the data of the open review and shares it with the tabs.
+- `src/renderer/features`: the screens. `review-context.tsx` holds the data of the open review and shares it with the tabs. `ChangesTable.tsx` draws the table of changes of the Code changes tab: one ordered list of column definitions, the state and approval pills, the group buttons, the group header rows and the collapsed groups. The caller owns the rows, the sort cycle, the filters, the group mode and the running actions. `MrsScreen.tsx` builds the rows with `rowFromSnapshot` (`src/shared/mr-rows.ts`), which also holds the pure rules that filter, group, sort and count them. A row with no snapshot shows … in the cells that need one.
 - `src/renderer/highlight`: the syntax colours. `engine.ts` colours a whole text with one grammar and cuts the answer into lines. `loaders.ts` holds one lazy import for each grammar, and `hcl.ts` is the grammar of Terraform files that the app defines itself. `highlight.worker.ts` runs the engine off the page thread, and `client.ts` talks to the worker, keeps the cache and stops a worker that is too slow. `useFileHighlight.ts` is the hook of the file panel, `Code.tsx` draws a line, a code block and the notice about a file that is too big to colour. `src/renderer/highlight.css` holds the colours of the System look.
 - `src/shared/syntax-language.ts` picks a grammar from a file name or a code fence. `syntax-tokens.ts` has the token kinds, the cutting of a tree into lines, the join of tokens with the marks of changed characters, and the size limits. `syntax-plan.ts` says which texts of a file to colour and where the colours of each line come from. `themes.ts` also holds the token colours of each theme.
 - `tests`: the unit tests (`*.test.ts`), the end-to-end tests (`e2e/*.spec.ts`) and the fakes (`fakes/`).
@@ -54,7 +54,7 @@ The app keeps its files in two places.
 - `reviews/<name>/review-run.json` and `ac-run.json`: the record of the last AI review and of the last acceptance check. A record that says `running` when the app starts is rewritten as stopped.
 - `settings.json`: the choice of skill and model, shared by all reviews.
 
-The neutral model is in `src/shared/provider.ts`: `ChangeRef` (provider, host, project, number), `ChangeInfo`, `Thread`, `Approvals`. GitLab and GitHub map to it, so the rest of the code does not care which host it talks to. GitHub threads and check runs use GraphQL and REST.
+The neutral model is in `src/shared/provider.ts`: `ChangeRef` (provider, host, project, number), `ChangeInfo` (with the user names of the reviewers), `Thread`, `Approvals`. GitLab and GitHub map to it, so the rest of the code does not care which host it talks to. GitHub threads and check runs use GraphQL and REST.
 
 ## 5. IPC
 

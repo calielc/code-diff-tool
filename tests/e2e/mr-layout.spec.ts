@@ -9,7 +9,22 @@ const main = join(__dirname, '../../out/main/index.js')
 const P = encodeURIComponent('team/backend/x')
 const EP = (iid: number): string => `projects/${P}/merge_requests/${iid}`
 const key = (iid: number): string => `backend/x!${iid}`
-const HEADERS = ['MR', 'Stack', 'Title', 'Repo', 'Pipeline', 'Author', 'Approved by', 'Your review', 'Comments', 'Created', 'Updated', 'Merged', 'State']
+const HEADERS = [
+  'Repo',
+  'MR',
+  'Stack',
+  'Title',
+  'Pipeline',
+  'Author',
+  'Reviewers',
+  'Approved by',
+  'Your review',
+  'Comments',
+  'Created',
+  'Updated',
+  'Merged',
+  'State'
+]
 
 let forge: FakeForge | undefined
 test.afterEach(async () => {
@@ -207,6 +222,7 @@ test('the table has the columns, summary, stack pills, your review cells and the
   // Title with the branch line, repo without a group, dates in 24-hour time with the year.
   await expect(await cell(page, 21, 'Title')).toContainText('feat-a → main')
   await expect(await cell(page, 21, 'Repo')).toHaveText('backend/x')
+  await expect(await cell(page, 21, 'Reviewers')).toHaveText('–')
   await expect(await cell(page, 21, 'Created')).toHaveText('Jan 6, 2025, 12:00')
   await expect(await cell(page, 21, 'Updated')).toHaveText('Feb 1, 2025, 09:05')
   await expect(await cell(page, 21, 'Merged')).toHaveText('–')
@@ -229,6 +245,12 @@ test('the table has the columns, summary, stack pills, your review cells and the
   await expect(await cell(page, 23, 'State')).toContainText('Merged')
   await expect((await cell(page, 27, 'State')).getByText('Auto-merge')).toHaveCount(0)
 
+  // Mark as ready and Mark as draft are in the State cell, only for the viewer's own open MRs.
+  const stateButtons = async (iid: number): Promise<string[]> => await (await cell(page, iid, 'State')).getByRole('button').allTextContents()
+  expect(await stateButtons(25)).toEqual(['Mark as draft'])
+  await expect((await cell(page, 25, 'State')).getByTestId('icon-mark-draft')).toHaveCount(1)
+  for (const iid of [21, 22, 23, 26, 27]) expect(await stateButtons(iid), `!${iid}`).toEqual([])
+
   // Your review: the status text and the buttons.
   const review = async (iid: number): Promise<Locator> => await cell(page, iid, 'Your review')
   const buttons = async (iid: number): Promise<string[]> => await (await review(iid)).getByRole('button').allTextContents()
@@ -239,7 +261,7 @@ test('the table has the columns, summary, stack pills, your review cells and the
   await expect(await review(23)).toContainText('Merged, no approval')
   expect(await buttons(23)).toEqual([])
   await expect(await review(25)).toContainText('You are the author')
-  expect(await buttons(25)).toEqual(['Mark as draft'])
+  expect(await buttons(25)).toEqual([]) // Mark as draft moved to the State column
   await expect(await review(26)).toContainText('✓ Approved by you')
   expect(await buttons(26)).toEqual(['Submit review', 'Revoke approval'])
 

@@ -96,7 +96,7 @@ async function submitGitLab(
       stage = 'published'
     }
     if (o.approve) await forgeApi(gitlabAt(ref), `${base}/approve`, 'POST', { body: {} })
-    if (o.unapprove) await forgeApi(gitlabAt(ref), `${base}/unapprove`, 'POST')
+    if (o.unapprove) await forgeApi(gitlabAt(ref), `${base}/unapprove`, 'POST', { body: {} })
     if (o.ready || o.draft) {
       const current = (await forgeApi(gitlabAt(ref), base, 'GET')) as J // the title as it is now, so a rename since the page loaded stays
       await forgeApi(gitlabAt(ref), base, 'PUT', { body: { title: draftTitle(String(current.title ?? ''), !o.ready) } })

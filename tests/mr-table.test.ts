@@ -13,6 +13,7 @@ import {
   pipelineRank,
   pipelineStages,
   stackInfo,
+  stateActions,
   yourReview,
   type ApproveCandidateInput,
   type MrFilters,
@@ -237,7 +238,7 @@ describe('yourReview', () => {
     expect(r).toMatchObject({ order: 1, id: 'changes', text: 'Changes requested by you', tone: 'bad', actions: ['submit', 'approve'] })
   })
 
-  it('says You are the author, with Mark as draft for a ready MR and no Submit review', () => {
+  it('says You are the author, with no buttons at all: Mark as draft lives in the State column', () => {
     // Arrange
     const i = input({ author: 'me' })
 
@@ -245,10 +246,10 @@ describe('yourReview', () => {
     const r = yourReview(i)
 
     // Assert
-    expect(r).toMatchObject({ order: 2, id: 'author', text: 'You are the author', tone: 'muted', actions: ['mark-draft'] })
+    expect(r).toMatchObject({ order: 2, id: 'author', text: 'You are the author', tone: 'muted', actions: [] })
   })
 
-  it('gives the author of a draft the Mark as ready button', () => {
+  it('gives the author of a draft no Mark as ready button: it lives in the State column', () => {
     // Arrange
     const i = input({ author: 'me', draft: true })
 
@@ -256,10 +257,10 @@ describe('yourReview', () => {
     const r = yourReview(i)
 
     // Assert
-    expect(r.actions).toEqual(['mark-ready'])
+    expect(r.actions).toEqual([])
   })
 
-  it('gives the author who approved their own MR the approved text but the author button', () => {
+  it('gives the author who approved their own MR the approved text and no author button', () => {
     // Arrange
     const i = input({ author: 'me', userHasApproved: true })
 
@@ -268,7 +269,7 @@ describe('yourReview', () => {
 
     // Assert
     expect(r.id).toBe('approved')
-    expect(r.actions).toEqual(['mark-draft'])
+    expect(r.actions).toEqual([])
   })
 
   it('says Merged, no approval for a merged MR, with no buttons, and keeps the author text first', () => {
@@ -814,6 +815,7 @@ describe('mrSortValue and the stored sort', () => {
     repo: 'Backend/Recommendation-Service',
     authorName: 'Ann LEE',
     approverCount: 2,
+    reviewerCount: 3,
     pipelineStatus: 'failed',
     reviewOrder: 5,
     commentsSort: 20005,
@@ -915,5 +917,128 @@ describe('mrSortValue and the stored sort', () => {
   it('keeps a stored "null", the order of the review, as null', () => {
     // Act and Assert
     expect(parseStoredMrSort('null')).toBeNull()
+  })
+})
+
+describe('the reviewers column', () => {
+  const row = (over: Partial<MrSortRow> = {}): MrSortRow => ({
+    iid: 1,
+    stackRank: null,
+    title: 't',
+    repo: 'r',
+    authorName: 'a',
+    approverCount: 0,
+    reviewerCount: 0,
+    pipelineStatus: null,
+    reviewOrder: 0,
+    commentsSort: null,
+    createdAt: '',
+    updatedAt: '2026-11-09T09:56:00Z',
+    mergedAt: null,
+    state: 'opened',
+    draft: false,
+    ...over
+  })
+
+  it.each([0, 1, 4, 11])('gives the number of reviewers, %s, as the sort value', (count) => {
+    // Arrange
+    const r = row({ reviewerCount: count, approverCount: 7 })
+
+    // Act
+    const value = mrSortValue(r, 'reviewers')
+
+    // Assert
+    expect(value).toBe(count)
+  })
+
+  it('gives null when the reviewers are not known', () => {
+    // Arrange
+    const r = row({ reviewerCount: null })
+
+    // Act
+    const value = mrSortValue(r, 'reviewers')
+
+    // Assert
+    expect(value).toBeNull()
+  })
+
+  it('accepts the key reviewers in the stored sort with both directions', () => {
+    // Act and Assert
+    expect(parseStoredMrSort('{"key":"reviewers","dir":"asc"}')).toEqual({ key: 'reviewers', dir: 'asc' })
+    expect(parseStoredMrSort('{"key":"reviewers","dir":"desc"}')).toEqual({ key: 'reviewers', dir: 'desc' })
+  })
+})
+
+describe('stateActions', () => {
+  const input = (over: Partial<YourReviewInput> = {}): YourReviewInput => ({
+    state: 'opened',
+    draft: false,
+    author: 'ann',
+    viewer: 'me',
+    viewerState: null,
+    userCanApprove: true,
+    userHasApproved: false,
+    ...over
+  })
+
+  it.each<[string, Partial<YourReviewInput>, string[]]>([
+    ['the author of a ready MR', { author: 'me' }, ['mark-draft']],
+    ['the author of a draft', { author: 'me', draft: true }, ['mark-ready']],
+    ['someone else on a ready MR', {}, []],
+    ['someone else on a draft', { draft: true }, []],
+    ['the author of a merged MR', { author: 'me', state: 'merged' }, []],
+    ['the author of a closed draft', { author: 'me', state: 'closed', draft: true }, []],
+    ['the author of a locked MR', { author: 'me', state: 'locked' }, []],
+    ['the author who approved their own MR', { author: 'me', userHasApproved: true }, ['mark-draft']],
+    ['the author who cannot approve', { author: 'me', userCanApprove: false, draft: true }, ['mark-ready']]
+  ])('gives the right action for %s', (_name, over, expected) => {
+    // Arrange
+    const i = input(over)
+
+    // Act
+    const actions = stateActions(i)
+
+    // Assert
+    expect(actions).toEqual(expected)
+  })
+
+  it('is the only place of mark-ready and mark-draft: yourReview never returns them while stateActions does for the same inputs', () => {
+    // Arrange
+    const states: ChangeState[] = ['opened', 'merged', 'closed', 'locked']
+    const flags = [false, true]
+    const viewerStates = [null, 'requested_changes'] as const
+    const authors = ['me', 'ann']
+    let checked = 0
+    let given = 0
+
+    // Act and Assert
+    for (const state of states)
+      for (const draft of flags)
+        for (const author of authors)
+          for (const userCanApprove of flags)
+            for (const userHasApproved of flags)
+              for (const viewerState of viewerStates) {
+                const i = input({ state, draft, author, userCanApprove, userHasApproved, viewerState })
+                expect(yourReview(i).actions, JSON.stringify(i)).not.toContain('mark-ready')
+                expect(yourReview(i).actions, JSON.stringify(i)).not.toContain('mark-draft')
+                const expected = state === 'opened' && author === 'me' ? [draft ? 'mark-ready' : 'mark-draft'] : []
+                expect(stateActions(i), JSON.stringify(i)).toEqual(expected)
+                checked++
+                given += expected.length
+              }
+    expect(checked).toBe(4 * 2 * 2 * 2 * 2 * 2)
+    expect(given).toBe(2 * 2 * 2 * 2) // opened and the author, times draft, can approve, has approved and the viewer state
+  })
+
+  it('does not change its input', () => {
+    // Arrange
+    const i = input({ author: 'me' })
+    const before = JSON.stringify(i)
+
+    // Act
+    stateActions(i)
+
+    // Assert
+    expect(JSON.stringify(i)).toBe(before)
   })
 })

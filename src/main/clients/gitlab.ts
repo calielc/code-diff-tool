@@ -30,6 +30,12 @@ function addPerson(people: Record<string, Person>, u: J | null | undefined): voi
 /** Call 2 mapping (file 05 section 2.5). */
 export function mapMr(ref: ChangeRef, mr: J, people: Record<string, Person>): ChangeInfo {
   addPerson(people, mr.author)
+  const reviewers: string[] = []
+  for (const u of Array.isArray(mr.reviewers) ? (mr.reviewers as J[]) : []) {
+    if (typeof u?.username !== 'string') continue
+    addPerson(people, u)
+    reviewers.push(u.username)
+  }
   const state = mr.state === 'opened' || mr.state === 'closed' || mr.state === 'merged' || mr.state === 'locked' ? mr.state : 'opened'
   const d = mr.diff_refs ?? {}
   const hp = mr.head_pipeline
@@ -41,6 +47,7 @@ export function mapMr(ref: ChangeRef, mr: J, people: Record<string, Person>): Ch
     description: str(mr.description),
     draft: mr.draft === true, // counts only when it is the JSON value true
     author: str(mr.author?.username),
+    reviewers,
     sourceBranch: str(mr.source_branch),
     targetBranch: str(mr.target_branch),
     createdAt: str(mr.created_at),

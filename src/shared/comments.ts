@@ -46,6 +46,9 @@ export interface SubmitInput {
   draft: string[]
 }
 
+/** One submit request by url, from the home lists. The lists and the keys of summaries hold change urls, not review keys. */
+export type UrlSubmitInput = Omit<SubmitInput, 'slug'>
+
 /** Remove every leading draft prefix, then add `Draft: ` when the result must be a draft (file 03 section 10.4). */
 export function draftTitle(title: string, draft: boolean): string {
   const stripped = title.replace(/^(?:(?:\[draft\]|\(draft\)|draft:)\s*)+/i, '')

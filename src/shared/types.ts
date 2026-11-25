@@ -7,7 +7,7 @@ import type { MineResult } from './my-changes'
 import type { CommitInfo } from './commits'
 import type { FileObject } from './diff'
 import type { AiStateView } from './ai'
-import type { PendingComment, SubmitInput, ThreadsAnswer } from './comments'
+import type { PendingComment, SubmitInput, ThreadsAnswer, UrlSubmitInput } from './comments'
 import type { WatchMessage } from './watch'
 import type { BuildProgress, BuildResult, CheckResult, ReviewSummary } from './review'
 
@@ -187,6 +187,8 @@ export interface CodeDiffApi {
     snapshot(req: { url: string; updatedAt: string }): Promise<Result<ChangeSnapshot>>
     /** Forgets the kept snapshots of these changes, so the next ask reads them again. */
     dropSnapshots(urls: string[]): Promise<void>
+    /** The actions of the review (approve, revoke, review text, mark as ready or draft), by change url. Answers like review.submit, with the error text of each failed url. */
+    submit(req: UrlSubmitInput): Promise<Result<Record<string, string>>>
   }
   events: {
     /** Developer menu item. Returns an unsubscribe function (file 05 section 9.3, push channels). */

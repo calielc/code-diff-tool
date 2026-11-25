@@ -2,8 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { DEFAULT_MINE_APPROVALS, DEFAULT_MINE_STATES, type MineItem, type MineRole } from '@shared/my-changes'
 import { rowFromMine, rowFromSnapshot, type ChangeRow, type RowGroupMode } from '@shared/mr-rows'
 import type { MrFilters, MrSortKey } from '@shared/mr-table'
+import { api } from '../api'
 import { useAvatars } from './ui'
-import { ChangesTable, type TableSort } from './ChangesTable'
+import { ChangesTable, type RowAction, type RowError, type TableSort } from './ChangesTable'
+import { SubmitDialog } from './SubmitDialog'
 import type { Answer, Mine } from './useMine'
 
 /** The row of a list item. Its state, title and updated time come from the list. The snapshot of an old answer stays until a new one arrives, and a failed read leaves the stub with its mark. */
@@ -15,8 +17,6 @@ function rowOf(item: MineItem, viewer: string, answer: Answer | undefined): Chan
   return { ...full, state: stub.state, draft: stub.draft, title: stub.title, updatedAt: stub.updatedAt, people: { ...stub.people, ...full.people } }
 }
 
-const NOTHING = {}
-
 export function MineList(props: {
   role: MineRole
   mine: Mine
@@ -26,10 +26,13 @@ export function MineList(props: {
   blocked: string | null
   onOpenPrereq: () => void
 }): React.JSX.Element {
-  const { data, answers, request, refresh, reload } = props.mine
+  const { data, answers, request, refresh, reread, reload } = props.mine
   const [filters, setFilters] = useState<MrFilters>({ states: DEFAULT_MINE_STATES, approvals: DEFAULT_MINE_APPROVALS })
   const [mode, setMode] = useState<RowGroupMode>('state')
   const [sort, setSort] = useState<TableSort>({ key: 'updated', dir: 'desc' })
+  const [busy, setBusy] = useState<Record<string, RowAction>>({})
+  const [errors, setErrors] = useState<Record<string, RowError>>({})
+  const [submitFor, setSubmitFor] = useState<string | null>(null)
   const items = useMemo(() => (data?.items ?? []).filter((i) => i.roles.includes(props.role)), [data, props.role])
   const rows = useMemo(() => items.map((i) => rowOf(i, data?.viewers[i.host] ?? '', answers[i.url])), [items, data, answers])
   const people = useMemo(() => Object.assign({}, ...rows.map((r) => r.people)), [rows])
@@ -42,6 +45,32 @@ export function MineList(props: {
   useEffect(() => request(shown), [request, shown])
   // A click on a new column sorts ascending. A click on the sorted column reverses it.
   const sortBy = (key: MrSortKey): void => setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }))
+
+  const without = <T,>(o: Record<string, T>, url: string): Record<string, T> => Object.fromEntries(Object.entries(o).filter(([k]) => k !== url))
+  /** After a write the row reads its snapshot again and the list loads again. The busy text stays until both are done, so the old cells never show as if nothing happened. */
+  const refreshRow = async (url: string): Promise<void> => {
+    const item = items.find((i) => i.url === url)
+    await Promise.all([item ? reread([item]) : undefined, reload()])
+    setBusy((b) => without(b, url))
+  }
+  const act = async (row: ChangeRow, action: RowAction): Promise<void> => {
+    const url = row.url
+    setBusy((b) => ({ ...b, [url]: action }))
+    setErrors((e) => without(e, url))
+    const res = await api.changes.submit({
+      approve: action === 'approve' ? [url] : [],
+      unapprove: action === 'revoke' ? [url] : [],
+      requestChanges: [],
+      summaries: {},
+      ready: action === 'mark-ready' ? [url] : [],
+      draft: action === 'mark-draft' ? [url] : []
+    })
+    const error = res.ok ? res.value[url] : res.error
+    if (!error) return refreshRow(url)
+    setBusy((b) => without(b, url))
+    setErrors((e) => ({ ...e, [url]: { action, message: error } }))
+  }
+  const submitRow = rows.find((r) => r.url === submitFor)
 
   if (data && !data.hasAccess)
     return (
@@ -78,8 +107,10 @@ export function MineList(props: {
             <input type="checkbox" aria-label={`Select ${row.title}`} checked={props.picked.has(row.url)} onChange={() => props.onToggle(row.url)} />
           )
         }}
-        busy={NOTHING}
-        errors={NOTHING}
+        onAction={(row, action) => void act(row, action)}
+        onSubmit={(row) => setSubmitFor(row.url)}
+        busy={busy}
+        errors={errors}
         emptyText={data ? 'No changes here.' : 'Reading changes…'}
         toolbar={
           <>
@@ -98,6 +129,14 @@ export function MineList(props: {
           </>
         }
       />
+      {submitRow?.snapshot && (
+        <SubmitDialog
+          mrs={[{ key: submitRow.url, snapshot: submitRow.snapshot }]}
+          submit={api.changes.submit}
+          onDone={() => void refreshRow(submitRow.url)}
+          onClose={() => setSubmitFor(null)}
+        />
+      )}
     </div>
   )
 }

@@ -2,7 +2,7 @@ import { _electron as electron, expect, test, type ElectronApplication, type Loc
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { makeEnv, seedReview, SHORT, type Env } from './naming-helpers'
-import { changesFixture, FAKE_GITLAB_USER_ID, forgeEnv, startFakeForge, type FakeForge, type Fixture, type SeedChange } from '../fakes/fake-forge'
+import { changesFixture, FAKE_GITLAB_USER_ID, forgeEnv, startFakeForge, type Call, type FakeForge, type Fixture, type SeedChange } from '../fakes/fake-forge'
 
 const main = join(__dirname, '../../out/main/index.js')
 const DAY = 86_400_000
@@ -2500,7 +2500,7 @@ test.describe('the snapshot of the shown rows', () => {
     expect(await usersIn(cellAt(r, 'Reviewers'))).toEqual(['bob'])
     expect(await usersIn(cellAt(r, 'Approved by'))).toEqual(['cy'])
     await expect(cellAt(r, 'Your review')).toContainText('Not reviewed by you yet')
-    await expect(cellAt(r, 'Your review').getByRole('button')).toHaveCount(0)
+    await expect(cellAt(r, 'Your review').getByRole('button')).toHaveText(['Submit review', 'Approve'])
     await expect(cellAt(r, 'Comments').locator('.threadchip')).toHaveText('💬 2/3')
     await expect(cellAt(r, 'Comments')).toContainText('2 open, 1 resolved')
     await expect(cellAt(r, 'Created')).toHaveText(DATE_TEXT('Mar', 4))
@@ -2528,7 +2528,7 @@ test.describe('the snapshot of the shown rows', () => {
     expect(await usersIn(cellAt(r, 'Reviewers'))).toEqual(['fay', 'me'])
     expect(await usersIn(cellAt(r, 'Approved by'))).toEqual(['me'])
     await expect(cellAt(r, 'Your review')).toContainText('Approved by you')
-    await expect(cellAt(r, 'Your review').getByRole('button')).toHaveCount(0)
+    await expect(cellAt(r, 'Your review').getByRole('button')).toHaveText(['Submit review', 'Revoke approval'])
     await expect(cellAt(r, 'Comments').locator('.threadchip')).toHaveText('💬 0/2')
     await expect(cellAt(r, 'Comments')).toContainText('all resolved')
     await expect(cellAt(r, 'Created')).toHaveText(DATE_TEXT('May', 20))
@@ -2934,7 +2934,7 @@ test.describe('the snapshot of the shown rows', () => {
     expect(await titles(page)).toEqual(['Crslow', 'Crb', 'Cra'])
   })
 
-  test('the window has the channels mine, snapshot and the one to drop the cache, and the old details channel is gone', async () => {
+  test('the window has the channels snapshot, submit and the one to drop the cache, and the old details channel is gone', async () => {
     // Arrange
     const { page } = await start(baseFixture())
 
@@ -2942,6 +2942,815 @@ test.describe('the snapshot of the shown rows', () => {
     const keys = await page.evaluate(() => Object.keys(window.codeDiff.changes).sort())
 
     // Assert
-    expect(keys).toEqual(['dropSnapshots', 'mine', 'snapshot'])
+    expect(keys).toEqual(['dropSnapshots', 'mine', 'snapshot', 'submit'])
+  })
+})
+
+test.describe('actions on the home rows', () => {
+  const WAIT = { timeout: 10_000 }
+  const glEp = (iid: number): string => `projects/${encodeURIComponent(GL)}/merge_requests/${iid}`
+  const ghEp = (iid: number): string => `repos/${GH}/pulls/${iid}`
+  /** A write is any call that is not a GET. A GraphQL call that is not a mutation is a read of the threads. */
+  const isWrite = (c: Call): boolean =>
+    c.method !== 'GET' && !(c.endpoint === 'graphql' && !String((c.body as { query?: string } | undefined)?.query ?? '').startsWith('mutation'))
+  const writeCalls = (f: FakeForge): { method: string; endpoint: string; body: unknown }[] =>
+    f.calls.filter(isWrite).map((c) => ({ method: c.method, endpoint: c.endpoint, body: c.body }))
+  /** How often the full read of one change was asked: the GET of the change itself. */
+  const reads = (f: FakeForge, endpoint: string): number => f.calls.filter((c) => c.method === 'GET' && c.endpoint === endpoint).length
+
+  /**
+   * The viewer is "me". Assigned to the viewer, newest first:
+   * Acacia (GitLab, open, not approved), Banyan (GitLab, open, approved by me), Camphor (GitLab, open, mine), Deodar (GitLab, draft, mine),
+   * Ebony (GitHub, open, not approved), Fig (GitHub, open, approved by me), Gum (GitHub, open, mine), Hickory (GitHub, draft, mine),
+   * Iroko (merged), Juniperus (closed), Kapok (open, the viewer cannot approve), Larch (open, assigned and also a reviewer role).
+   */
+  const ACTION_SEED: SeedChange[] = [
+    { provider: 'gitlab', project: GL, iid: 901, title: 'Acacia', state: 'opened', author: 'ann', updatedAt: ago(1), assigned: true },
+    { provider: 'gitlab', project: GL, iid: 902, title: 'Banyan', state: 'opened', author: 'ann', updatedAt: ago(1.1), assigned: true, approvedBy: ['me'] },
+    { provider: 'gitlab', project: GL, iid: 903, title: 'Camphor', state: 'opened', author: 'me', updatedAt: ago(1.2), assigned: true },
+    { provider: 'gitlab', project: GL, iid: 904, title: 'Deodar', state: 'draft', author: 'me', updatedAt: ago(1.3), assigned: true },
+    { provider: 'github', project: GH, iid: 911, title: 'Ebony', state: 'opened', author: 'bob', updatedAt: ago(1.4), assigned: true },
+    { provider: 'github', project: GH, iid: 912, title: 'Fig', state: 'opened', author: 'bob', updatedAt: ago(1.5), assigned: true, approvedBy: ['me'] },
+    { provider: 'github', project: GH, iid: 913, title: 'Gum', state: 'opened', author: 'me', updatedAt: ago(1.6), assigned: true },
+    { provider: 'github', project: GH, iid: 914, title: 'Hickory', state: 'draft', author: 'me', updatedAt: ago(1.7), assigned: true },
+    { provider: 'gitlab', project: GL, iid: 905, title: 'Iroko', state: 'merged', author: 'ann', updatedAt: ago(2), assigned: true },
+    { provider: 'gitlab', project: GL, iid: 906, title: 'Juniperus', state: 'closed', author: 'ann', updatedAt: ago(2.1), assigned: true },
+    { provider: 'gitlab', project: GL, iid: 907, title: 'Kapok', state: 'opened', author: 'ann', updatedAt: ago(2.2), assigned: true, userCanApprove: false },
+    { provider: 'gitlab', project: GL, iid: 908, title: 'Larch', state: 'opened', author: 'ann', updatedAt: ago(2.3), assigned: true, reviewer: true }
+  ]
+  const patch = (iid: number, over: Partial<SeedChange>): SeedChange[] => ACTION_SEED.map((c) => (c.iid === iid ? { ...c, ...over } : c))
+
+  /** Starts on the list "Assigned to me" with every state shown and every snapshot read, unless `settle` is false. */
+  async function startActions(
+    seed: SeedChange[] = ACTION_SEED,
+    extra: Fixture = {},
+    opts: { settle?: boolean; options?: NonNullable<Parameters<typeof changesFixture>[1]> } = {}
+  ): Promise<{ page: Page; forge: FakeForge }> {
+    const r = await start({ ...changesFixture(seed, opts.options), ...extra })
+    await openTab(r.page, 'assigned')
+    await showAll(r.page)
+    if (opts.settle !== false) await snapshotsLoaded(r.page)
+    return r
+  }
+  const review = (page: Page, title: string): Locator => cellAt(row(page, title), 'Your review')
+  const state = (page: Page, title: string): Locator => cellAt(row(page, title), 'State')
+  const buttonsOf = (cell: Locator): Promise<string[]> => cell.getByRole('button').allTextContents()
+  const approveBtn = (page: Page, title: string): Locator => review(page, title).getByRole('button', { name: 'Approve', exact: true })
+  const placeholders = (page: Page, title: string): Locator => row(page, title).locator('[title="Loading"]')
+  const group = (page: Page, name: string): Locator => page.getByTestId('group-row').filter({ hasText: new RegExp(`^\\s*[▴▾]?\\s*${name}\\s*·`) })
+
+  test.describe('the buttons follow the rules of the review table', () => {
+    test('a change of someone else has Submit review and Approve, or Submit review and Revoke approval when the viewer approved it, on both forges', async () => {
+      // Arrange
+      const { page } = await startActions()
+
+      // Act and Assert
+      for (const t of ['Acacia', 'Ebony']) {
+        await expect(review(page, t)).toContainText('Not reviewed by you yet')
+        expect(await buttonsOf(review(page, t)), t).toEqual(['Submit review', 'Approve'])
+      }
+      for (const t of ['Banyan', 'Fig']) {
+        await expect(review(page, t)).toContainText('Approved by you')
+        expect(await buttonsOf(review(page, t)), t).toEqual(['Submit review', 'Revoke approval'])
+      }
+      await expect(review(page, 'Kapok')).toContainText('Not an eligible approver')
+      expect(await buttonsOf(review(page, 'Kapok'))).toEqual(['Submit review'])
+      await expect(page.getByTestId(`submit-${glUrl(901)}`)).toHaveCount(1)
+      await expect(page.getByTestId(`submit-${ghUrl(911)}`)).toHaveCount(1)
+    })
+
+    test('the author sees the text You are the author and no Approve, no Revoke approval and no Submit review, on both forges', async () => {
+      // Arrange
+      const { page } = await startActions()
+
+      // Act and Assert
+      for (const t of ['Camphor', 'Deodar', 'Gum', 'Hickory']) {
+        await expect(review(page, t), t).toContainText('You are the author')
+        expect(await buttonsOf(review(page, t)), t).toEqual([])
+      }
+      await expect(page.getByTestId(`submit-${glUrl(903)}`)).toHaveCount(0)
+      await expect(page.getByTestId(`submit-${ghUrl(913)}`)).toHaveCount(0)
+    })
+
+    test('Mark as draft and Mark as ready are in the State cell of the own open changes only, with the same titles as in the review table', async () => {
+      // Arrange
+      const { page } = await startActions()
+
+      // Act and Assert
+      expect(await buttonsOf(state(page, 'Camphor'))).toEqual(['Mark as draft'])
+      expect(await buttonsOf(state(page, 'Gum'))).toEqual(['Mark as draft'])
+      expect(await buttonsOf(state(page, 'Deodar'))).toEqual(['Mark as ready'])
+      expect(await buttonsOf(state(page, 'Hickory'))).toEqual(['Mark as ready'])
+      await expect(state(page, 'Camphor').getByRole('button', { name: 'Mark as draft' })).toHaveAttribute('title', 'Adds Draft: to the title')
+      await expect(state(page, 'Deodar').getByRole('button', { name: 'Mark as ready' })).toHaveAttribute('title', 'Removes the Draft prefix from the title')
+      await expect(state(page, 'Camphor').getByTestId('icon-mark-draft')).toHaveCount(1)
+      await expect(state(page, 'Deodar').getByTestId('icon-mark-ready')).toHaveCount(1)
+      for (const t of ['Acacia', 'Banyan', 'Ebony', 'Fig', 'Iroko', 'Juniperus', 'Kapok', 'Larch']) expect(await buttonsOf(state(page, t)), t).toEqual([])
+      await expect(page.getByRole('button', { name: /^Mark as (ready|draft)$/ })).toHaveCount(4)
+    })
+
+    test('a merged row and a closed row have no button in either cell, whoever wrote them', async () => {
+      // Arrange
+      const seed = ACTION_SEED.map((c) => (c.iid === 905 || c.iid === 906 ? { ...c, author: 'me' } : c))
+      const { page } = await startActions(seed)
+
+      // Act and Assert
+      for (const t of ['Iroko', 'Juniperus']) {
+        expect(await buttonsOf(review(page, t)), t).toEqual([])
+        expect(await buttonsOf(state(page, t)), t).toEqual([])
+      }
+      await expect(row(page, 'Iroko').locator('.statepill')).toHaveText('Merged')
+      await expect(row(page, 'Juniperus').locator('.statepill')).toHaveText('Closed')
+    })
+
+    test('a stub row, whose snapshot is still on its way, has no button in either cell, also an own open change', async () => {
+      // Arrange
+      const seed = ACTION_SEED.map((c) => (c.iid === 901 || c.iid === 903 ? { ...c, snapshotSleepMs: 3_000 } : c))
+
+      // Act
+      const { page } = await startActions(seed, {}, { settle: false })
+
+      // Assert
+      for (const t of ['Acacia', 'Camphor']) {
+        await expect(review(page, t)).toHaveText('…')
+        expect(await buttonsOf(review(page, t)), t).toEqual([])
+        expect(await buttonsOf(state(page, t)), t).toEqual([])
+      }
+      await expect(page.getByTestId(`submit-${glUrl(901)}`)).toHaveCount(0)
+      await expect(row(page, 'Banyan')).toContainText('Approved by you', WAIT)
+    })
+
+    test('a row whose read failed has no button in either cell and keeps its dashes, also an own open change', async () => {
+      // Arrange
+      const seed = ACTION_SEED.map((c) => (c.iid === 901 || c.iid === 903 ? { ...c, snapshotFail: true } : c))
+
+      // Act
+      const { page } = await startActions(seed)
+
+      // Assert
+      for (const t of ['Acacia', 'Camphor']) {
+        await expect(review(page, t)).toHaveText('–')
+        expect(await buttonsOf(review(page, t)), t).toEqual([])
+        expect(await buttonsOf(state(page, t)), t).toEqual([])
+      }
+      await expect(page.getByTestId(`submit-${glUrl(901)}`)).toHaveCount(0)
+      await expect(page.getByTestId('mine-error')).toHaveCount(0)
+    })
+  })
+
+  test.describe('Approve and Revoke approval', () => {
+    test('Approve on a GitLab row says Approving… in the Your review cell, posts the approval, and then the row is approved by you with your avatar in Approved by', async () => {
+      // Arrange
+      const { page, forge: f } = await startActions(patch(901, { writeSleepMs: 1_200 }))
+
+      // Act
+      await approveBtn(page, 'Acacia').click()
+
+      // Assert
+      await expect(review(page, 'Acacia')).toContainText('Approving…')
+      await expect.poll(() => writeCalls(f), WAIT).toEqual([{ method: 'POST', endpoint: `${glEp(901)}/approve`, body: {} }])
+      await expect(review(page, 'Acacia')).toContainText('✓ Approved by you', WAIT)
+      await expect(review(page, 'Acacia')).not.toContainText('Approving…')
+      expect(await usersIn(cellAt(row(page, 'Acacia'), 'Approved by'))).toEqual(['me'])
+      expect(await buttonsOf(review(page, 'Acacia'))).toEqual(['Submit review', 'Revoke approval'])
+      expect(writeCalls(f)).toHaveLength(1)
+    })
+
+    test('Approve on a GitHub row posts a review with the event APPROVE and then shows the approval', async () => {
+      // Arrange
+      const { page, forge: f } = await startActions(patch(911, { writeSleepMs: 1_200 }))
+
+      // Act
+      await approveBtn(page, 'Ebony').click()
+
+      // Assert
+      await expect(review(page, 'Ebony')).toContainText('Approving…')
+      await expect.poll(() => writeCalls(f), WAIT).toEqual([{ method: 'POST', endpoint: `${ghEp(911)}/reviews`, body: { event: 'APPROVE' } }])
+      await expect(review(page, 'Ebony')).toContainText('✓ Approved by you', WAIT)
+      expect(await usersIn(cellAt(row(page, 'Ebony'), 'Approved by'))).toEqual(['me'])
+      expect(await buttonsOf(review(page, 'Ebony'))).toEqual(['Submit review', 'Revoke approval'])
+    })
+
+    test('Revoke approval on a GitLab row says Revoking…, posts the unapprove, and then the row is not reviewed by you and the avatar is gone', async () => {
+      // Arrange
+      const { page, forge: f } = await startActions(patch(902, { writeSleepMs: 1_200 }))
+      expect(await usersIn(cellAt(row(page, 'Banyan'), 'Approved by'))).toEqual(['me'])
+
+      // Act
+      await review(page, 'Banyan').getByRole('button', { name: 'Revoke approval' }).click()
+
+      // Assert
+      await expect(review(page, 'Banyan')).toContainText('Revoking…')
+      await expect.poll(() => writeCalls(f), WAIT).toEqual([{ method: 'POST', endpoint: `${glEp(902)}/unapprove`, body: {} }])
+      await expect(review(page, 'Banyan')).toContainText('Not reviewed by you yet', WAIT)
+      await expect(cellAt(row(page, 'Banyan'), 'Approved by')).toHaveText('–')
+      expect(await buttonsOf(review(page, 'Banyan'))).toEqual(['Submit review', 'Approve'])
+    })
+
+    test('Revoke approval on a GitHub row dismisses the approval of the viewer and then shows the row as not approved', async () => {
+      // Arrange
+      const { page, forge: f } = await startActions(patch(912, { writeSleepMs: 1_200 }))
+
+      // Act
+      await review(page, 'Fig').getByRole('button', { name: 'Revoke approval' }).click()
+
+      // Assert
+      await expect(review(page, 'Fig')).toContainText('Revoking…')
+      await expect
+        .poll(() => writeCalls(f), WAIT)
+        .toEqual([{ method: 'PUT', endpoint: `${ghEp(912)}/reviews/1/dismissals`, body: { message: 'Approval withdrawn' } }])
+      await expect(review(page, 'Fig')).toContainText('Not reviewed by you yet', WAIT)
+      await expect(cellAt(row(page, 'Fig'), 'Approved by')).toHaveText('–')
+    })
+
+    test('after a successful action the list is read again and only that row asks for its snapshot again', async () => {
+      // Arrange
+      const { page, forge: f } = await startActions()
+      const listCalls = mineCalls(f)
+      const before = { acacia: reads(f, glEp(901)), banyan: reads(f, glEp(902)), ebony: reads(f, ghEp(911)) }
+
+      // Act
+      await approveBtn(page, 'Acacia').click()
+
+      // Assert
+      await expect(review(page, 'Acacia')).toContainText('✓ Approved by you', WAIT)
+      await expect.poll(() => mineCalls(f), WAIT).toBeGreaterThan(listCalls)
+      expect(reads(f, glEp(901))).toBe(before.acacia + 1)
+      expect(reads(f, glEp(902))).toBe(before.banyan)
+      expect(reads(f, ghEp(911))).toBe(before.ebony)
+    })
+
+    test('the old cells stay while the new snapshot is on its way: no placeholder shows and the approval arrives later', async () => {
+      // Arrange
+      const options = {}
+      const { page } = await startActions(ACTION_SEED, {}, { options })
+      Object.assign(options, { snapshotSleepMs: 1_500 })
+
+      // Act
+      await approveBtn(page, 'Acacia').click()
+
+      // Assert
+      const sampled: number[] = []
+      for (let i = 0; i < 10; i++) {
+        sampled.push(await placeholders(page, 'Acacia').count())
+        await page.waitForTimeout(100)
+      }
+      expect(sampled).toEqual(Array(10).fill(0))
+      await expect(cellAt(row(page, 'Acacia'), 'Title')).toContainText('Acacia')
+      await expect(review(page, 'Acacia')).toContainText('✓ Approved by you', WAIT)
+      expect(await usersIn(cellAt(row(page, 'Acacia'), 'Approved by'))).toEqual(['me'])
+    })
+  })
+
+  test.describe('Mark as ready and Mark as draft', () => {
+    test('Mark as draft on an own open GitLab change says Marking as draft…, puts the Draft prefix on the title and then the row is a draft', async () => {
+      // Arrange
+      const { page, forge: f } = await startActions(patch(903, { writeSleepMs: 1_200 }))
+
+      // Act
+      await state(page, 'Camphor').getByRole('button', { name: 'Mark as draft' }).click()
+
+      // Assert
+      await expect(state(page, 'Camphor')).toContainText('Marking as draft…')
+      await expect.poll(() => writeCalls(f), WAIT).toEqual([{ method: 'PUT', endpoint: glEp(903), body: { title: 'Draft: Camphor' } }])
+      await expect(state(page, 'Camphor').locator('.statepill')).toHaveText('Draft', WAIT)
+      await expect(state(page, 'Camphor')).not.toContainText('Marking as draft…')
+      expect(await buttonsOf(state(page, 'Camphor'))).toEqual(['Mark as ready'])
+      await expect(cellAt(row(page, 'Camphor'), 'Title')).toContainText('Camphor')
+      expect(writeCalls(f)).toHaveLength(1)
+    })
+
+    test('Mark as ready on an own draft GitLab change puts the title without the Draft prefix and then the row is open', async () => {
+      // Arrange
+      const { page, forge: f } = await startActions(patch(904, { writeSleepMs: 1_200 }))
+
+      // Act
+      await state(page, 'Deodar').getByRole('button', { name: 'Mark as ready' }).click()
+
+      // Assert
+      await expect(state(page, 'Deodar')).toContainText('Marking as ready…')
+      await expect.poll(() => writeCalls(f), WAIT).toEqual([{ method: 'PUT', endpoint: glEp(904), body: { title: 'Deodar' } }])
+      await expect(state(page, 'Deodar').locator('.statepill')).toHaveText('Open', WAIT)
+      expect(await buttonsOf(state(page, 'Deodar'))).toEqual(['Mark as draft'])
+      await expect(cellAt(row(page, 'Deodar'), 'Title')).not.toContainText('Draft:')
+    })
+
+    test('Mark as draft and Mark as ready on GitHub send the GraphQL mutation for the node of the pull request', async () => {
+      // Arrange
+      const { page, forge: f } = await startActions()
+
+      // Act
+      await state(page, 'Gum').getByRole('button', { name: 'Mark as draft' }).click()
+      await expect(state(page, 'Gum').locator('.statepill')).toHaveText('Draft', WAIT)
+      await state(page, 'Hickory').getByRole('button', { name: 'Mark as ready' }).click()
+      await expect(state(page, 'Hickory').locator('.statepill')).toHaveText('Open', WAIT)
+
+      // Assert
+      const sent = writeCalls(f).map((w) => ({
+        endpoint: w.endpoint,
+        query: String((w.body as { query: string }).query),
+        id: (w.body as { variables: { id: string } }).variables.id
+      }))
+      expect(sent).toHaveLength(2)
+      expect(sent[0]).toMatchObject({ endpoint: 'graphql', id: `PR_${GH}#913` })
+      expect(sent[0].query).toContain('convertPullRequestToDraft')
+      expect(sent[1]).toMatchObject({ endpoint: 'graphql', id: `PR_${GH}#914` })
+      expect(sent[1].query).toContain('markPullRequestReadyForReview')
+      expect(await buttonsOf(state(page, 'Gum'))).toEqual(['Mark as ready'])
+      expect(await buttonsOf(state(page, 'Hickory'))).toEqual(['Mark as draft'])
+    })
+
+    test('after the write the list is read again and the row moves to its new State group', async () => {
+      // Arrange
+      const { page, forge: f } = await startActions()
+      const listCalls = mineCalls(f)
+      await expect(group(page, 'Draft')).toContainText('2')
+
+      // Act
+      await state(page, 'Camphor').getByRole('button', { name: 'Mark as draft' }).click()
+
+      // Assert
+      await expect.poll(() => mineCalls(f), WAIT).toBeGreaterThan(listCalls)
+      await expect(group(page, 'Draft')).toContainText('3', WAIT)
+    })
+  })
+
+  test.describe('the errors of the forge', () => {
+    test('an Approve that fails shows the error in the Your review cell, gives the button back, keeps the row and clears the error on the next success', async () => {
+      // Arrange
+      const { page, forge: f } = await startActions(patch(901, { writeFail: 'HTTP 403 nope' }))
+
+      // Act
+      await approveBtn(page, 'Acacia').click()
+
+      // Assert
+      await expect(review(page, 'Acacia')).toContainText('HTTP 403', WAIT)
+      await expect(approveBtn(page, 'Acacia')).toBeVisible()
+      await expect(review(page, 'Acacia')).not.toContainText('Approving…')
+      await expect(review(page, 'Acacia')).toContainText('Not reviewed by you yet')
+      await expect(state(page, 'Acacia')).not.toContainText('HTTP 403')
+      await expect(row(page, 'Banyan')).not.toContainText('HTTP 403')
+      await expect(placeholders(page, 'Acacia')).toHaveCount(0)
+      await expect(cellAt(row(page, 'Acacia'), 'Title')).toContainText('Acacia')
+      f.setFixture(changesFixture(ACTION_SEED))
+      await approveBtn(page, 'Acacia').click()
+      await expect(review(page, 'Acacia')).toContainText('✓ Approved by you', WAIT)
+      await expect(review(page, 'Acacia')).not.toContainText('HTTP 403')
+    })
+
+    test('a Revoke approval that fails shows the error in the Your review cell and gives the button back', async () => {
+      // Arrange
+      const { page } = await startActions(patch(902, { writeFail: 'HTTP 500 boom' }))
+
+      // Act
+      await review(page, 'Banyan').getByRole('button', { name: 'Revoke approval' }).click()
+
+      // Assert
+      await expect(review(page, 'Banyan')).toContainText('HTTP 500', WAIT)
+      await expect(review(page, 'Banyan').getByRole('button', { name: 'Revoke approval' })).toBeVisible()
+      await expect(review(page, 'Banyan')).toContainText('Approved by you')
+      expect(await usersIn(cellAt(row(page, 'Banyan'), 'Approved by'))).toEqual(['me'])
+    })
+
+    test('a Mark as draft that fails shows the error in the State cell and not in the Your review cell, and gives the button back', async () => {
+      // Arrange
+      const { page } = await startActions(patch(903, { writeFail: 'HTTP 500 boom' }))
+
+      // Act
+      await state(page, 'Camphor').getByRole('button', { name: 'Mark as draft' }).click()
+
+      // Assert
+      await expect(state(page, 'Camphor')).toContainText('HTTP 500', WAIT)
+      await expect(state(page, 'Camphor').getByRole('button', { name: 'Mark as draft' })).toBeVisible()
+      await expect(state(page, 'Camphor')).not.toContainText('Marking as draft…')
+      await expect(review(page, 'Camphor')).not.toContainText('HTTP 500')
+      await expect(state(page, 'Camphor').locator('.statepill')).toHaveText('Open')
+    })
+
+    test('an error belongs to its row: another row shows none and a later action on it works', async () => {
+      // Arrange
+      const { page, forge: f } = await startActions(patch(901, { writeFail: 'HTTP 403 nope' }))
+      await approveBtn(page, 'Acacia').click()
+      await expect(review(page, 'Acacia')).toContainText('HTTP 403', WAIT)
+
+      // Act
+      await approveBtn(page, 'Ebony').click()
+
+      // Assert
+      await expect(review(page, 'Ebony')).toContainText('✓ Approved by you', WAIT)
+      await expect(review(page, 'Ebony')).not.toContainText('HTTP 403')
+      await expect(review(page, 'Acacia')).toContainText('HTTP 403')
+      expect(writeCalls(f).map((w) => w.endpoint)).toEqual([`${glEp(901)}/approve`, `${ghEp(911)}/reviews`])
+    })
+  })
+
+  test.describe('the Submit review dialog of a home row', () => {
+    const dialog = (page: Page): Locator => page.getByRole('dialog', { name: 'Submit review' })
+    const openFor = async (page: Page, url: string): Promise<Locator> => {
+      await page.getByTestId(`submit-${url}`).click()
+      await expect(dialog(page)).toBeVisible()
+      return dialog(page)
+    }
+
+    test('lists the one change of the row, with its overall comment box and the three decisions', async () => {
+      // Arrange
+      const { page } = await startActions()
+
+      // Act
+      const dlg = await openFor(page, glUrl(901))
+
+      // Assert
+      await expect(dlg.locator('fieldset')).toHaveCount(1)
+      await expect(dlg.getByLabel('Overall comment for !901')).toBeVisible()
+      await expect(dlg.getByRole('radiogroup', { name: 'Decision for !901' }).getByRole('radio')).toHaveCount(3)
+      await expect(dlg).toContainText('Acacia')
+      await expect(dlg.getByTestId('submit-review')).toBeEnabled()
+    })
+
+    test('posts the summary and the approval for a GitLab row in that order, closes, and then the row is approved by you', async () => {
+      // Arrange
+      const { page, forge: f } = await startActions()
+      const dlg = await openFor(page, glUrl(901))
+
+      // Act
+      await dlg.getByLabel('Overall comment for !901').fill('LGTM')
+      await dlg.getByLabel('Approve').check()
+      await dlg.getByTestId('submit-review').click()
+
+      // Assert
+      await expect(dialog(page)).toHaveCount(0, WAIT)
+      expect(writeCalls(f)).toEqual([
+        { method: 'POST', endpoint: `${glEp(901)}/draft_notes`, body: { note: 'LGTM' } },
+        { method: 'POST', endpoint: `${glEp(901)}/draft_notes/bulk_publish`, body: undefined },
+        { method: 'POST', endpoint: `${glEp(901)}/approve`, body: {} }
+      ])
+      await expect(review(page, 'Acacia')).toContainText('✓ Approved by you', WAIT)
+      expect(await usersIn(cellAt(row(page, 'Acacia'), 'Approved by'))).toEqual(['me'])
+    })
+
+    test('requests changes on a GitHub row with its text in one review, and then the row shows Changes requested by you', async () => {
+      // Arrange
+      const { page, forge: f } = await startActions()
+      const dlg = await openFor(page, ghUrl(911))
+
+      // Act
+      await dlg.getByLabel('Overall comment for !911').fill('There is a race here')
+      await dlg.getByLabel('Request changes').check()
+      await dlg.getByTestId('submit-review').click()
+
+      // Assert
+      await expect(dialog(page)).toHaveCount(0, WAIT)
+      expect(writeCalls(f)).toEqual([{ method: 'POST', endpoint: `${ghEp(911)}/reviews`, body: { event: 'REQUEST_CHANGES', body: 'There is a race here' } }])
+      await expect(review(page, 'Ebony')).toContainText('Changes requested by you', WAIT)
+    })
+
+    test('requests changes on a GitLab row by publishing the review with the state requested_changes', async () => {
+      // Arrange
+      const { page, forge: f } = await startActions()
+      const dlg = await openFor(page, glUrl(901))
+
+      // Act
+      await dlg.getByLabel('Overall comment for !901').fill('Needs work')
+      await dlg.getByLabel('Request changes').check()
+      await dlg.getByTestId('submit-review').click()
+
+      // Assert
+      await expect(dialog(page)).toHaveCount(0, WAIT)
+      expect(writeCalls(f)).toEqual([
+        { method: 'POST', endpoint: `${glEp(901)}/draft_notes`, body: { note: 'Needs work' } },
+        { method: 'POST', endpoint: `${glEp(901)}/draft_notes/bulk_publish`, body: { reviewer_state: 'requested_changes' } }
+      ])
+      await expect(review(page, 'Acacia')).toContainText('Changes requested by you', WAIT)
+    })
+
+    test('shows the red line and sends nothing when changes are requested without an overall comment, and the dialog stays open', async () => {
+      // Arrange
+      const { page, forge: f } = await startActions()
+      const dlg = await openFor(page, glUrl(901))
+
+      // Act
+      await dlg.getByLabel('Request changes').check()
+      await dlg.getByTestId('submit-review').click()
+
+      // Assert
+      await expect(dlg.getByText('Requesting changes needs an overall comment.')).toBeVisible()
+      await expect(dialog(page)).toBeVisible()
+      expect(writeCalls(f)).toEqual([])
+    })
+
+    test('closes with no call at all when nothing is chosen and no text is written, and Cancel closes too', async () => {
+      // Arrange
+      const { page, forge: f } = await startActions()
+      const dlg = await openFor(page, glUrl(901))
+
+      // Act
+      await dlg.getByTestId('submit-review').click()
+
+      // Assert
+      await expect(dialog(page)).toHaveCount(0)
+      const dlg2 = await openFor(page, ghUrl(911))
+      await dlg2.getByLabel('Overall comment for !911').fill('draft text')
+      await dlg2.getByRole('button', { name: 'Cancel' }).click()
+      await expect(dialog(page)).toHaveCount(0)
+      expect(writeCalls(f)).toEqual([])
+    })
+
+    test('turns off the decisions the viewer cannot take, with the reason as the tooltip: already approved, not an eligible approver', async () => {
+      // Arrange
+      const { page } = await startActions()
+
+      // Act
+      const dlg = await openFor(page, glUrl(902))
+
+      // Assert
+      await expect(dlg.getByLabel('Approve')).toBeDisabled()
+      await expect(dlg.locator('label', { hasText: 'Approve' })).toHaveAttribute('title', 'Already approved by you')
+      await dlg.getByRole('button', { name: 'Cancel' }).click()
+      const dlg2 = await openFor(page, glUrl(907))
+      await expect(dlg2.getByLabel('Approve')).toBeDisabled()
+      await expect(dlg2.locator('label', { hasText: 'Approve' })).toHaveAttribute('title', "You can't approve this")
+    })
+
+    test('shows a partial failure for the change in the banner, keeps the dialog open and says the other parts were posted', async () => {
+      // Arrange
+      const { page, forge: f } = await startActions(ACTION_SEED, { [`POST ${glEp(901)}/approve`]: { fail: 'HTTP 403 Forbidden' } })
+      const dlg = await openFor(page, glUrl(901))
+
+      // Act
+      await dlg.getByLabel('Overall comment for !901').fill('LGTM')
+      await dlg.getByLabel('Approve').check()
+      await dlg.getByTestId('submit-review').click()
+
+      // Assert
+      await expect(page.getByTestId('submit-banner')).toContainText('!901: The overall comment went out, then:', WAIT)
+      await expect(page.getByTestId('submit-banner')).toContainText('The other changes were posted.')
+      await expect(dialog(page)).toBeVisible()
+      expect(writeCalls(f).map((w) => w.endpoint)).toEqual([`${glEp(901)}/draft_notes`, `${glEp(901)}/draft_notes/bulk_publish`, `${glEp(901)}/approve`])
+    })
+
+    test('shows the error of the forge for a GitHub change in the banner when its only write fails, and keeps the dialog open', async () => {
+      // Arrange
+      const { page } = await startActions(patch(911, { writeFail: 'HTTP 422 invalid' }))
+      const dlg = await openFor(page, ghUrl(911))
+
+      // Act
+      await dlg.getByLabel('Approve').check()
+      await dlg.getByTestId('submit-review').click()
+
+      // Assert
+      await expect(page.getByTestId('submit-banner')).toContainText('!911: ', WAIT)
+      await expect(page.getByTestId('submit-banner')).toContainText('HTTP 422')
+      await expect(dialog(page)).toBeVisible()
+    })
+
+    test('does not tick the row, and leaves the other ticks alone', async () => {
+      // Arrange
+      const { page } = await startActions()
+      await page.getByLabel('Select Ebony').check()
+
+      // Act
+      const dlg = await openFor(page, glUrl(901))
+      await dlg.getByLabel('Approve').check()
+      await dlg.getByTestId('submit-review').click()
+
+      // Assert
+      await expect(dialog(page)).toHaveCount(0, WAIT)
+      await expect(page.getByLabel('Select Acacia')).not.toBeChecked()
+      await expect(page.getByLabel('Select Ebony')).toBeChecked()
+      await expect(page.getByTestId('mine-start')).toHaveText('Start review (1)')
+    })
+  })
+
+  test.describe('the same actions in every layout', () => {
+    test('work in every group mode: No group, Repo, State and Approval', async () => {
+      // Arrange
+      const { page, forge: f } = await startActions()
+      const steps: { mode: 'No group' | 'Repo' | 'State' | 'Approval'; title: string; button: string; after: string }[] = [
+        { mode: 'No group', title: 'Acacia', button: 'Approve', after: '✓ Approved by you' },
+        { mode: 'Repo', title: 'Acacia', button: 'Revoke approval', after: 'Not reviewed by you yet' },
+        { mode: 'State', title: 'Ebony', button: 'Approve', after: '✓ Approved by you' },
+        { mode: 'Approval', title: 'Ebony', button: 'Revoke approval', after: 'Not reviewed by you yet' }
+      ]
+
+      // Act and Assert
+      let writes = 0
+      for (const step of steps) {
+        await modeBtn(page, step.mode).click()
+        await review(page, step.title).getByRole('button', { name: step.button, exact: true }).click()
+        await expect(review(page, step.title), `${step.mode}`).toContainText(step.after, WAIT)
+        expect(writeCalls(f), `${step.mode}`).toHaveLength(++writes)
+      }
+    })
+
+    test('work for a row of a group that was collapsed and expanded again', async () => {
+      // Arrange
+      const { page, forge: f } = await startActions()
+      await group(page, 'Open').getByTestId('group-toggle').click()
+      await expect(row(page, 'Acacia')).toHaveCount(0)
+      await group(page, 'Open').getByTestId('group-toggle').click()
+      await expect(row(page, 'Acacia')).toHaveCount(1)
+
+      // Act
+      await approveBtn(page, 'Acacia').click()
+
+      // Assert
+      await expect(review(page, 'Acacia')).toContainText('✓ Approved by you', WAIT)
+      expect(writeCalls(f)).toHaveLength(1)
+    })
+
+    test('a row keeps its error while its group is collapsed and expanded again', async () => {
+      // Arrange
+      const { page } = await startActions(patch(901, { writeFail: 'HTTP 403 nope' }))
+      await approveBtn(page, 'Acacia').click()
+      await expect(review(page, 'Acacia')).toContainText('HTTP 403', WAIT)
+
+      // Act
+      await group(page, 'Open').getByTestId('group-toggle').click()
+      await group(page, 'Open').getByTestId('group-toggle').click()
+
+      // Assert
+      await expect(review(page, 'Acacia')).toContainText('HTTP 403')
+    })
+
+    test('leave the ticks and Start review (N) alone, and a click on a button does not tick its row', async () => {
+      // Arrange
+      const { page } = await startActions()
+      await page.getByLabel('Select Acacia').check()
+      await page.getByLabel('Select Camphor').check()
+      await expect(page.getByTestId('mine-start')).toHaveText('Start review (2)')
+
+      // Act
+      await approveBtn(page, 'Acacia').click()
+      await expect(review(page, 'Acacia')).toContainText('✓ Approved by you', WAIT)
+      await approveBtn(page, 'Ebony').click()
+      await expect(review(page, 'Ebony')).toContainText('✓ Approved by you', WAIT)
+      await state(page, 'Camphor').getByRole('button', { name: 'Mark as draft' }).click()
+      await expect(state(page, 'Camphor').locator('.statepill')).toHaveText('Draft', WAIT)
+
+      // Assert
+      await expect(page.getByLabel('Select Acacia')).toBeChecked()
+      await expect(page.getByLabel('Select Camphor')).toBeChecked()
+      await expect(page.getByLabel('Select Ebony')).not.toBeChecked()
+      await expect(page.getByTestId('mine-start')).toHaveText('Start review (2)')
+    })
+  })
+
+  test.describe('the same change in both tabs', () => {
+    test('an action in one tab refreshes the row there, and the other tab shows the new state when it opens, from the one shared snapshot', async () => {
+      // Arrange
+      const { page, forge: f } = await startActions()
+      const before = reads(f, glEp(908))
+
+      // Act
+      await approveBtn(page, 'Larch').click()
+      await expect(review(page, 'Larch')).toContainText('✓ Approved by you', WAIT)
+      await openTab(page, 'reviewer')
+
+      // Assert
+      await expect(review(page, 'Larch')).toContainText('✓ Approved by you')
+      expect(await usersIn(cellAt(row(page, 'Larch'), 'Approved by'))).toEqual(['me'])
+      expect(reads(f, glEp(908))).toBe(before + 1)
+
+      // Act: the other way round
+      await review(page, 'Larch').getByRole('button', { name: 'Revoke approval' }).click()
+      await expect(review(page, 'Larch')).toContainText('Not reviewed by you yet', WAIT)
+      await openTab(page, 'assigned')
+
+      // Assert
+      await expect(review(page, 'Larch')).toContainText('Not reviewed by you yet')
+      await expect(cellAt(row(page, 'Larch'), 'Approved by')).toHaveText('–')
+      expect(reads(f, glEp(908))).toBe(before + 2)
+    })
+  })
+
+  test.describe('the channel changes:submit by url', () => {
+    type Outcome = { settled: 'ok'; v: { ok: boolean; value?: Record<string, string>; error?: string } } | { settled: 'rejected'; message: string }
+    const lists = {
+      approve: [] as string[],
+      unapprove: [] as string[],
+      requestChanges: [] as string[],
+      summaries: {} as Record<string, string>,
+      ready: [] as string[],
+      draft: [] as string[]
+    }
+    const submit = (page: Page, req: Record<string, unknown>): Promise<Outcome> =>
+      page.evaluate(
+        (r) =>
+          (window.codeDiff.changes as unknown as { submit: (x: unknown) => Promise<never> }).submit(r).then(
+            (v) => ({ settled: 'ok' as const, v }),
+            (e: unknown) => ({ settled: 'rejected' as const, message: String(e) })
+          ),
+        { ...lists, ...req }
+      ) as Promise<Outcome>
+    const askSnapshot = (page: Page, url: string): Promise<{ ok: boolean }> =>
+      page.evaluate(async (u) => {
+        const mine = await window.codeDiff.changes.mine()
+        const item = mine.items.find((i) => i.url === u)!
+        return window.codeDiff.changes.snapshot({ url: u, updatedAt: item.updatedAt })
+      }, url) as Promise<{ ok: boolean }>
+    const valueOf = (o: Outcome): { ok: boolean; value?: Record<string, string>; error?: string } => (o as Extract<Outcome, { settled: 'ok' }>).v
+
+    test('answers like the review channel, with an empty record when every write worked, writes by the url and forgets the snapshot of that url', async () => {
+      // Arrange
+      const { page, forge: f } = await startActions()
+      const read = reads(f, glEp(902))
+
+      // Act
+      const outcome = await submit(page, { approve: [glUrl(902)] })
+
+      // Assert
+      expect(outcome).toEqual({ settled: 'ok', v: { ok: true, value: {} } })
+      expect(writeCalls(f)).toEqual([{ method: 'POST', endpoint: `${glEp(902)}/approve`, body: {} }])
+      expect((await askSnapshot(page, glUrl(902))).ok).toBe(true)
+      expect(reads(f, glEp(902))).toBe(read + 1)
+    })
+
+    test('answers with the error of each failed url and still forgets the snapshots of every url it named', async () => {
+      // Arrange
+      const { page, forge: f } = await startActions(patch(901, { writeFail: 'HTTP 403 nope' }))
+      const before = { gl: reads(f, glEp(901)), gh: reads(f, ghEp(911)) }
+
+      // Act
+      const outcome = await submit(page, { approve: [glUrl(901), ghUrl(911)] })
+
+      // Assert
+      expect(outcome.settled).toBe('ok')
+      const value = valueOf(outcome).value!
+      expect(Object.keys(value)).toEqual([glUrl(901)])
+      expect(value[glUrl(901)]).toContain('HTTP 403')
+      await askSnapshot(page, glUrl(901))
+      await askSnapshot(page, ghUrl(911))
+      expect(reads(f, glEp(901))).toBe(before.gl + 1)
+      expect(reads(f, ghEp(911))).toBe(before.gh + 1)
+    })
+
+    test('refuses the whole call and names the host when one url is on a host with no saved access, writing nothing and keeping the snapshots', async () => {
+      // Arrange
+      const { page, forge: f } = await startActions()
+      const read = reads(f, glEp(901))
+
+      // Act
+      const outcome = await submit(page, { approve: [glUrl(901), 'https://git.example.org/team/z/-/merge_requests/5'] })
+
+      // Assert
+      expect(outcome.settled).toBe('ok')
+      expect(valueOf(outcome).ok).toBe(false)
+      expect(valueOf(outcome).error).toContain('git.example.org')
+      expect(writeCalls(f)).toEqual([])
+      await askSnapshot(page, glUrl(901))
+      expect(reads(f, glEp(901))).toBe(read)
+    })
+
+    test('refuses the whole call when a url is not a merge request or pull request url, writing nothing', async () => {
+      // Arrange
+      const { page, forge: f } = await startActions()
+
+      // Act
+      const outcome = await submit(page, { approve: [glUrl(901)], summaries: { 'https://gitlab.com/team/backend/x/-/issues/4': 'hello' } })
+
+      // Assert
+      expect(outcome.settled).toBe('ok')
+      expect(valueOf(outcome).ok).toBe(false)
+      expect(valueOf(outcome).error).toContain('/-/issues/4')
+      expect(writeCalls(f)).toEqual([])
+    })
+
+    test('rejects a request with more than 100 urls in a list, a url longer than 2048 characters, a summary longer than 65536 characters or a missing list, and writes nothing', async () => {
+      // Arrange
+      const { page, forge: f } = await startActions()
+      const many = Array.from({ length: 101 }, (_, n) => glUrl(n + 1))
+      const long = `https://gitlab.com/${'a'.repeat(2_050)}/-/merge_requests/1`
+
+      // Act
+      const tooMany = await submit(page, { approve: many })
+      const tooLong = await submit(page, { approve: [long] })
+      const longKey = await submit(page, { summaries: { [long]: 'x' } })
+      const bigText = await submit(page, { summaries: { [glUrl(901)]: 'x'.repeat(65_537) } })
+      const noList = await page.evaluate(() =>
+        (window.codeDiff.changes as unknown as { submit: (x: unknown) => Promise<never> }).submit({ approve: [] }).then(
+          () => 'resolved',
+          () => 'rejected'
+        )
+      )
+
+      // Assert
+      for (const o of [tooMany, tooLong, longKey, bigText]) expect(o.settled).toBe('rejected')
+      expect(noList).toBe('rejected')
+      expect(writeCalls(f)).toEqual([])
+    })
+
+    test('accepts exactly 100 urls in a list and a summary of exactly 65536 characters', async () => {
+      // Arrange
+      const { page } = await startActions()
+      const hundred = Array.from({ length: 100 }, () => glUrl(907))
+
+      // Act
+      const ok100 = await submit(page, { approve: hundred })
+      const okText = await submit(page, { summaries: { [glUrl(901)]: 'x'.repeat(65_536) } })
+
+      // Assert
+      expect(ok100.settled).toBe('ok')
+      expect(okText.settled).toBe('ok')
+    })
   })
 })

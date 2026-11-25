@@ -116,7 +116,8 @@ const api: CodeDiffApi = {
   changes: {
     mine: () => ipcRenderer.invoke(CH.changesMine),
     snapshot: (req) => ipcRenderer.invoke(CH.changesSnapshot, req),
-    dropSnapshots: (urls) => ipcRenderer.invoke(CH.changesDropSnapshots, { urls })
+    dropSnapshots: (urls) => ipcRenderer.invoke(CH.changesDropSnapshots, { urls }),
+    submit: (req) => ipcRenderer.invoke(CH.changesSubmit, req)
   },
   events: {
     onOpenDev: (cb) => {

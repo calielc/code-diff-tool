@@ -16,6 +16,8 @@ export interface Mine {
   request: (items: MineItem[]) => void
   /** Makes the main process forget the snapshots of these changes, and reads them again once each. The old answers stay until the new ones arrive. */
   refresh: (items: MineItem[]) => void
+  /** Reads these changes again, once each, after a write that already made the main process drop their snapshots. The old answers stay until the new ones arrive. Resolves when every read has ended. */
+  reread: (items: MineItem[]) => Promise<void>
 }
 
 /** Reads the lists while a list tab is shown. They load at once, again every 60 seconds and again when the window gains focus. */
@@ -89,5 +91,12 @@ export function useMine(active: boolean): Mine {
     [request]
   )
 
-  return { data: result, answers, loading, reload: () => load(true), request, refresh }
+  const reread = useCallback(
+    async (items: MineItem[]): Promise<void> => {
+      await Promise.all(items.map(read))
+    },
+    [read]
+  )
+
+  return { data: result, answers, loading, reload: () => load(true), request, refresh, reread }
 }

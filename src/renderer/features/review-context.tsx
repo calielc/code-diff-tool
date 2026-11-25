@@ -55,6 +55,9 @@ export const useReview = (): ReviewCtx => {
   return c
 }
 
+/** The review context, or null on a screen that has no review, such as the home lists. */
+export const useOptionalReview = (): ReviewCtx | null => useContext(Ctx)
+
 export function ReviewProvider(props: { slug: string; result: BuildResult; onReload: () => void; children: React.ReactNode }): React.JSX.Element {
   const { slug } = props
   const [data, setData] = useState<BuildResult>(props.result)

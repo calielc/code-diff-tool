@@ -60,5 +60,6 @@ export const CH = {
   launchNew: 'launch:new',
   changesMine: 'changes:mine',
   changesSnapshot: 'changes:snapshot',
-  changesDropSnapshots: 'changes:dropSnapshots'
+  changesDropSnapshots: 'changes:dropSnapshots',
+  changesSubmit: 'changes:submit'
 } as const

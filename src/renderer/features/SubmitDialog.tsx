@@ -1,7 +1,9 @@
 import { useState } from 'react'
+import type { UrlSubmitInput } from '@shared/comments'
 import type { BuiltMr } from '@shared/review'
+import type { Result } from '@shared/types'
 import { api } from '../api'
-import { useReview } from './review-context'
+import { useOptionalReview } from './review-context'
 
 type Decision = 'comment' | 'approve' | 'changes'
 
@@ -9,8 +11,19 @@ type Decision = 'comment' | 'approve' | 'changes'
 export const reviewable = (mrs: BuiltMr[], viewer: string): BuiltMr[] =>
   mrs.filter((m) => m.snapshot.info.state === 'opened' && m.snapshot.info.author !== viewer)
 
-export function SubmitDialog(props: { mrs: BuiltMr[]; onClose(): void }): React.JSX.Element {
-  const r = useReview()
+type DialogMr = Pick<BuiltMr, 'key' | 'snapshot'>
+
+/**
+ * In a review the dialog sends the review keys to the review channel and reloads the review. On the home lists the caller gives `submit`, which gets the
+ * change urls as keys, and `onDone`, which runs after a successful submit.
+ */
+export function SubmitDialog(props: {
+  mrs: DialogMr[]
+  onClose(): void
+  submit?: (req: UrlSubmitInput) => Promise<Result<Record<string, string>>>
+  onDone?: () => void
+}): React.JSX.Element {
+  const r = useOptionalReview()
   const [text, setText] = useState<Record<string, string>>({})
   const [decision, setDecision] = useState<Record<string, Decision>>({})
   const [attempted, setAttempted] = useState(false)
@@ -30,15 +43,19 @@ export function SubmitDialog(props: { mrs: BuiltMr[]; onClose(): void }): React.
     const requestChanges = keys.filter((k) => choice(k) === 'changes')
     if (approve.length === 0 && requestChanges.length === 0 && Object.keys(summaries).length === 0) return props.onClose()
     setBusy(true)
-    const res = await api.review.submit({ slug: r.slug, approve, unapprove: [], requestChanges, summaries, ready: [], draft: [] })
+    const request = { approve, unapprove: [], requestChanges, summaries, ready: [], draft: [] }
+    const res = await (props.submit ? props.submit(request) : api.review.submit({ slug: r!.slug, ...request }))
     setBusy(false)
     if (!res.ok) return setBanner(`Could not submit: ${res.error}. Check the changes on the forge before you submit again.`)
     const failed = Object.entries(res.value)
     if (failed.length > 0) {
-      setBanner(`Not posted: ${failed.map(([k, e]) => `!${k.slice(k.lastIndexOf('!') + 1)}: ${e}`).join('; ')}. The other changes were posted.`)
+      const iidOf = (key: string): number | undefined => props.mrs.find((m) => m.key === key)?.snapshot.info.ref.iid
+      setBanner(`Not posted: ${failed.map(([k, e]) => `!${iidOf(k)}: ${e}`).join('; ')}. The other changes were posted.`)
       return
     }
-    r.reload() // read the changes again, so they show as the forge has them now
+    // read the changes again, so they show as the forge has them now
+    if (props.onDone) props.onDone()
+    else r?.reload()
     props.onClose()
   }
 

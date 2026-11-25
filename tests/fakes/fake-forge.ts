@@ -218,6 +218,13 @@ export interface SeedChange {
   snapshotFail?: boolean
   /** The viewer has asked for changes on this change. It then shows as a reviewer in the state `requested_changes`. */
   requestedChanges?: boolean
+  /**
+   * Every write call of this change (approve, unapprove, title, review, draft notes, draft state) answers with this failure text, for example `HTTP 403 nope`.
+   * To fail one endpoint only, spread a fixture entry such as `POST projects/<encoded path>/merge_requests/<iid>/approve` after the result of `changesFixture`.
+   */
+  writeFail?: string
+  /** Every write call of this change waits this long before it answers. */
+  writeSleepMs?: number
 }
 
 const paged = <T>(items: T[], query: Record<string, string>): T[] => {
@@ -285,7 +292,7 @@ const githubItem = (c: SeedChange): Record<string, unknown> => ({
  * `forge.setFixture` again with a longer list to seed one more change while the app runs.
  */
 export function changesFixture(seed: SeedChange[], opts: ChangesOptions = {}): Fixture {
-  // Copies, so a test can change the seed it passed in without changing what the fake already serves.
+  // The writes below change these copies, so the next read shows them and the seed of the test stays as it was.
   const changes: SeedChange[] = seed.map((c) => ({
     ...c,
     approvedBy: [...(c.approvedBy ?? [])],
@@ -329,7 +336,8 @@ export function changesFixture(seed: SeedChange[], opts: ChangesOptions = {}): F
         return { total_count: hits.length, incomplete_results: false, items: paged(hits.map(githubItem), q) }
       }
     },
-    ...fullRead(changes, opts)
+    ...fullRead(changes, opts),
+    ...writes(changes)
   }
 }
 
@@ -339,7 +347,8 @@ const headSha = (c: SeedChange): string => `head-${c.iid}`
 const baseSha = (c: SeedChange): string => `base-${c.iid}`
 const createdOf = (c: SeedChange): string => c.createdAt ?? new Date(Date.parse(c.updatedAt) - 2 * DAY_MS).toISOString()
 const mergedOf = (c: SeedChange): string | null => (c.state === 'merged' ? (c.mergedAt ?? c.updatedAt) : null)
-const sleepOf = (c: SeedChange | undefined, opts: ChangesOptions): number => c?.snapshotSleepMs ?? opts.snapshotSleepMs ?? 0
+const sleepOf = (c: SeedChange | undefined, opts: ChangesOptions, kind: 'read' | 'write' = 'read'): number =>
+  kind === 'write' ? (c?.writeSleepMs ?? 0) : (c?.snapshotSleepMs ?? opts.snapshotSleepMs ?? 0)
 const failOf = (c: SeedChange | undefined): string | undefined => (c?.snapshotFail ? 'HTTP 500 boom' : undefined)
 /** The jobs of a pipeline, with the stage `build` when the seed gives none. */
 const jobsOf = (c: SeedChange): NonNullable<SeedChange['pipeline']>['jobs'] =>
@@ -510,7 +519,15 @@ function fullRead(changes: SeedChange[], opts: ChangesOptions): Fixture {
     },
     // The threads of a pull request come from GraphQL. The body names the repo and the number.
     'POST graphql': {
+      sleepFor: (_q, _endpoint, body) => sleepOf(mutated(changes, body), { snapshotSleepMs: 0 }, 'write'),
+      failFor: (_q, _endpoint, body) => mutated(changes, body)?.writeFail,
       dynamic: (_q, _endpoint, body) => {
+        const m = mutated(changes, body)
+        if (m) {
+          const to = (body as { query: string }).query
+          m.state = to.includes('markPullRequestReadyForReview') ? 'opened' : 'draft'
+          return { data: {} }
+        }
         const v = (body as { variables?: { owner?: string; repo?: string; n?: number } } | undefined)?.variables
         const c = changes.find((x) => x.provider === 'github' && x.iid === v?.n && x.project === `${v?.owner}/${v?.repo}`)
         const nodes = threadsOf(c ?? ({} as SeedChange)).map((resolved, n) => ({
@@ -554,3 +571,103 @@ function fullRead(changes: SeedChange[], opts: ChangesOptions): Fixture {
 }
 
 const nodeId = (c: SeedChange): string => `PR_${c.project}#${c.iid}`
+/** The GitHub change that a draft-state mutation names, or undefined for any other GraphQL call. */
+function mutated(changes: SeedChange[], body: unknown): SeedChange | undefined {
+  const b = body as { query?: string; variables?: { id?: string } } | undefined
+  if (!b?.query?.includes('PullRequest') || !b.query.startsWith('mutation')) return undefined
+  return changes.find((c) => c.provider === 'github' && nodeId(c) === b.variables?.id)
+}
+const DRAFT_PREFIX = /^(?:(?:\[draft\]|\(draft\)|draft:)\s*)+/i
+
+/**
+ * The write endpoints of every seeded change, as the real forges take them. Each write changes the live copy of the change, so the next read shows it:
+ *   GitLab  POST .../approve and .../unapprove add and remove the viewer in approvedBy. PUT <change> with a title sets the state to draft when the title starts with `Draft:`
+ *           and to opened when it does not, and keeps the title without the prefix. POST .../draft_notes and .../draft_notes/bulk_publish take a review comment, and
+ *           bulk_publish with reviewer_state requested_changes marks the viewer as having asked for changes. GET .../draft_notes is an empty list.
+ *   GitHub  POST .../reviews with the event APPROVE, REQUEST_CHANGES or COMMENT adds a review of the viewer. PUT .../reviews/<id>/dismissals withdraws the approval of the viewer.
+ *           POST graphql with the mutation markPullRequestReadyForReview or convertPullRequestToDraft sets the state to opened or draft.
+ * A change with `writeFail` answers every one of these with that failure, and `writeSleepMs` makes each wait. The updated time never changes, so a test can tell a read
+ * that the app asked for again from one that the updated time made.
+ */
+function writes(changes: SeedChange[]): Fixture {
+  const gl = (endpoint: string): SeedChange | undefined => {
+    const [, project, , iid] = endpoint.split('/')
+    return changes.find((x) => x.provider === 'gitlab' && x.iid === Number(iid) && enc(x.project) === project)
+  }
+  const gh = (endpoint: string): SeedChange | undefined => {
+    const [, owner, repo, , n] = endpoint.split('/')
+    return changes.find((x) => x.provider === 'github' && x.iid === Number(n) && x.project === `${owner}/${repo}`)
+  }
+  const failGl = (_q: Record<string, string>, endpoint: string): string | undefined => gl(endpoint)?.writeFail
+  const sleepGl = (_q: Record<string, string>, endpoint: string): number => gl(endpoint)?.writeSleepMs ?? 0
+  const failGh = (_q: Record<string, string>, endpoint: string): string | undefined => gh(endpoint)?.writeFail
+  const sleepGh = (_q: Record<string, string>, endpoint: string): number => gh(endpoint)?.writeSleepMs ?? 0
+  const without = (c: SeedChange): void => {
+    c.approvedBy = (c.approvedBy ?? []).filter((u) => u !== VIEWER)
+    c.reviews = (c.reviews ?? []).filter((r) => !(r.user === VIEWER && r.state === 'APPROVED'))
+  }
+  return {
+    'POST projects/*/merge_requests/*/approve': {
+      sleepFor: sleepGl,
+      failFor: failGl,
+      dynamic: (_q, endpoint) => {
+        const c = gl(endpoint)
+        if (c && !(c.approvedBy ?? []).includes(VIEWER)) c.approvedBy = [...(c.approvedBy ?? []), VIEWER]
+        return {}
+      }
+    },
+    'POST projects/*/merge_requests/*/unapprove': {
+      sleepFor: sleepGl,
+      failFor: failGl,
+      dynamic: (_q, endpoint) => {
+        const c = gl(endpoint)
+        if (c) without(c)
+        return {}
+      }
+    },
+    'PUT projects/*/merge_requests/*': {
+      sleepFor: sleepGl,
+      failFor: failGl,
+      dynamic: (_q, endpoint, body) => {
+        const c = gl(endpoint)
+        const title = String((body as { title?: string } | undefined)?.title ?? '')
+        if (c) {
+          c.state = DRAFT_PREFIX.test(title) ? 'draft' : 'opened'
+          c.title = title.replace(DRAFT_PREFIX, '')
+        }
+        return {}
+      }
+    },
+    'GET projects/*/merge_requests/*/draft_notes': { sleepFor: sleepGl, failFor: failGl, json: [] },
+    'POST projects/*/merge_requests/*/draft_notes': { sleepFor: sleepGl, failFor: failGl, empty: true },
+    'POST projects/*/merge_requests/*/draft_notes/bulk_publish': {
+      sleepFor: sleepGl,
+      failFor: failGl,
+      dynamic: (_q, endpoint, body) => {
+        const c = gl(endpoint)
+        if (c && (body as { reviewer_state?: string } | undefined)?.reviewer_state === 'requested_changes') c.requestedChanges = true
+        return {}
+      }
+    },
+    'POST repos/*/*/pulls/*/reviews': {
+      sleepFor: sleepGh,
+      failFor: failGh,
+      dynamic: (_q, endpoint, body) => {
+        const c = gh(endpoint)
+        const event = (body as { event?: string } | undefined)?.event
+        const state = event === 'APPROVE' ? 'APPROVED' : event === 'REQUEST_CHANGES' ? 'CHANGES_REQUESTED' : 'COMMENTED'
+        if (c) c.reviews = [...(c.reviews ?? []), { user: VIEWER, state }]
+        return {}
+      }
+    },
+    'PUT repos/*/*/pulls/*/reviews/*/dismissals': {
+      sleepFor: sleepGh,
+      failFor: failGh,
+      dynamic: (_q, endpoint) => {
+        const c = gh(endpoint)
+        if (c) without(c)
+        return {}
+      }
+    }
+  }
+}

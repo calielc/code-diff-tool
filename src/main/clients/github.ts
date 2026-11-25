@@ -1,4 +1,5 @@
 import type { Approvals, ChangeInfo, ChangeRef, ChangeSnapshot, Note, Person, PipelineJob, ReviewerState, Thread } from '@shared/provider'
+import { mineReviewers } from '@shared/my-changes'
 import { forgeApi, forgePaged, githubAt } from './forge-api'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -27,6 +28,8 @@ function addPerson(people: Record<string, Person>, u: J | null | undefined): voi
 /** GET pulls/{n}. GitHub has no diff_refs, so base and start are the base sha and the merge base comes from git. */
 export function mapPull(ref: ChangeRef, pr: J, people: Record<string, Person>): ChangeInfo {
   addPerson(people, pr.user)
+  const requested = Array.isArray(pr.requested_reviewers) ? (pr.requested_reviewers as J[]) : []
+  for (const u of requested) addPerson(people, u)
   const state = pr.merged === true || pr.merged_at ? 'merged' : pr.state === 'closed' ? 'closed' : 'opened'
   const baseSha = str(pr.base?.sha)
   return {
@@ -37,6 +40,7 @@ export function mapPull(ref: ChangeRef, pr: J, people: Record<string, Person>): 
     description: str(pr.body),
     draft: pr.draft === true,
     author: str(pr.user?.login),
+    reviewers: requested.map((u) => str(u?.login)).filter(Boolean),
     sourceBranch: str(pr.head?.ref),
     targetBranch: str(pr.base?.ref),
     createdAt: str(pr.created_at),
@@ -179,6 +183,11 @@ export async function readPull(ref: ChangeRef): Promise<ChangeSnapshot> {
   const status = overallStatus(jobs)
   info.pipeline = status ? { status, url: `${info.url}/checks`, id: null, projectId: null } : null
   const { approvals, viewerState } = mapReviews(reviews, viewer, info.author, people)
+  const submitted = [...reviews]
+    .sort((a, b) => str(a.submitted_at).localeCompare(str(b.submitted_at)))
+    .map((r) => ({ user: str(r.user?.login), state: str(r.state) }))
+  info.reviewers = mineReviewers(info.reviewers, submitted, info.author).filter(Boolean)
+  for (const r of reviews) if (info.reviewers.includes(str(r.user?.login))) addPerson(people, r.user)
   return { info, approvals, threads, viewerState, jobs, people, viewer }
 }
 

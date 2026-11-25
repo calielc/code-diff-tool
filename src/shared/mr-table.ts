@@ -79,15 +79,21 @@ export interface YourReview {
   text: string
   tone: 'ok' | 'bad' | 'muted'
   tooltip: string | null
-  /** The buttons, left to right. Empty unless the MR is open. */
+  /** The buttons, left to right. Empty unless the MR is open and the viewer is not the author. Mark as ready and Mark as draft are in `stateActions`. */
   actions: ReviewAction[]
+}
+
+/** The mark-ready and mark-draft buttons: only the author of an open MR gets one. */
+export function stateActions(i: YourReviewInput): ReviewAction[] {
+  if (i.state !== 'opened' || i.author !== i.viewer) return []
+  return [i.draft ? 'mark-ready' : 'mark-draft']
 }
 
 export function yourReview(i: YourReviewInput): YourReview {
   const isAuthor = i.author === i.viewer
   let actions: ReviewAction[] = []
   if (i.state === 'opened') {
-    if (isAuthor) actions = [i.draft ? 'mark-ready' : 'mark-draft']
+    if (isAuthor) actions = []
     else if (i.userHasApproved) actions = ['submit', 'revoke']
     else actions = i.userCanApprove ? ['submit', 'approve'] : ['submit']
   }
@@ -275,7 +281,7 @@ export function pipelineStages(jobs: PipelineJob[]): PipelineStage[] {
 }
 
 export type MrSortKey =
-  'mr' | 'stack' | 'title' | 'repo' | 'pipeline' | 'author' | 'approved' | 'review' | 'comments' | 'created' | 'updated' | 'merged' | 'state'
+  'mr' | 'stack' | 'title' | 'repo' | 'pipeline' | 'author' | 'reviewers' | 'approved' | 'review' | 'comments' | 'created' | 'updated' | 'merged' | 'state'
 
 export interface MrSortRow {
   iid: number
@@ -285,6 +291,8 @@ export interface MrSortRow {
   /** The display name, or the user name when no name is known. */
   authorName: string
   approverCount: number
+  /** Null when the reviewers are not known. */
+  reviewerCount: number | null
   pipelineStatus: string | null
   /** YourReview.order */
   reviewOrder: number
@@ -311,6 +319,8 @@ export function mrSortValue(row: MrSortRow, key: MrSortKey): string | number | n
       return pipelineRank(row.pipelineStatus)
     case 'author':
       return row.authorName.toLowerCase()
+    case 'reviewers':
+      return row.reviewerCount
     case 'approved':
       return row.approverCount
     case 'review':
@@ -328,10 +338,31 @@ export function mrSortValue(row: MrSortRow, key: MrSortKey): string | number | n
   }
 }
 
+/** An empty value sorts first. Text sorts without regard to case, numbers and dates as numbers. */
+export function compareValues(x: string | number | null, y: string | number | null): number {
+  if (x === null || y === null) return x === y ? 0 : x === null ? -1 : 1
+  return typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y), undefined, { numeric: true })
+}
+
 export const DEFAULT_MR_SORT: { key: MrSortKey; dir: 'asc' | 'desc' } = { key: 'created', dir: 'asc' }
 
 /** Reads the stored sort. Nothing, bad JSON, an unknown key (an old one such as "branch") or a bad direction gives the default. The stored text "null" gives null: the order of the review. */
-const SORT_KEYS: MrSortKey[] = ['mr', 'stack', 'title', 'repo', 'pipeline', 'author', 'approved', 'review', 'comments', 'created', 'updated', 'merged', 'state']
+const SORT_KEYS: MrSortKey[] = [
+  'mr',
+  'stack',
+  'title',
+  'repo',
+  'pipeline',
+  'author',
+  'reviewers',
+  'approved',
+  'review',
+  'comments',
+  'created',
+  'updated',
+  'merged',
+  'state'
+]
 
 export function parseStoredMrSort(raw: string | null): { key: MrSortKey; dir: 'asc' | 'desc' } | null {
   if (raw === 'null') return null

@@ -60,6 +60,8 @@ export interface ChangeInfo {
   description: string
   draft: boolean
   author: string
+  /** The user names of the people asked to review, or that reviewed. Empty when unknown. */
+  reviewers: string[]
   sourceBranch: string
   targetBranch: string
   createdAt: string

@@ -42,7 +42,6 @@ Two files hold the details.
 - The app has one window. Two reviews cannot be open side by side.
 - A commit of a file shows without comments or threads, because its lines are not the lines of HEAD. Mapping them is not done.
 - The Diff tab has no per-commit view for the combined view.
-- The pictures of the Code changes table do not have the columns Created, Merged and the filter chips of the design.
 - Avatars show initials only.
 - The installers are not signed, and the macOS app is not notarized. The app does not update itself.
 - macOS has no automated test run in the CI. The installer workflow builds the macOS app and starts it once.

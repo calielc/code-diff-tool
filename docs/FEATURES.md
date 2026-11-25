@@ -41,11 +41,12 @@ The table lists the issues with their type, title, status, assignee, number of c
 
 ![The Code changes tab](docs/images/code-changes.png)
 
-The table has one row for each change with its number, stack position, title and branches, repo, state, pipeline, author, approvals, your review status, comments and dates.
+The table has one row for each change. The columns are Repo, MR, Stack, Title, Pipeline, Author, Reviewers, Approved by, Your review, Comments, Created, Updated, Merged and State, in that order. The Title cell shows the source and target branch. The Reviewers cell shows an avatar for each person asked to review the change. On GitHub it also shows the people who already reviewed it, except the author. A dash means nobody.
 
 - Each branch pair shows a badge: "Up to date", or "N behind" when the change is behind its target branch.
-- The state filters hide drafts, open, merged and closed changes. Every column sorts. The first click sorts ascending, the second descending, and the third goes back to the order of the review.
-- The row shows what you can do: submit a review, approve, revoke your approval, mark a draft as ready, or mark a ready change as draft. Mark as ready has a circle with a check. Mark as draft has a pencil on a dashed circle.
+- The state filters hide drafts, open, merged and closed changes. The approval filters hide approved or not approved changes. Every column sorts. The first click sorts ascending, the second descending, and the third goes back to the order of the review. The Reviewers column sorts by the number of people.
+- Four buttons, "No group", "Repo", "State" and "Approval", group the rows. No group is on at the start, and the app does not keep the choice. A group header shows its name and the number of rows shown, for example `Open · 4`. Its chevron button, or a click on the header text, hides or shows the rows of the group. The rows of a group follow the sort, and equal values go by the newest update. The app keeps the hidden groups while the review is open. The state filters, the approval filters and the sort are saved for the next start.
+- The Your review cell shows your status and what you can do: submit a review, approve, or revoke your approval. The State cell shows the state, the auto-merge badge and, on your own open changes, one button: mark a draft as ready, or mark a ready change as draft. Mark as ready has a circle with a check. Mark as draft has a pencil on a dashed circle.
 - Merged and closed changes are read only. A closed change has no diff.
 - The threads of the conversation, which are not on a line, show under the row.
 

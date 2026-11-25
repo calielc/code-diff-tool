@@ -113,6 +113,11 @@ const api: CodeDiffApi = {
       return () => ipcRenderer.removeListener(CH.launchNew, listener)
     }
   },
+  changes: {
+    mine: () => ipcRenderer.invoke(CH.changesMine),
+    snapshot: (req) => ipcRenderer.invoke(CH.changesSnapshot, req),
+    dropSnapshots: (urls) => ipcRenderer.invoke(CH.changesDropSnapshots, { urls })
+  },
   events: {
     onOpenDev: (cb) => {
       const listener = (): void => cb()

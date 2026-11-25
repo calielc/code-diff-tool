@@ -11,6 +11,7 @@ import { registerSectionsHandlers } from './ipc/sections'
 import { registerAiHandlers } from './ipc/ai'
 import { registerCommitHandlers } from './ipc/commits'
 import { currentTheme, registerThemeHandlers, setTheme } from './ipc/theme'
+import { registerChangesHandlers } from './ipc/changes'
 import { registerLaunchHandlers, receiveLaunch } from './ipc/launch'
 import { parseLaunchRequest, PROTOCOL } from '@shared/launch'
 import { stopAllRuns, markStaleRecords } from './services/ai-runs'
@@ -100,6 +101,7 @@ if (!app.requestSingleInstanceLock()) {
     registerAiHandlers()
     registerCommitHandlers()
     registerLaunchHandlers()
+    registerChangesHandlers()
     void readAppState().then(async (st) => {
       if (st.workspaceRoot) await markStaleRecords(st.workspaceRoot)
     })

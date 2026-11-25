@@ -393,6 +393,8 @@ export interface ChangesTableProps {
   onFilters: (next: MrFilters) => void
   groupMode: RowGroupMode
   onGroupMode: (mode: RowGroupMode) => void
+  /** An extra first column, for example a checkbox. */
+  leading?: { header: React.ReactNode; cell: (row: ChangeRow) => React.ReactNode }
   onAction?: (row: ChangeRow, action: RowAction) => void
   onSubmit?: (row: ChangeRow) => void
   /** The action that runs now, by row id. */
@@ -475,7 +477,7 @@ export function ChangesTable(props: ChangesTableProps): React.JSX.Element {
   const anyState = Object.values(filters.states).some(Boolean)
   const approvals = approvalCounts(rows, anyState ? filters.states : { draft: true, opened: true, merged: true, closed: true })
   const ctx: CellContext = { stacks, busy: props.busy, errors: props.errors, onAction: props.onAction, onSubmit: props.onSubmit }
-  const columnCount = COLUMN_DEFS.length
+  const columnCount = COLUMN_DEFS.length + (props.leading ? 1 : 0)
 
   return (
     <>
@@ -532,6 +534,7 @@ export function ChangesTable(props: ChangesTableProps): React.JSX.Element {
       <table className="reviews">
         <thead>
           <tr>
+            {props.leading && <th>{props.leading.header}</th>}
             {COLUMN_DEFS.map((c) => (
               <th key={c.key} aria-sort={sort?.key === c.key ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
                 <button className="link" data-testid={`sort-${c.key}`} title={`Sort by ${c.label}`} onClick={() => props.onSort(c.key)}>
@@ -574,6 +577,7 @@ export function ChangesTable(props: ChangesTableProps): React.JSX.Element {
               ),
               ...(open ? g.rows : []).map((row) => (
                 <tr key={row.id} data-testid={`mr-${row.id}`} data-url={row.url}>
+                  {props.leading && <td>{props.leading.cell(row)}</td>}
                   {COLUMN_DEFS.map((c) => (
                     <Fragment key={c.key}>{c.cell(row, ctx)}</Fragment>
                   ))}

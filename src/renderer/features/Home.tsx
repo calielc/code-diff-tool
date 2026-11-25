@@ -4,7 +4,10 @@ import type { LaunchRequest } from '@shared/launch'
 import { api } from '../api'
 import { AddToReview } from './AddToReview'
 import { NewReview } from './NewReview'
+import { MineList } from './MineList'
+import { useMine } from './useMine'
 
+type Tab = 'reviews' | 'assigned' | 'reviewer'
 type SortKey = 'title' | 'mrs' | 'issues' | 'lastOpened' | 'summarised'
 
 const SUMMARISED_LABEL: Record<SummarisedState, string> = { writing: 'Writing…', failed: 'Failed', ready: 'Ready', 'not-written': 'Not written' }
@@ -47,6 +50,20 @@ export function Home(props: {
   const [showNew, setShowNew] = useState(false)
   const [initial, setInitial] = useState<LaunchRequest | null>(null)
   const [addTo, setAddTo] = useState<LaunchRequest | null>(null)
+  const [tab, setTab] = useState<Tab>('reviews')
+  // The ticks of the two lists of changes are one selection, kept by url. It clears when the New review form closes.
+  const [picked, setPicked] = useState<Set<string>>(new Set())
+  const mine = useMine(tab !== 'reviews')
+  const toggle = (url: string): void =>
+    setPicked((p) => {
+      const next = new Set(p)
+      if (!next.delete(url)) next.add(url)
+      return next
+    })
+  const startPicked = (): void => {
+    setInitial({ mrs: [...picked], issues: [], title: '', review: '' })
+    setShowNew(true)
+  }
   // A request from outside adds to the review it names when that review exists, else it starts a new review.
   useEffect(() => {
     const request = props.launch
@@ -98,6 +115,7 @@ export function Home(props: {
   }
 
   const onKey = (e: React.KeyboardEvent): void => {
+    if (tab !== 'reviews') return
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
       e.preventDefault()
       filterRef.current?.focus()
@@ -121,113 +139,151 @@ export function Home(props: {
           <button onClick={props.onOpenPrereq}>Open Prerequisites</button>
         </div>
       )}
-      <header>
-        <h1>Reviews</h1>
-        {total > 0 && (
-          <input
-            ref={filterRef}
-            aria-label="Filter reviews"
-            placeholder="Filter reviews"
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            onKeyDown={(e) => e.key === 'Escape' && setFilter('')}
-          />
-        )}
-        <button className="primary" data-testid="new-review" disabled={!!props.blocked} title={gate} onClick={() => setShowNew(true)}>
-          New review
-        </button>
-        <button onClick={props.onOpenPrereq}>Prerequisites…</button>
-      </header>
-      <p className="muted" data-testid="review-count">
-        {reviews === null ? 'Reading reviews…' : `${total} ${total === 1 ? 'review' : 'reviews'}`}
-      </p>
-
-      {reviews !== null && total === 0 && (
-        <div className="empty">
-          <p>No reviews yet.</p>
-          <p className="muted">Create a review from the merge or pull requests of an issue.</p>
-          <button className="primary" disabled={!!props.blocked} title={gate} onClick={() => setShowNew(true)}>
+      <div className="tabs" role="tablist">
+        {(
+          [
+            ['reviews', 'Reviews'],
+            ['assigned', 'Assigned to me'],
+            ['reviewer', 'I am the reviewer']
+          ] as const
+        ).map(([key, label]) => (
+          <button
+            key={key}
+            role="tab"
+            className={tab === key ? 'on' : ''}
+            aria-selected={tab === key}
+            data-testid={`home-tab-${key}`}
+            onClick={() => setTab(key)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {tab !== 'reviews' && (
+        <header>
+          <span className="grow" />
+          <button className="primary" data-testid="new-review" disabled={!!props.blocked} title={gate} onClick={() => setShowNew(true)}>
             New review
           </button>
-        </div>
+          <button onClick={props.onOpenPrereq}>Prerequisites…</button>
+        </header>
       )}
-
-      {total > 0 && (
+      {tab !== 'reviews' && (
+        <MineList role={tab} mine={mine} picked={picked} onToggle={toggle} onStart={startPicked} blocked={props.blocked} onOpenPrereq={props.onOpenPrereq} />
+      )}
+      {tab === 'reviews' && (
         <>
-          <div className="mrtools reviewtools">
-            <div className="seg toggles" role="group" aria-label="Show reviews by summarised state">
-              {SUMMARISED_ORDER.map((k) => (
-                <button
-                  key={k}
-                  className={summarised[k] ? 'on' : ''}
-                  aria-pressed={summarised[k]}
-                  title={`Show or hide the reviews that are ${SUMMARISED_LABEL[k].toLowerCase().replace('…', '')}`}
-                  onClick={() => setSummarised({ ...summarised, [k]: !summarised[k] })}
-                >
-                  {SUMMARISED_LABEL[k]} <small>{(reviews ?? []).filter((r) => r.summarised === k).length}</small>
-                </button>
-              ))}
-            </div>
-          </div>
-          <table className="reviews">
-            <thead>
-              <tr>
-                {head('title', 'Name')}
-                {head('mrs', 'Changes', true)}
-                {head('issues', 'Issues', true)}
-                {head('lastOpened', 'Last opened')}
-                {head('summarised', 'Summarised')}
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr
-                  key={r.slug}
-                  data-testid={`review-${r.slug}`}
-                  className={r.slug === selected ? 'selected' : ''}
-                  onClick={() => setSelected(r.slug)}
-                  onDoubleClick={() => open(r)}
-                >
-                  <td className={r.unreadable ? 'bad-text' : 'cut strong'} title={r.title ?? r.slug}>
-                    {r.unreadable ? 'Unreadable review.json' : (r.title ?? r.slug)}
-                  </td>
-                  <td className="num">{r.mrCount ?? '–'}</td>
-                  <td className="num">{r.issueCount ?? '–'}</td>
-                  <td title={r.openedAt ?? `Last changed ${when(r.modifiedAt)}`}>
-                    {r.openedAt ? when(r.openedAt) : <span className="muted">Never opened here</span>}
-                  </td>
-                  <td>
-                    <span className={`summ ${r.summarised}`}>{SUMMARISED_LABEL[r.summarised]}</span>
-                  </td>
-                  <td className="rowactions">
-                    <button disabled={!!props.blocked || r.unreadable} title={r.unreadable ? 'review.json cannot be read' : gate} onClick={() => open(r)}>
-                      Open
-                    </button>
-                    <button aria-label={`Delete review ${r.slug}`} onClick={() => setDeleting(r.slug)}>
-                      Delete
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {rows.length === 0 && (
+          <header>
+            <h1>Reviews</h1>
+            {total > 0 && (
+              <>
+                <input
+                  ref={filterRef}
+                  aria-label="Filter reviews"
+                  placeholder="Filter reviews"
+                  value={filter}
+                  onChange={(e) => setFilter(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Escape' && setFilter('')}
+                />
+              </>
+            )}
+            <button className="primary" data-testid="new-review" disabled={!!props.blocked} title={gate} onClick={() => setShowNew(true)}>
+              New review
+            </button>
+            <button onClick={props.onOpenPrereq}>Prerequisites…</button>
+          </header>
+          <p className="muted" data-testid="review-count">
+            {reviews === null ? 'Reading reviews…' : `${total} ${total === 1 ? 'review' : 'reviews'}`}
+          </p>
+
+          {reviews !== null && total === 0 && (
             <div className="empty">
-              <p>No review matches "{filter}".</p>
-              <button
-                onClick={() => {
-                  setFilter('')
-                  setSummarised(ALL_SUMMARISED)
-                }}
-              >
-                Clear filter
+              <p>No reviews yet.</p>
+              <p className="muted">Create a review from the merge or pull requests of an issue.</p>
+              <button className="primary" disabled={!!props.blocked} title={gate} onClick={() => setShowNew(true)}>
+                New review
               </button>
             </div>
           )}
-          <p className="muted" data-testid="showing">
-            Showing {rows.length} of {total} {total === 1 ? 'review' : 'reviews'}
-          </p>
+
+          {total > 0 && (
+            <>
+              <div className="mrtools reviewtools">
+                <div className="seg toggles" role="group" aria-label="Show reviews by summarised state">
+                  {SUMMARISED_ORDER.map((k) => (
+                    <button
+                      key={k}
+                      className={summarised[k] ? 'on' : ''}
+                      aria-pressed={summarised[k]}
+                      title={`Show or hide the reviews that are ${SUMMARISED_LABEL[k].toLowerCase().replace('…', '')}`}
+                      onClick={() => setSummarised({ ...summarised, [k]: !summarised[k] })}
+                    >
+                      {SUMMARISED_LABEL[k]} <small>{(reviews ?? []).filter((r) => r.summarised === k).length}</small>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <table className="reviews">
+                <thead>
+                  <tr>
+                    {head('title', 'Name')}
+                    {head('mrs', 'Changes', true)}
+                    {head('issues', 'Issues', true)}
+                    {head('lastOpened', 'Last opened')}
+                    {head('summarised', 'Summarised')}
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((r) => (
+                    <tr
+                      key={r.slug}
+                      data-testid={`review-${r.slug}`}
+                      className={r.slug === selected ? 'selected' : ''}
+                      onClick={() => setSelected(r.slug)}
+                      onDoubleClick={() => open(r)}
+                    >
+                      <td className={r.unreadable ? 'bad-text' : 'cut strong'} title={r.title ?? r.slug}>
+                        {r.unreadable ? 'Unreadable review.json' : (r.title ?? r.slug)}
+                      </td>
+                      <td className="num">{r.mrCount ?? '–'}</td>
+                      <td className="num">{r.issueCount ?? '–'}</td>
+                      <td title={r.openedAt ?? `Last changed ${when(r.modifiedAt)}`}>
+                        {r.openedAt ? when(r.openedAt) : <span className="muted">Never opened here</span>}
+                      </td>
+                      <td>
+                        <span className={`summ ${r.summarised}`}>{SUMMARISED_LABEL[r.summarised]}</span>
+                      </td>
+                      <td className="rowactions">
+                        <button disabled={!!props.blocked || r.unreadable} title={r.unreadable ? 'review.json cannot be read' : gate} onClick={() => open(r)}>
+                          Open
+                        </button>
+                        <button aria-label={`Delete review ${r.slug}`} onClick={() => setDeleting(r.slug)}>
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {rows.length === 0 && (
+                <div className="empty">
+                  <p>No review matches "{filter}".</p>
+                  <button
+                    onClick={() => {
+                      setFilter('')
+                      setSummarised(ALL_SUMMARISED)
+                    }}
+                  >
+                    Clear filter
+                  </button>
+                </div>
+              )}
+              <p className="muted" data-testid="showing">
+                Showing {rows.length} of {total} {total === 1 ? 'review' : 'reviews'}
+              </p>
+            </>
+          )}
         </>
       )}
 
@@ -248,9 +304,11 @@ export function Home(props: {
           onClose={() => {
             setShowNew(false)
             setInitial(null)
+            setPicked(new Set())
           }}
           onCreated={(slug) => {
             setShowNew(false)
+            setPicked(new Set())
             void load()
             props.onOpenReview(slug)
           }}

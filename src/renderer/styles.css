@@ -260,11 +260,6 @@ table.reviews tr.selected {
 table.reviews .rowactions {
   white-space: nowrap;
   text-align: right;
-  visibility: hidden;
-}
-table.reviews tr:hover .rowactions,
-table.reviews tr.selected .rowactions {
-  visibility: visible;
 }
 button.link {
   border: 0;
@@ -1191,4 +1186,8 @@ button.ask {
 .tokenhelp > ul {
   margin: 4px 0;
   padding-left: 20px;
+}
+.reviewtools {
+  justify-content: flex-end;
+  margin-top: 8px;
 }

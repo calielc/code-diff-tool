@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { SECTIONS_PROMPT_VERSION } from '../../src/shared/sections'
-import { forgeEnv, startFakeForge, type FakeForge, type Fixture } from '../fakes/fake-forge'
+import { changesFixture, FAKE_GITLAB_USER_ID, forgeEnv, startFakeForge, type FakeForge, type Fixture, type SeedChange } from '../fakes/fake-forge'
 
 // Takes screenshots of the main screens, to compare them with the design. Runs only with SHOTS=<folder>.
 const out = process.env['SHOTS']
@@ -33,6 +33,73 @@ const FILES: Record<string, [string | null, string | null]> = {
   'test/Api.Tests/ProgramTests.cs': ['class T { }\n', 'class T\n{\n    void A() { }\n}\n'],
   'README.md': ['# Service\n', '# Service\n\nGenerated clients are published from CI.\n']
 }
+
+const hoursAgo = (hours: number): string => new Date(Date.now() - hours * 3_600_000).toISOString()
+// Made-up changes for the two lists of the home screen.
+const MINE: SeedChange[] = [
+  {
+    provider: 'gitlab',
+    project: 'team/web/portal',
+    iid: 312,
+    title: 'Add the export button to the report page',
+    state: 'opened',
+    author: 'ann',
+    updatedAt: hoursAgo(3),
+    assigned: true,
+    reviewers: ['sam'],
+    approvedBy: ['sam'],
+    pipeline: { status: 'success' },
+    threads: { open: 1, resolved: 2 }
+  },
+  {
+    provider: 'gitlab',
+    project: 'team/web/portal',
+    iid: 305,
+    title: 'Fix the date in the weekly summary',
+    state: 'draft',
+    author: 'me',
+    updatedAt: hoursAgo(20),
+    assigned: true,
+    pipeline: { status: 'running' }
+  },
+  {
+    provider: 'github',
+    project: 'acme/docs',
+    iid: 87,
+    title: 'Update the setup guide',
+    state: 'opened',
+    author: 'bob',
+    updatedAt: hoursAgo(30),
+    assigned: true,
+    reviewer: true,
+    reviews: [{ user: 'ann', state: 'COMMENTED' }]
+  },
+  {
+    provider: 'gitlab',
+    project: 'team/backend/billing',
+    iid: 58,
+    title: 'Round the invoice total to two decimals',
+    state: 'opened',
+    author: 'dee',
+    updatedAt: hoursAgo(5),
+    reviewer: true,
+    reviewers: ['ann'],
+    pipeline: { status: 'failed' },
+    behind: 4
+  },
+  {
+    provider: 'gitlab',
+    project: 'team/backend/billing',
+    iid: 54,
+    title: 'Remove the old tax table',
+    state: 'merged',
+    author: 'cy',
+    updatedAt: hoursAgo(70),
+    reviewer: true,
+    approvedBy: ['ann'],
+    pipeline: { status: 'success' }
+  }
+]
 
 test('screenshots of the main screens', async () => {
   test.skip(!out, 'set SHOTS=<folder>')
@@ -66,7 +133,8 @@ test('screenshots of the main screens', async () => {
   writeFileSync(join(ud, 'app-state.json'), JSON.stringify({ schemaVersion: 1, workspaceRoot: root, firstRunDone: true }))
   const P = encodeURIComponent('team/backend/api-service')
   const fixture: Fixture = {
-    'GET user': { json: { username: 'sam' } },
+    ...changesFixture(MINE),
+    'GET user': { json: { id: FAKE_GITLAB_USER_ID, username: 'me', login: 'me' } },
     [`GET projects/${P}/merge_requests/104`]: {
       json: {
         web_url: 'https://gitlab.com/team/backend/api-service/-/merge_requests/104',
@@ -232,6 +300,15 @@ test('screenshots of the main screens', async () => {
   const shot = (name: string): Promise<Buffer> => page.screenshot({ path: join(out!, `${name}.png`) })
   await expect(page.getByRole('heading').first()).toBeVisible()
   await shot('home')
+  await page.getByTestId('home-tab-assigned').click()
+  await expect(page.locator('tr[data-testid^="mr-"]').first()).toBeVisible()
+  await expect(page.locator('tr[data-testid^="mr-"]').getByText('…')).toHaveCount(0, { timeout: 20_000 })
+  await shot('home-assigned')
+  await page.getByTestId('home-tab-reviewer').click()
+  await expect(page.locator('tr[data-testid^="mr-"]').first()).toBeVisible()
+  await expect(page.locator('tr[data-testid^="mr-"]').getByText('…')).toHaveCount(0, { timeout: 20_000 })
+  await shot('home-reviewer')
+  await page.getByTestId('home-tab-reviews').click()
   await page.getByTestId('review-APP-101').dblclick()
   await expect(page.getByTestId('mrs-tab')).toBeVisible()
   await shot('code-changes')

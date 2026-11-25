@@ -1,4 +1,5 @@
 // One row of the shared MR/PR table and the pure rules that group, filter, sort and count the rows.
+import type { MineItem } from './my-changes'
 import { mrStateKey, mrVisible, type MrFilters, type MrStateKey } from './mr-table'
 import { parseChangeUrl, type ChangeSnapshot, type ChangeState, type Person } from './provider'
 
@@ -47,6 +48,28 @@ export interface RowGroup {
 const STATE_ORDER: MrStateKey[] = ['draft', 'opened', 'merged', 'closed']
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
 const textOrder = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0)
+
+export function rowFromMine(item: MineItem, viewer: string): ChangeRow {
+  return {
+    id: item.url,
+    url: item.url,
+    repo: item.project,
+    iid: item.iid,
+    state: item.state === 'draft' ? 'opened' : item.state,
+    draft: item.state === 'draft',
+    title: item.title,
+    updatedAt: item.updatedAt,
+    snapshot: null,
+    stub: { author: item.author, reviewers: [...item.reviewers], people: item.people, approvedBy: item.approvedBy },
+    defaultBranch: null,
+    people: item.people,
+    viewer,
+    drafts: 0
+  }
+}
+
+/** The rows of the home lists, in the order of the items. The viewer of a row is the signed-in user of its host, or empty. */
+export const mineRows = (items: MineItem[], viewers: Record<string, string>): ChangeRow[] => items.map((item) => rowFromMine(item, viewers[item.host] ?? ''))
 
 /** A row of a review: the snapshot is complete, so there is no stub. */
 export function rowFromSnapshot(mr: { key: string; repo: string; defaultBranch: string | null; snapshot: ChangeSnapshot }, drafts: number): ChangeRow {

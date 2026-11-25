@@ -57,5 +57,8 @@ export const CH = {
   themeSet: 'theme:set',
   reviewsAddTo: 'reviews:addTo',
   launchTake: 'launch:take',
-  launchNew: 'launch:new'
+  launchNew: 'launch:new',
+  changesMine: 'changes:mine',
+  changesSnapshot: 'changes:snapshot',
+  changesDropSnapshots: 'changes:dropSnapshots'
 } as const

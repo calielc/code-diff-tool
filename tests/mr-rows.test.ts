@@ -1,7 +1,25 @@
 import { describe, expect, it } from 'vitest'
 import type { ChangeInfo, ChangeSnapshot, ChangeState } from '../src/shared/provider'
+import { DEFAULT_MINE_APPROVALS, DEFAULT_MINE_STATES, type MineItem, type MineState } from '../src/shared/my-changes'
 import { mrStateKey, type MrFilters, type MrStateKey } from '../src/shared/mr-table'
-import { approvalCounts, groupRows, rowApproved, rowStateKey, stateCounts, type ChangeRow } from '../src/shared/mr-rows'
+import { approvalCounts, groupRows, mineRows, rowApproved, rowFromMine, rowStateKey, stateCounts, type ChangeRow } from '../src/shared/mr-rows'
+
+const mineItem = (n: number, over: Partial<MineItem> = {}): MineItem => ({
+  provider: 'gitlab',
+  host: 'gitlab.com',
+  project: 'team/backend/x',
+  iid: n,
+  url: `https://gitlab.com/team/backend/x/-/merge_requests/${n}`,
+  title: `Title ${n}`,
+  author: 'ann',
+  state: 'opened',
+  updatedAt: '2026-11-10T10:00:00.000Z',
+  roles: ['assigned'],
+  reviewers: [],
+  approvedBy: null,
+  ...over,
+  people: over.people ?? { [over.author ?? 'ann']: { name: over.author ?? 'ann', avatarUrl: null } }
+})
 
 interface RowOver {
   host?: string
@@ -17,7 +35,7 @@ interface RowOver {
   url?: string
 }
 
-/** A stub row built by hand, a row with no snapshot yet. */
+/** A stub row built by hand, so the group tests do not depend on rowFromMine. */
 const row = (n: number, over: RowOver = {}): ChangeRow => {
   const host = over.host ?? 'gitlab.com'
   const project = over.project ?? 'team/backend/x'
@@ -119,6 +137,99 @@ const by = (key: 'repo' | 'state' | 'title' | 'author' | 'reviewers' | 'approval
 }
 const NO_ORDER = (): number => 0
 const iids = (rows: ChangeRow[]): number[] => rows.map((r) => r.iid)
+
+describe('rowFromMine', () => {
+  it('builds a stub row with the url as id, the project as repo and the stub filled from the item', () => {
+    // Arrange
+    const item = mineItem(41, {
+      project: 'acme/web',
+      title: 'Add the thing',
+      author: 'zoe',
+      updatedAt: '2026-11-07T09:30:00.000Z',
+      reviewers: ['kim', 'lee'],
+      approvedBy: ['kim'],
+      people: { zoe: { name: 'Zoe Q', avatarUrl: null }, kim: { name: 'Kim', avatarUrl: 'https://a/kim.png' } }
+    })
+
+    // Act
+    const built = rowFromMine(item, 'viewer1')
+
+    // Assert
+    expect(built).toEqual({
+      id: item.url,
+      url: item.url,
+      repo: 'acme/web',
+      iid: 41,
+      state: 'opened',
+      draft: false,
+      title: 'Add the thing',
+      updatedAt: '2026-11-07T09:30:00.000Z',
+      snapshot: null,
+      stub: { author: 'zoe', reviewers: ['kim', 'lee'], people: item.people, approvedBy: ['kim'] },
+      defaultBranch: null,
+      people: item.people,
+      viewer: 'viewer1',
+      drafts: 0
+    })
+  })
+
+  it.each<[MineState, ChangeState, boolean]>([
+    ['draft', 'opened', true],
+    ['opened', 'opened', false],
+    ['merged', 'merged', false],
+    ['closed', 'closed', false]
+  ])('maps the state %s to state %s with draft %s', (mine, state, draft) => {
+    // Arrange
+    const item = mineItem(3, { state: mine })
+
+    // Act
+    const built = rowFromMine(item, 'me')
+
+    // Assert
+    expect(built.state).toBe(state)
+    expect(built.draft).toBe(draft)
+  })
+
+  it('keeps an unknown approvedBy as null on the stub and an empty one as empty', () => {
+    // Arrange
+    const unknown = mineItem(1, { approvedBy: null })
+    const nobody = mineItem(2, { approvedBy: [] })
+
+    // Act
+    const a = rowFromMine(unknown, 'me')
+    const b = rowFromMine(nobody, 'me')
+
+    // Assert
+    expect(a.stub?.approvedBy).toBeNull()
+    expect(b.stub?.approvedBy).toEqual([])
+  })
+
+  it('does not share the reviewers array with the item, and does not change the item', () => {
+    // Arrange
+    const item = mineItem(5, { reviewers: ['kim'] })
+    const before = JSON.stringify(item)
+
+    // Act
+    const built = rowFromMine(item, 'me')
+    built.stub?.reviewers.push('lee')
+
+    // Assert
+    expect(JSON.stringify(item)).toBe(before)
+  })
+
+  it('gives two rows with the same iid in different repos two different ids', () => {
+    // Arrange
+    const a = mineItem(7, { project: 'a/one', url: 'https://gitlab.com/a/one/-/merge_requests/7' })
+    const b = mineItem(7, { project: 'b/two', url: 'https://gitlab.com/b/two/-/merge_requests/7' })
+
+    // Act
+    const rows = [rowFromMine(a, 'me'), rowFromMine(b, 'me')]
+
+    // Assert
+    expect(rows.map((r) => r.id)).toEqual([a.url, b.url])
+    expect(rows.map((r) => r.iid)).toEqual([7, 7])
+  })
+})
 
 describe('rowApproved', () => {
   it.each<[string, string[] | null, boolean]>([
@@ -1112,5 +1223,118 @@ describe('groupRows with the filters', () => {
 
     // Assert
     expect(JSON.stringify(rows)).toBe(before)
+  })
+})
+
+describe('mineRows', () => {
+  const github = (n: number, over: Partial<MineItem> = {}): MineItem =>
+    mineItem(n, { provider: 'github', host: 'github.com', project: 'acme/web', url: `https://github.com/acme/web/pull/${n}`, ...over })
+
+  it('builds one row for each item, in the order of the items, with the viewer of the host of the item', () => {
+    // Arrange
+    const items = [mineItem(4), github(21), mineItem(9, { host: 'git.example.org', url: 'https://git.example.org/team/backend/x/-/merge_requests/9' })]
+    const viewers = { 'gitlab.com': 'ann-gl', 'github.com': 'bob-gh', 'git.example.org': 'cy-self' }
+
+    // Act
+    const rows = mineRows(items, viewers)
+
+    // Assert
+    expect(rows.map((r) => [r.id, r.viewer])).toEqual([
+      [items[0].url, 'ann-gl'],
+      [items[1].url, 'bob-gh'],
+      [items[2].url, 'cy-self']
+    ])
+  })
+
+  it('gives an empty viewer to an item whose host has no viewer', () => {
+    // Arrange
+    const items = [mineItem(1), github(2)]
+
+    // Act
+    const rows = mineRows(items, { 'gitlab.com': 'ann-gl' })
+
+    // Assert
+    expect(rows.map((r) => r.viewer)).toEqual(['ann-gl', ''])
+  })
+
+  it('gives the same row as rowFromMine for each item', () => {
+    // Arrange
+    const items = [mineItem(5, { state: 'draft', reviewers: ['kim'], approvedBy: ['kim'] }), github(6, { state: 'merged' })]
+
+    // Act
+    const rows = mineRows(items, { 'gitlab.com': 'ann-gl', 'github.com': 'bob-gh' })
+
+    // Assert
+    expect(rows).toEqual([rowFromMine(items[0], 'ann-gl'), rowFromMine(items[1], 'bob-gh')])
+  })
+
+  it('gives no rows for no items and does not change the items or the viewers', () => {
+    // Arrange
+    const items = [mineItem(1, { reviewers: ['kim'] })]
+    const viewers = { 'gitlab.com': 'ann-gl' }
+    const before = JSON.stringify([items, viewers])
+
+    // Act
+    const none = mineRows([], viewers)
+    mineRows(items, viewers)
+
+    // Assert
+    expect(none).toEqual([])
+    expect(JSON.stringify([items, viewers])).toBe(before)
+  })
+
+  it.each<[string, string[] | null]>([
+    ['not answered yet', null],
+    ['answered with nobody', []],
+    ['answered with two people', ['kim', 'lee']]
+  ])('keeps approvedBy of the stub as it is while the details are %s, on GitLab and on GitHub', (_name, approvedBy) => {
+    // Arrange
+    const items = [mineItem(1, { approvedBy }), github(2, { approvedBy })]
+
+    // Act
+    const rows = mineRows(items, {})
+
+    // Assert
+    expect(rows.map((r) => r.stub?.approvedBy)).toEqual([approvedBy, approvedBy])
+    expect(rows.map((r) => rowApproved(r))).toEqual([(approvedBy?.length ?? 0) > 0, (approvedBy?.length ?? 0) > 0])
+  })
+
+  it('moves a row from not approved to approved when the same item arrives again with its approvers', () => {
+    // Arrange
+    const waiting = mineItem(8, { approvedBy: null })
+    const answered = mineItem(8, { approvedBy: ['kim'] })
+
+    // Act
+    const [before] = mineRows([waiting], {})
+    const [after] = mineRows([answered], {})
+
+    // Assert
+    expect([rowApproved(before), rowApproved(after)]).toEqual([false, true])
+  })
+})
+
+describe('groupRows with the defaults of the home lists', () => {
+  const filtersFrom = (states: Record<MineState, boolean>, approvals: { approved: boolean; notApproved: boolean }): MrFilters => ({
+    states: { draft: states.draft, opened: states.opened, merged: states.merged, closed: states.closed },
+    approvals
+  })
+
+  it('shows only the open rows, approved or not, with DEFAULT_MINE_STATES and DEFAULT_MINE_APPROVALS', () => {
+    // Arrange
+    const rows = [
+      row(1, { draft: true, approvedBy: ['kim'] }),
+      row(2, { approvedBy: ['kim'] }),
+      row(3, { approvedBy: [] }),
+      row(4, { state: 'merged', approvedBy: ['kim'] }),
+      row(5, { state: 'closed' }),
+      row(6, { approvedBy: null })
+    ]
+
+    // Act
+    const groups = groupRows(rows, 'state', NO_ORDER, filtersFrom(DEFAULT_MINE_STATES, DEFAULT_MINE_APPROVALS))
+
+    // Assert
+    expect(groups.map((g) => g.state)).toEqual(['opened'])
+    expect(iids(groups[0].rows).sort()).toEqual([2, 3, 6])
   })
 })

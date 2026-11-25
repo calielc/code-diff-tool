@@ -6,9 +6,9 @@ import { AddToReview } from './AddToReview'
 import { NewReview } from './NewReview'
 
 type SortKey = 'title' | 'mrs' | 'issues' | 'lastOpened' | 'summarised'
-type SummarisedFilter = 'all' | SummarisedState
 
 const SUMMARISED_LABEL: Record<SummarisedState, string> = { writing: 'Writing…', failed: 'Failed', ready: 'Ready', 'not-written': 'Not written' }
+const ALL_SUMMARISED: Record<SummarisedState, boolean> = { writing: true, failed: true, ready: true, 'not-written': true }
 const SUMMARISED_ORDER: SummarisedState[] = ['writing', 'failed', 'ready', 'not-written']
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' }) // LX-2 before LX-10
 
@@ -42,7 +42,7 @@ export function Home(props: {
   const [reviews, setReviews] = useState<ReviewSummary[] | null>(null)
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'lastOpened', dir: 'desc' })
   const [filter, setFilter] = useState('')
-  const [summarised, setSummarised] = useState<SummarisedFilter>('all')
+  const [summarised, setSummarised] = useState<Record<SummarisedState, boolean>>(ALL_SUMMARISED)
   const [selected, setSelected] = useState<string | null>(null)
   const [showNew, setShowNew] = useState(false)
   const [initial, setInitial] = useState<LaunchRequest | null>(null)
@@ -74,9 +74,7 @@ export function Home(props: {
 
   const rows = useMemo(() => {
     const text = filter.toLowerCase()
-    const kept = (reviews ?? []).filter(
-      (r) => (summarised === 'all' || r.summarised === summarised) && (!text || (r.title ?? r.slug).toLowerCase().includes(text))
-    )
+    const kept = (reviews ?? []).filter((r) => summarised[r.summarised] && (!text || (r.title ?? r.slug).toLowerCase().includes(text)))
     const sign = sort.dir === 'asc' ? 1 : -1
     // Equal values sort by slug ascending in either direction.
     return kept.sort((a, b) => compare(a, b, sort.key) * sign || collator.compare(a.slug, b.slug))
@@ -126,24 +124,14 @@ export function Home(props: {
       <header>
         <h1>Reviews</h1>
         {total > 0 && (
-          <>
-            <input
-              ref={filterRef}
-              aria-label="Filter reviews"
-              placeholder="Filter reviews"
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-              onKeyDown={(e) => e.key === 'Escape' && setFilter('')}
-            />
-            <select aria-label="Summarised state" value={summarised} onChange={(e) => setSummarised(e.target.value as SummarisedFilter)}>
-              <option value="all">All summarised</option>
-              {SUMMARISED_ORDER.map((f) => (
-                <option key={f} value={f}>
-                  {SUMMARISED_LABEL[f]}
-                </option>
-              ))}
-            </select>
-          </>
+          <input
+            ref={filterRef}
+            aria-label="Filter reviews"
+            placeholder="Filter reviews"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            onKeyDown={(e) => e.key === 'Escape' && setFilter('')}
+          />
         )}
         <button className="primary" data-testid="new-review" disabled={!!props.blocked} title={gate} onClick={() => setShowNew(true)}>
           New review
@@ -166,6 +154,21 @@ export function Home(props: {
 
       {total > 0 && (
         <>
+          <div className="mrtools reviewtools">
+            <div className="seg toggles" role="group" aria-label="Show reviews by summarised state">
+              {SUMMARISED_ORDER.map((k) => (
+                <button
+                  key={k}
+                  className={summarised[k] ? 'on' : ''}
+                  aria-pressed={summarised[k]}
+                  title={`Show or hide the reviews that are ${SUMMARISED_LABEL[k].toLowerCase().replace('…', '')}`}
+                  onClick={() => setSummarised({ ...summarised, [k]: !summarised[k] })}
+                >
+                  {SUMMARISED_LABEL[k]} <small>{(reviews ?? []).filter((r) => r.summarised === k).length}</small>
+                </button>
+              ))}
+            </div>
+          </div>
           <table className="reviews">
             <thead>
               <tr>
@@ -215,7 +218,7 @@ export function Home(props: {
               <button
                 onClick={() => {
                   setFilter('')
-                  setSummarised('all')
+                  setSummarised(ALL_SUMMARISED)
                 }}
               >
                 Clear filter

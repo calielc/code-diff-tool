@@ -31,3 +31,65 @@ test('the list of reviews has a Name column and no Slug column, and the filter w
   await expect(page.getByTestId('review-R-1')).toHaveCount(0)
   await started.app.close()
 })
+
+test('the Open and Delete buttons of every review are visible and clickable without a hover', async () => {
+  // Arrange
+  const env = makeEnv()
+  seedReview(env, 'R-1')
+  seedReview(env, 'R-2', { title: 'Second review' })
+  const started = await launch(env, mrFixture('team/backend/x', 12, env.shas.a, env.shas.b))
+  forge = started.forge
+  const page = await home(started.app)
+
+  // Act
+  const second = page.getByTestId('review-R-2')
+
+  // Assert: no hover and no selection of that row
+  await expect(second.getByRole('button', { name: 'Open' })).toBeVisible({ timeout: SHORT })
+  await expect(second.getByRole('button', { name: 'Delete review R-2' })).toBeVisible()
+  await second.getByRole('button', { name: 'Delete review R-2' }).click()
+  await expect(page.getByRole('dialog')).toBeVisible({ timeout: SHORT })
+  await started.app.close()
+})
+
+test('the summarised filter is a group of toggle pills at the top right of the grid, like the pills of the MR list', async () => {
+  // Arrange
+  const env = makeEnv()
+  seedReview(env, 'R-1', { title: 'Ready one' }, { 'sections.json': '{}' })
+  seedReview(env, 'R-2', { title: 'Failed one' }, { 'sections-error.txt': 'boom' })
+  seedReview(env, 'R-3', { title: 'Plain one' })
+  const started = await launch(env, mrFixture('team/backend/x', 12, env.shas.a, env.shas.b))
+  forge = started.forge
+  const page = await home(started.app)
+  const group = page.getByRole('group', { name: 'Show reviews by summarised state' })
+
+  // Assert: no dropdown any more, four pills, all on, each with its count
+  await expect(group).toBeVisible({ timeout: SHORT })
+  await expect(page.getByLabel('Summarised state', { exact: true })).toHaveCount(0)
+  await expect(group).toHaveClass(/seg/)
+  await expect(group.getByRole('button')).toHaveCount(4)
+  for (const name of ['Writing', 'Failed', 'Ready', 'Not written']) {
+    await expect(group.getByRole('button', { name: new RegExp(`^${name}`) })).toHaveAttribute('aria-pressed', 'true')
+  }
+  await expect(group.getByRole('button', { name: /^Ready/ })).toContainText('1')
+  await expect(group.getByRole('button', { name: /^Failed/ })).toContainText('1')
+  await expect(group.getByRole('button', { name: /^Not written/ })).toContainText('1')
+  await expect(group.getByRole('button', { name: /^Writing/ })).toContainText('0')
+
+  // Assert: the pills sit above the grid, at its right edge
+  const table = await page.locator('table.reviews').boundingBox()
+  const pills = await group.boundingBox()
+  expect(pills!.y + pills!.height).toBeLessThanOrEqual(table!.y)
+  expect(Math.abs(pills!.x + pills!.width - (table!.x + table!.width))).toBeLessThanOrEqual(12)
+
+  // Act and assert: a pill that is turned off hides its reviews and a second click shows them again
+  await group.getByRole('button', { name: /^Failed/ }).click()
+  await expect(group.getByRole('button', { name: /^Failed/ })).toHaveAttribute('aria-pressed', 'false')
+  await expect(page.getByTestId('review-R-2')).toHaveCount(0)
+  await expect(page.getByTestId('review-R-1')).toBeVisible()
+  await expect(page.getByTestId('review-R-3')).toBeVisible()
+  await expect(page.getByTestId('showing')).toContainText('Showing 2 of 3')
+  await group.getByRole('button', { name: /^Failed/ }).click()
+  await expect(page.getByTestId('review-R-2')).toBeVisible()
+  await started.app.close()
+})

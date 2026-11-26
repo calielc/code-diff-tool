@@ -1191,11 +1191,30 @@ table.diff td.ln:first-child {
   color: var(--accent);
 }
 
-/* the ready and draft icons of the table actions */
-.actions button .ico {
-  margin-right: 4px;
-  vertical-align: -2px;
+/* the find bar of the file panel, and the marks of its matches */
+.findbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
 }
+.findbar input {
+  flex: 0 1 280px;
+}
+.findbar button {
+  padding: 1px 8px;
+}
+::highlight(find) {
+  background: color-mix(in srgb, var(--warn) 35%, transparent);
+  color: inherit;
+}
+::highlight(find-current) {
+  background: color-mix(in srgb, var(--warn) 75%, transparent);
+  color: inherit;
+}
+
 /* the Mark as ready and Mark as draft buttons in the State cell */
 .statepill,
 .automerge {

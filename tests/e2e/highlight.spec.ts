@@ -131,6 +131,45 @@ test.describe.serial('syntax colours in the diff', () => {
     await page.getByTestId('file-src/calc.ts').click()
   })
 
+  test('Ctrl or Cmd+F finds text in the code of the open file, marks every match even across coloured pieces, and Escape clears the marks', async () => {
+    const marked = (): Promise<string[]> => page.evaluate(() => [...(CSS.highlights.get('find') ?? [])].map((r) => (r as unknown as Range).toString()))
+    await page.getByTestId('file-src/calc.ts').click()
+    await page.getByTestId('layout-inline').click()
+
+    // Act: open the bar and search for text that crosses a keyword and its neighbour
+    await page.keyboard.press('ControlOrMeta+f')
+    await expect(page.getByTestId('find-input')).toBeFocused()
+    await page.getByTestId('find-input').fill('Export Function')
+
+    // Assert: the match ignores case, and its range covers the whole text over several pieces
+    await expect(page.getByTestId('find-count')).toHaveText('1 of 1')
+    expect(await marked()).toEqual(['export function'])
+
+    // Act: a text with several matches steps with Enter and Shift+Enter
+    await page.getByTestId('find-input').fill('add')
+    const total = Number(((await page.getByTestId('find-count').textContent()) ?? '').split(' of ')[1])
+    expect(total).toBeGreaterThan(1)
+    expect((await marked()).every((t) => t === 'add')).toBe(true)
+    await page.keyboard.press('Enter')
+    await expect(page.getByTestId('find-count')).toHaveText(`2 of ${total}`)
+    await page.keyboard.press('Shift+Enter')
+    await expect(page.getByTestId('find-count')).toHaveText(`1 of ${total}`)
+
+    // Assert: a switch of the layout keeps the search, and a text with no match says so
+    await page.getByTestId('layout-side').click()
+    await expect.poll(async () => (await marked()).length).toBeGreaterThan(0)
+    await page.getByTestId('find-input').fill('zzzz-nothing')
+    await expect(page.getByTestId('find-count')).toHaveText('No matches')
+    expect(await marked()).toEqual([])
+
+    // Act and assert: Escape closes the bar and clears the marks
+    await page.getByTestId('find-input').fill('add')
+    await page.keyboard.press('Escape')
+    await expect(page.getByTestId('find-bar')).toHaveCount(0)
+    expect(await marked()).toEqual([])
+    await page.getByTestId('layout-inline').click()
+  })
+
   test('there is no switch, and an old stored choice of false does not turn the colours off', async () => {
     await expect(page.getByTestId('syntax-toggle')).toHaveCount(0, { timeout: 3000 })
     await expect(page.getByTestId('diff-table').locator('.tk-kw').first()).toBeVisible()

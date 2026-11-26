@@ -18,6 +18,7 @@ import { draftAtLine, fileThreads, isFileDraft, positionMatchesLine, threadCount
 import { clampTreeWidth, nextTreeWidth, parseStoredTreeWidth, treeWidthFromPointer } from '@shared/tree-width'
 import { api } from '../api'
 import { Code, SyntaxNotice } from '../highlight/Code'
+import { FindBar } from './FindBar'
 import { useFileHighlight } from '../highlight/useFileHighlight'
 import { useReview } from './review-context'
 import { SubmitDialog, reviewable } from './SubmitDialog'
@@ -586,6 +587,20 @@ export function DiffTab(props: { mode: 'summarised' | 'diff'; visible?: (mrKey: 
     },
     [orderedFiles, selected, goTo]
   )
+  // Ctrl+F or Cmd+F opens the find bar of the file panel. The text is marked in the code of the open file.
+  const [finding, setFinding] = useState(0) // 0 is closed, and each press of the key raises it, so the input takes the focus again
+  const findRoot = useCallback(() => document.querySelector<HTMLElement>('.rightscroll'), [])
+  useEffect(() => {
+    if (view === 'summarised') return
+    const on = (e: KeyboardEvent): void => {
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'f') {
+        e.preventDefault()
+        setFinding((n) => n + 1)
+      }
+    }
+    window.addEventListener('keydown', on)
+    return () => window.removeEventListener('keydown', on)
+  }, [view])
   /** Scroll to the next or the previous comment card in the open file. */
   const walk = useCallback((dir: 1 | -1) => {
     const box = document.querySelector('.rightscroll')
@@ -809,6 +824,7 @@ export function DiffTab(props: { mode: 'summarised' | 'diff'; visible?: (mrKey: 
         )}
 
         <section className="rightcard">
+          {finding > 0 && view !== 'summarised' && <FindBar root={findRoot} focusToken={finding} onClose={() => setFinding(0)} />}
           <div className="rightscroll">
             {view === 'summarised' ? (
               r.sections.document ? (

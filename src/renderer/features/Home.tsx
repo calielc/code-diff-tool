@@ -49,6 +49,7 @@ export function Home(props: {
   const [selected, setSelected] = useState<string | null>(null)
   const [showNew, setShowNew] = useState(false)
   const [initial, setInitial] = useState<LaunchRequest | null>(null)
+  const [autoCheck, setAutoCheck] = useState(false)
   const [addTo, setAddTo] = useState<LaunchRequest | null>(null)
   const [tab, setTab] = useState<Tab>('reviews')
   // The ticks of the two lists of changes are one selection, kept by url. It clears when the New review form closes.
@@ -61,6 +62,7 @@ export function Home(props: {
       return next
     })
   const startPicked = (): void => {
+    setAutoCheck(false)
     setInitial({ mrs: [...picked], issues: [], title: '', review: '' })
     setShowNew(true)
   }
@@ -73,6 +75,7 @@ export function Home(props: {
       const exists = request.review !== '' && (await api.reviews.list()).some((r) => r.slug === request.review)
       if (exists) setAddTo(request)
       else {
+        setAutoCheck(true)
         setInitial(request)
         setShowNew(true)
       }
@@ -301,6 +304,7 @@ export function Home(props: {
       {showNew && (
         <NewReview
           initial={initial}
+          autoCheck={autoCheck}
           onClose={() => {
             setShowNew(false)
             setInitial(null)

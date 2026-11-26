@@ -14,8 +14,8 @@ const WAIT = { timeout: 15_000 }
 
 const SORT_KEYS = ['repo', 'mr', 'stack', 'title', 'pipeline', 'author', 'reviewers', 'approved', 'review', 'comments', 'created', 'updated', 'merged', 'state']
 const HEADERS = [
-  'Repo',
-  'MR',
+  'Repository',
+  'Change request',
   'Stack',
   'Title',
   'Pipeline',
@@ -383,8 +383,8 @@ test.describe('the filters', () => {
   test('keep the summary text, count the hidden MRs and are saved in codediff:mrFilters', async () => {
     // Arrange
     const { app, page } = await launch()
-    const states = page.getByRole('group', { name: 'Show MRs by state' })
-    const approvals = page.getByRole('group', { name: 'Show MRs by approval' })
+    const states = page.getByRole('group', { name: 'Show change requests by state' })
+    const approvals = page.getByRole('group', { name: 'Show change requests by approval' })
     await expect(page.getByTestId('mrs-summary')).toContainText('2 draft · 4 open · 1 merged · 1 closed, 1 hidden')
 
     // Act
@@ -396,8 +396,14 @@ test.describe('the filters', () => {
     await expect(page.getByTestId('mrs-summary')).toContainText('2 draft · 4 open · 1 merged · 1 closed, 4 hidden')
     await page.reload()
     await openReview(page)
-    await expect(page.getByRole('group', { name: 'Show MRs by state' }).getByRole('button', { name: /^Merged/ })).toHaveAttribute('aria-pressed', 'false')
-    await expect(page.getByRole('group', { name: 'Show MRs by approval' }).getByRole('button', { name: /^Approved/ })).toHaveAttribute('aria-pressed', 'false')
+    await expect(page.getByRole('group', { name: 'Show change requests by state' }).getByRole('button', { name: /^Merged/ })).toHaveAttribute(
+      'aria-pressed',
+      'false'
+    )
+    await expect(page.getByRole('group', { name: 'Show change requests by approval' }).getByRole('button', { name: /^Approved/ })).toHaveAttribute(
+      'aria-pressed',
+      'false'
+    )
     expect(await rowOrder(page)).toEqual([33, 22, 25, 26])
     await app.close()
   })
@@ -405,7 +411,7 @@ test.describe('the filters', () => {
   test('with every state button off show every MR, the same as with every button on', async () => {
     // Arrange
     const { app, page } = await launch()
-    const states = page.getByRole('group', { name: 'Show MRs by state' })
+    const states = page.getByRole('group', { name: 'Show change requests by state' })
 
     // Act
     for (const name of [/^Draft/, /^Open/, /^Merged/]) await states.getByRole('button', { name }).click()
@@ -419,7 +425,7 @@ test.describe('the filters', () => {
   test('with both approval buttons off show every MR of the states that are on', async () => {
     // Arrange
     const { app, page } = await launch()
-    const approvals = page.getByRole('group', { name: 'Show MRs by approval' })
+    const approvals = page.getByRole('group', { name: 'Show change requests by approval' })
 
     // Act
     await approvals.getByRole('button', { name: /^Approved/ }).click()
@@ -443,9 +449,10 @@ test.describe('the group buttons', () => {
     await expect(group).toHaveCount(1)
     await expect(group).toHaveAttribute('data-testid', 'group-mode')
     await expect(group).toHaveClass(/\bseg\b/)
-    await expect(group.getByRole('button')).toHaveText(['No group', 'Repo', 'State', 'Approval'])
+    await expect(group.getByRole('button')).toHaveText(['No group', 'Repository', 'State', 'Approval'])
     await expect(group.getByRole('button', { name: 'No group', exact: true })).toHaveAttribute('aria-pressed', 'true')
-    for (const name of ['Repo', 'State', 'Approval']) await expect(group.getByRole('button', { name, exact: true })).toHaveAttribute('aria-pressed', 'false')
+    for (const name of ['Repository', 'State', 'Approval'])
+      await expect(group.getByRole('button', { name, exact: true })).toHaveAttribute('aria-pressed', 'false')
     await app.close()
   })
 
@@ -482,7 +489,7 @@ test.describe('the group buttons', () => {
 
     // Act
     await page
-      .getByRole('group', { name: 'Show MRs by state' })
+      .getByRole('group', { name: 'Show change requests by state' })
       .getByRole('button', { name: /^Closed/ })
       .click()
 
@@ -496,7 +503,7 @@ test.describe('the group buttons', () => {
     const { app, page } = await launch()
 
     // Act
-    await setMode(page, 'Repo')
+    await setMode(page, 'Repository')
 
     // Assert
     expect(await sequence(page)).toEqual(['G:backend/x · 5', 22, 23, 25, 21, 26, 'G:frontend/y · 2', 33, 31])
@@ -522,7 +529,7 @@ test.describe('the group buttons', () => {
 
     // Act
     await page
-      .getByRole('group', { name: 'Show MRs by approval' })
+      .getByRole('group', { name: 'Show change requests by approval' })
       .getByRole('button', { name: /^Approved/ })
       .click()
 
@@ -538,7 +545,7 @@ test.describe('the group buttons', () => {
 
     // Act
     await page
-      .getByRole('group', { name: 'Show MRs by state' })
+      .getByRole('group', { name: 'Show change requests by state' })
       .getByRole('button', { name: /^Draft/ })
       .click()
 
@@ -567,7 +574,7 @@ test.describe('the group buttons', () => {
   test('make the rows of a repo group follow the sort by Reviewers', async () => {
     // Arrange
     const { app, page } = await launch()
-    await setMode(page, 'Repo')
+    await setMode(page, 'Repository')
 
     // Act
     await page.getByTestId('sort-reviewers').click()
@@ -594,7 +601,7 @@ test.describe('the group buttons', () => {
   test('back to No group show no header row and the order of the sort as before', async () => {
     // Arrange
     const { app, page } = await launch()
-    await setMode(page, 'Repo')
+    await setMode(page, 'Repository')
 
     // Act
     await setMode(page, 'No group')
@@ -608,7 +615,7 @@ test.describe('the group buttons', () => {
   test('are not saved: after a reload No group is on again, and nothing about the group is in the local storage', async () => {
     // Arrange
     const { app, page } = await launch()
-    await setMode(page, 'Repo')
+    await setMode(page, 'Repository')
     await expect(page.getByTestId('group-row')).toHaveCount(2)
     expect(await page.evaluate(() => Object.keys(localStorage).filter((k) => /group/i.test(k)))).toEqual([])
 
@@ -687,14 +694,14 @@ test.describe('the group header rows', () => {
     await groupRow(page, 'Draft').getByTestId('group-toggle').click()
 
     // Act
-    await setMode(page, 'Repo')
+    await setMode(page, 'Repository')
     const inRepo = await sequence(page)
     await groupRow(page, 'frontend/y').getByTestId('group-toggle').click()
     await setMode(page, 'Approval')
     const inApproval = await sequence(page)
     await setMode(page, 'State')
     const backInState = await sequence(page)
-    await setMode(page, 'Repo')
+    await setMode(page, 'Repository')
     const backInRepo = await sequence(page)
 
     // Assert
@@ -713,7 +720,7 @@ test.describe('the group header rows', () => {
 
     // Act
     await page
-      .getByRole('group', { name: 'Show MRs by state' })
+      .getByRole('group', { name: 'Show change requests by state' })
       .getByRole('button', { name: /^Merged/ })
       .click()
 

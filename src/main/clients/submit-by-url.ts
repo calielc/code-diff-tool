@@ -23,7 +23,7 @@ export async function submitByUrls(deps: SubmitByUrlDeps, input: UrlSubmitInput)
     if (ref) refs.set(url, ref)
     else bad.push(url)
   }
-  if (bad.length > 0) return { ok: false, error: `Not a merge request or pull request url: ${bad.join(', ')}.` }
+  if (bad.length > 0) return { ok: false, error: `Not a change request url: ${bad.join(', ')}.` }
   const noAccess = [...new Set([...refs.values()].filter((ref) => !deps.hasAccess(ref)).map((ref) => ref.host))]
   if (noAccess.length > 0) return { ok: false, error: noAccess.map((host) => `No access is saved for ${host}.`).join(' ') }
   if (urls.length === 0) return { ok: true, value: {} }

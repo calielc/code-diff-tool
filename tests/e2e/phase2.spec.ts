@@ -153,7 +153,7 @@ test('a failed call shows its error text and a bad URL is refused', async () => 
   const page = await openDev(app)
   await page.getByTestId('dev-url').fill('https://example.com/nope')
   await page.getByTestId('dev-read').click()
-  await expect(page.getByTestId('dev-error')).toHaveText('This is not a merge request or pull request URL.')
+  await expect(page.getByTestId('dev-error')).toHaveText('This is not a change request URL.')
   await page.getByTestId('dev-url').fill('https://gitlab.com/g/r/-/merge_requests/7')
   await page.getByTestId('dev-read').click()
   await expect(page.getByTestId('dev-error')).toContainText('HTTP 401 Unauthorized')

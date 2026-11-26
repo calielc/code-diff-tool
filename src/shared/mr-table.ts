@@ -115,7 +115,7 @@ export function yourReview(i: YourReviewInput): YourReview {
       'closed',
       'Closed, not in the diff',
       'muted',
-      'A closed MR is listed here only: its files are not in the tree, the diffs or the Summarised page.'
+      'A closed change request is listed here only: its files are not in the tree, the diffs or the Summarised page.'
     )
   }
   if (!i.userCanApprove) return status(5, 'ineligible', 'Not an eligible approver', 'muted')
@@ -212,7 +212,7 @@ export function commentsCell(threads: Pick<Thread, 'resolvable' | 'resolved' | '
   if (list.length === 0) return { chip: null, chipTitle: null, tone: null, detail: 'No threads', drafts, sort: null }
   const open = list.filter((t) => !t.resolved).length
   const offFile = list.filter((t) => t.position === null).length
-  const detail = `${open > 0 ? `${open} open, ${list.length - open} resolved` : 'all resolved'}${offFile > 0 ? `, ${offFile} on the MR, not on a file` : ''}`
+  const detail = `${open > 0 ? `${open} open, ${list.length - open} resolved` : 'all resolved'}${offFile > 0 ? `, ${offFile} on the change request, not on a file` : ''}`
   return {
     chip: `${open}/${list.length}`,
     chipTitle: `${open} open of ${list.length} thread${list.length === 1 ? '' : 's'} on GitLab`,

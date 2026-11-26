@@ -129,7 +129,7 @@ export interface CheckInput {
 export async function checkReview(root: string, input: CheckInput, onProgress?: (done: number, total: number) => void): Promise<Result<CheckResult>> {
   const urls = parseUrlBox(input.urls)
   const issues = parseIssueBox(input.issues)
-  if (urls.refs.length === 0 && urls.errors.length === 0) return { ok: false, error: 'Enter at least one merge request or pull request URL.' }
+  if (urls.refs.length === 0 && urls.errors.length === 0) return { ok: false, error: 'Enter at least one change request URL.' }
   if (urls.errors.length > 0) return { ok: false, error: urls.errors[0].message }
   if (urls.refs.length > MAX_URLS) return { ok: false, error: `Send 1 to ${MAX_URLS} URLs.` }
   if (issues.errors.length > 0) return { ok: false, error: issues.errors[0] }
@@ -163,7 +163,7 @@ export async function checkReview(root: string, input: CheckInput, onProgress?: 
 
   // A merged change counts as live. Closed ones get no diff.
   if (!mrs.some((m) => !m.skipped && m.state !== 'closed')) {
-    return { ok: false, error: 'No change to review: every merge or pull request is closed or has no clone in the workspace.' }
+    return { ok: false, error: 'No change to review: every change request is closed or has no clone in the workspace.' }
   }
   return { ok: true, value: { mrs, slugExists: await exists(join(reviewDir(root, input.slug), 'review.json')) } }
 }
@@ -205,7 +205,7 @@ export async function addToReview(root: string, input: AddToInput): Promise<Resu
   const issues = parseIssueBox(input.issues)
   if (urls.errors.length > 0) return { ok: false, error: urls.errors[0].message }
   if (issues.errors.length > 0) return { ok: false, error: issues.errors[0] }
-  if (urls.refs.length === 0 && issues.keys.length === 0) return { ok: false, error: 'Nothing to add: give a merge or pull request URL or an issue key.' }
+  if (urls.refs.length === 0 && issues.keys.length === 0) return { ok: false, error: 'Nothing to add: give a change request URL or an issue key.' }
   const file: ReviewFile = { ...existing.value, mrs: [...existing.value.mrs], skipped: [...existing.value.skipped], issues: [...existing.value.issues] }
   const same = (a: { host: string; projectPath: string; iid: number }, b: ChangeRef): boolean =>
     a.host === b.host && a.projectPath === b.project && a.iid === b.iid

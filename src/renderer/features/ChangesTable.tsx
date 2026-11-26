@@ -43,7 +43,7 @@ const REVIEW_LABEL = { submit: 'Submit review', approve: 'Approve', revoke: 'Rev
 const STAGE_GLYPH: Record<string, string> = { success: '✓', failed: '✕', warning: '!', running: '▶', pending: '…', canceled: '⊘', skipped: '»', manual: '▷' }
 const GROUP_MODES: [RowGroupMode, string][] = [
   ['none', 'No group'],
-  ['repo', 'Repo'],
+  ['repo', 'Repository'],
   ['state', 'State'],
   ['approval', 'Approval']
 ]
@@ -144,11 +144,11 @@ const snapshotOnly = (row: ChangeRow, render: (s: NonNullable<ChangeRow['snapsho
 
 /** The columns, left to right. The order here is the order on the screen. */
 const COLUMN_DEFS: ColumnDef[] = [
-  { key: 'repo', header: 'Repo', label: 'repo', cell: (row) => <td className="mono muted small">{row.repo}</td> },
+  { key: 'repo', header: 'Repository', label: 'repository', cell: (row) => <td className="mono muted small">{row.repo}</td> },
   {
     key: 'mr',
-    header: 'MR',
-    label: 'MR number',
+    header: 'Change request',
+    label: 'Change request number',
     cell: (row) => (
       <td className="mono strong">
         <a href={row.url} title={row.url} onClick={(e) => openOutside(e, row.url)}>
@@ -347,7 +347,10 @@ const COLUMN_DEFS: ColumnDef[] = [
         <td data-testid={`state-${row.id}`}>
           <span className={`statepill ${key}`}>{STATE_TEXT[key]}</span>
           {autoMerge?.enabled && (
-            <span className="automerge" title={`Auto-merge is on, set by ${autoMerge.by ?? 'unknown'}. GitLab merges this MR when the pipeline succeeds.`}>
+            <span
+              className="automerge"
+              title={`Auto-merge is on, set by ${autoMerge.by ?? 'unknown'}. GitLab merges this change request when the pipeline succeeds.`}
+            >
               Auto-merge
             </span>
           )}
@@ -486,20 +489,20 @@ export function ChangesTable(props: ChangesTableProps): React.JSX.Element {
         <span className="grow" />
         <div className="mrtools">
           {props.toolbar}
-          <div className="seg toggles" role="group" aria-label="Show MRs by state">
+          <div className="seg toggles" role="group" aria-label="Show change requests by state">
             {(['draft', 'opened', 'merged', 'closed'] as MrStateKey[]).map((k) => (
               <button
                 key={k}
                 className={filters.states[k] ? 'on' : ''}
                 aria-pressed={filters.states[k]}
-                title={`Show or hide the ${STATE_TEXT[k].toLowerCase()} MRs`}
+                title={`Show or hide the ${STATE_TEXT[k].toLowerCase()} change requests`}
                 onClick={() => props.onFilters({ ...filters, states: { ...filters.states, [k]: !filters.states[k] } })}
               >
                 {STATE_TEXT[k]} <small>{counts[k]}</small>
               </button>
             ))}
           </div>
-          <div className="seg toggles" role="group" aria-label="Show MRs by approval">
+          <div className="seg toggles" role="group" aria-label="Show change requests by approval">
             {(
               [
                 ['approved', 'Approved', approvals.approved, 'approved'],
@@ -510,7 +513,7 @@ export function ChangesTable(props: ChangesTableProps): React.JSX.Element {
                 key={k}
                 className={filters.approvals[k] ? 'on' : ''}
                 aria-pressed={filters.approvals[k]}
-                title={`Show or hide the ${word} MRs`}
+                title={`Show or hide the ${word} change requests`}
                 onClick={() => props.onFilters({ ...filters, approvals: { ...filters.approvals, [k]: !filters.approvals[k] } })}
               >
                 {label} <small>{count}</small>

@@ -36,7 +36,7 @@ async function prepare(req: ChatRequest): Promise<Result<{ input: AskInput; stat
 
   if (req.kind === 'line') {
     const clone = s.cloneOf.get(req.mr)
-    if (!clone) return { ok: false, error: `repo ${req.mr} has no local clone in the workspace.` }
+    if (!clone) return { ok: false, error: `repository ${req.mr} has no local clone in the workspace.` }
     if (!/^[0-9a-f]{40}$/.test(req.sha)) return { ok: false, error: 'sha is not 40 hex characters.' }
     if (!(await hasCommit(clone.dir, req.sha))) return { ok: false, error: `Commit ${req.sha} is not in the clone of ${clone.name}.` }
     try {

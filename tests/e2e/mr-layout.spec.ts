@@ -10,8 +10,8 @@ const P = encodeURIComponent('team/backend/x')
 const EP = (iid: number): string => `projects/${P}/merge_requests/${iid}`
 const key = (iid: number): string => `backend/x!${iid}`
 const HEADERS = [
-  'Repo',
-  'MR',
+  'Repository',
+  'Change request',
   'Stack',
   'Title',
   'Pipeline',
@@ -208,7 +208,7 @@ test('the table has the columns, summary, stack pills, your review cells and the
 
   // The summary counts every MR, the filters hide only the closed one, and 3 open MRs can be approved (one is the viewer's own).
   const summary = page.getByTestId('mrs-summary')
-  await expect(summary).toContainText('Merge requests')
+  await expect(summary).toContainText('Change requests')
   await expect(summary).toContainText('1 draft · 5 open · 1 merged · 1 closed, 1 hidden')
   await expect(summary).toContainText('3 you can approve')
 
@@ -221,7 +221,7 @@ test('the table has the columns, summary, stack pills, your review cells and the
 
   // Title with the branch line, repo without a group, dates in 24-hour time with the year.
   await expect(await cell(page, 21, 'Title')).toContainText('feat-a → main')
-  await expect(await cell(page, 21, 'Repo')).toHaveText('backend/x')
+  await expect(await cell(page, 21, 'Repository')).toHaveText('backend/x')
   await expect(await cell(page, 21, 'Reviewers')).toHaveText('–')
   await expect(await cell(page, 21, 'Created')).toHaveText('Jan 6, 2025, 12:00')
   await expect(await cell(page, 21, 'Updated')).toHaveText('Feb 1, 2025, 09:05')
@@ -239,7 +239,7 @@ test('the table has the columns, summary, stack pills, your review cells and the
   await expect(await cell(page, 21, 'State')).toContainText('Open')
   await expect((await cell(page, 21, 'State')).getByText('Auto-merge')).toHaveAttribute(
     'title',
-    'Auto-merge is on, set by zed. GitLab merges this MR when the pipeline succeeds.'
+    'Auto-merge is on, set by zed. GitLab merges this change request when the pipeline succeeds.'
   )
   await expect(await cell(page, 22, 'State')).toContainText('Draft')
   await expect(await cell(page, 23, 'State')).toContainText('Merged')
@@ -272,7 +272,7 @@ test('the table has the columns, summary, stack pills, your review cells and the
   await expect(await cell(page, 22, 'Comments')).toHaveText('No threads')
 
   // A click on a header sorts by it.
-  await page.locator('[data-testid="mrs-tab"] table thead th').nth(HEADERS.indexOf('MR')).getByRole('button').click()
+  await page.locator('[data-testid="mrs-tab"] table thead th').nth(HEADERS.indexOf('Change request')).getByRole('button').click()
   expect(await rowOrder(page)).toEqual([21, 22, 23, 25, 26, 27, 28])
   await app.close()
 })

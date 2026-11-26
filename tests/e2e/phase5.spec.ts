@@ -187,7 +187,7 @@ test('a merged change takes no comment (check 3)', async () => {
   const { app, page } = await open(s, fixtures(s, {}, 'merged'))
   await toDiff(page)
   await expect(page.getByRole('button', { name: 'Comment on this line' })).toHaveCount(0)
-  await expect(page.getByRole('img', { name: 'Read-only: merged MR' }).first()).toBeVisible()
+  await expect(page.getByRole('img', { name: 'Read-only: merged change request' }).first()).toBeVisible()
   await app.close()
 })
 

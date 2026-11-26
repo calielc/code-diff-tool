@@ -144,7 +144,7 @@ function Suggestion(props: { run: RunView; entry: ChecklistEntry }): React.JSX.E
   const d = props.entry.draft!
   const mr = r.mrByKey(d.mr)
   const line = d.newLine ?? d.oldLine
-  const where = d.path ? `!${iid(d.mr)} ${base(d.path)}${line ? `:${line}` : ''}` : `!${iid(d.mr)} · on the MR`
+  const where = d.path ? `!${iid(d.mr)} ${base(d.path)}${line ? `:${line}` : ''}` : `!${iid(d.mr)} · on the change request`
   const exists = !!r.drafts[d.id]
   let blocked: string | null = null
   if (!mr) blocked = `!${iid(d.mr)} is no longer in the review.`
@@ -182,5 +182,5 @@ function detail(ai: AiStateView, run: RunView | null, noCriteria: boolean): stri
   if (run?.state === 'failed') return run.error ?? ''
   if (run?.state === 'stopped') return 'Nothing arrived. Validate again when you want.'
   if (run?.state === 'done') return ''
-  return 'The AI reads the issues, the MRs and the code of each repo, and says for each criterion whether the MRs meet it. For a criterion they do not fully meet, it can suggest a comment that you add as a draft.'
+  return 'The AI reads the issues, the change requests and the code of each repository, and says for each criterion whether the change requests meet it. For a criterion they do not fully meet, it can suggest a comment that you add as a draft.'
 }

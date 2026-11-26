@@ -139,7 +139,7 @@ describe('submitByUrls', () => {
     expect(h.dropSnapshots).toHaveBeenCalledWith([GL(3)])
   })
 
-  it('should refuse the whole call, write nothing and drop nothing, when one url is not a merge request or pull request url', async () => {
+  it('should refuse the whole call, write nothing and drop nothing, when one url is not a change request url', async () => {
     // Arrange
     const h = harness()
     const bad = 'https://gitlab.com/team/backend/x/-/issues/4'

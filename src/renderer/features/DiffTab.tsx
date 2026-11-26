@@ -129,7 +129,7 @@ function entriesOf(result: BuildResult, view: ViewName): Entry[] {
     const n = (partNo.get(p.repo) ?? 0) + 1
     partNo.set(p.repo, n)
     const nums = p.mrs.map((k) => `!${iidOf(k)}`)
-    const label = p.mrs.length > 3 ? `${nums[0]} … (${p.mrs.length} MRs)` : nums.join(', ')
+    const label = p.mrs.length > 3 ? `${nums[0]} … (${p.mrs.length} change requests)` : nums.join(', ')
     return p.files.map((file) => ({
       id: stackedId(partIdOf(p.repo, n), file.path),
       repo: p.repo,
@@ -346,7 +346,10 @@ export function DiffTab(props: { mode: 'summarised' | 'diff'; visible?: (mrKey: 
   // The review chat knows which file the reviewer looks at now.
   useEffect(() => {
     if (!current) return r.setScreen(null)
-    r.setScreen({ path: current.file.path, where: current.mrKey ? `MR !${iidOf(current.mrKey)} (${current.repo})` : `the combined view of ${current.repo}` })
+    r.setScreen({
+      path: current.file.path,
+      where: current.mrKey ? `change request !${iidOf(current.mrKey)} (${current.repo})` : `the combined view of ${current.repo}`
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current?.id])
 
@@ -617,10 +620,11 @@ export function DiffTab(props: { mode: 'summarised' | 'diff'; visible?: (mrKey: 
 
   const partsBadge = result.combined.length > 0 && new Set(result.combined.map((p) => p.repo)).size < result.combined.length
   const combinedTip = !hasCombined
-    ? 'Stacked needs 2+ MRs in the same repo'
-    : [...result.combined.filter((p) => p.reason).map((p) => `${p.repo}: a part ${p.reason}`), 'Each part combines the MRs that merge cleanly in order.'].join(
-        '\n'
-      )
+    ? 'Stacked needs 2+ change requests in the same repository'
+    : [
+        ...result.combined.filter((p) => p.reason).map((p) => `${p.repo}: a part ${p.reason}`),
+        'Each part combines the change requests that merge cleanly in order.'
+      ].join('\n')
 
   return (
     <div className="difftab" data-testid="diff-tab">
@@ -1084,7 +1088,7 @@ function FileBody(props: {
                 select={
                   choose
                     ? {
-                        label: 'No single MR changed this line. Post it as a general comment on',
+                        label: 'No single change request changed this line. Post it as a general comment on',
                         value: chosen,
                         onChange: setChosen,
                         options: openMrsOfPart.map((k) => ({
@@ -1150,7 +1154,7 @@ function FileBody(props: {
               +
             </button>
           ) : (
-            <span className="stripe" role="img" aria-label="Read-only: merged MR" title="Read-only: merged MR" />
+            <span className="stripe" role="img" aria-label="Read-only: merged change request" title="Read-only: merged change request" />
           )}
           {entry.chatSha && (
             <button

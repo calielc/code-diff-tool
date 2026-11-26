@@ -161,7 +161,7 @@ describe('submit review (file 03 section 10.3)', () => {
     fixture({ [`GET ${base}/draft_notes`]: { json: [{ id: 1 }] } })
     const r = await submitReview({ slug: 's', ...none, summaries: { 'backend/x!7': 'hello' } }, refsMap)
     expect(r['backend/x!7']).toBe(
-      'you already have draft notes on this MR in GitLab, and publishing would post them too. Submit or delete them in GitLab first.'
+      'you already have draft notes on this change request in GitLab, and publishing would post them too. Submit or delete them in GitLab first.'
     )
     expect(sent()).toEqual([])
   })

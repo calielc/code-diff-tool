@@ -87,7 +87,9 @@ async function submitGitLab(
     if (o.summary) {
       const drafts = await forgePaged(gitlabAt(ref), `${base}/draft_notes`)
       if (drafts.length > 0) {
-        throw new StepError('you already have draft notes on this MR in GitLab, and publishing would post them too. Submit or delete them in GitLab first.')
+        throw new StepError(
+          'you already have draft notes on this change request in GitLab, and publishing would post them too. Submit or delete them in GitLab first.'
+        )
       }
       await forgeApi(gitlabAt(ref), `${base}/draft_notes`, 'POST', { body: { note: o.summary } })
       stage = 'drafted'

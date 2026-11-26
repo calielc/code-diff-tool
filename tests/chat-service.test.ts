@@ -140,7 +140,7 @@ describe('the line chat (file 04 section 3.1, acceptance checks 1 and 2)', () =>
     [{ session: 'abc' }, 'session is not a UUID.'],
     [{ model: 'gpt' }, 'model is not one of haiku, sonnet, opus, fable.'],
     [{ prompt: '  ' }, 'prompt is empty.'],
-    [{ mr: 'x!1' }, 'repo x!1 has no local clone in the workspace.'],
+    [{ mr: 'x!1' }, 'repository x!1 has no local clone in the workspace.'],
     [{ sha: 'xyz' }, 'sha is not 40 hex characters.'],
     [{ sha: 'f'.repeat(40) }, `Commit ${'f'.repeat(40)} is not in the clone of backend/x.`]
   ])('refuses %j with its reason and starts nothing', async (o, message) => {

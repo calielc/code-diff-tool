@@ -302,7 +302,8 @@ function Screen(props: { onHome: () => void }): React.JSX.Element {
         </button>
         <ReviewName slug={r.slug} name={name} onSaved={setName} />
         <span className="sub" data-testid="subtitle">
-          {data.mrs.length} {data.mrs.length === 1 ? 'change' : 'changes'} in {repoCount} {repoCount === 1 ? 'repo' : 'repos'} · signed in as {data.viewer}
+          {data.mrs.length} {data.mrs.length === 1 ? 'change request' : 'change requests'} in {repoCount} {repoCount === 1 ? 'repository' : 'repositories'} ·
+          signed in as {data.viewer}
           {data.issues.length > 0 && ` · ${data.issues.map((t) => t.key).join(', ')}`}
         </span>
         <span className="grow" />
@@ -408,7 +409,7 @@ function Screen(props: { onHome: () => void }): React.JSX.Element {
                 headTestId="mrs-summary"
                 head={
                   <>
-                    <strong>Merge requests</strong>
+                    <strong>Change requests</strong>
                     <span className="muted">
                       {stateCount.draft} draft · {stateCount.opened} open · {stateCount.merged} merged · {stateCount.closed} closed
                       {hiddenCount > 0 && `, ${hiddenCount} hidden`}
@@ -427,7 +428,7 @@ function Screen(props: { onHome: () => void }): React.JSX.Element {
                     </button>
                   )
                 }
-                emptyText={`No MR has the states and approvals turned on. Turn more on above to see the review's ${rows.length} MRs.`}
+                emptyText={`No change request has the states and approvals turned on. Turn more on above to see the review's ${rows.length} change requests.`}
               />
               {data.skipped.length > 0 && (
                 <>

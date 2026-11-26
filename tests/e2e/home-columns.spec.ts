@@ -21,7 +21,7 @@ test('the list of reviews has a Name column and no Slug column, and the filter w
   const headers = (await page.locator('table.reviews thead th').allTextContents()).map((t) => t.replace(/[▲▼]/g, '').trim())
 
   // Assert
-  expect(headers).toEqual(['Name', 'Changes', 'Issues', 'Last opened', 'Summarised', ''])
+  expect(headers).toEqual(['Name', 'Change requests', 'Issues', 'Last opened', 'Summarised', ''])
   const first = page.getByTestId('review-R-1')
   await expect(first.locator('td').first()).toHaveText('Old name', { timeout: SHORT })
   await expect(first).not.toContainText('R-1')

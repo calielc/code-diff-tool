@@ -38,7 +38,7 @@ export function NewReview(props: {
 
   // Field messages. An empty field shows its message only after a press of "Check".
   const urlMessages: string[] = [...parsedUrls.errors.map((e) => e.message)]
-  if (submitted && urls.trim() === '') urlMessages.push('Enter at least one merge request or pull request URL.')
+  if (submitted && urls.trim() === '') urlMessages.push('Enter at least one change request URL.')
   if (parsedUrls.refs.length > MAX_URLS) urlMessages.push(`Send 1 to ${MAX_URLS} URLs.`)
   const issueMessages: string[] = [...parsedIssues.errors]
   if (parsedIssues.keys.length > MAX_ISSUES) issueMessages.push(`Send 1 to ${MAX_ISSUES} issue keys or URLs.`)
@@ -173,7 +173,7 @@ export function NewReview(props: {
                 data-testid="urls"
                 rows={4}
                 value={urls}
-                placeholder="https://gitlab.com/<group>/<repo>/-/merge_requests/<number> or https://github.com/<owner>/<repo>/pull/<number>"
+                placeholder="https://gitlab.com/<group>/<repository>/-/merge_requests/<number> or https://github.com/<owner>/<repository>/pull/<number>"
                 onChange={(e) => setUrls(e.target.value)}
               />
               <span className="muted">One URL per line.</span>

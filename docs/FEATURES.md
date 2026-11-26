@@ -101,6 +101,7 @@ The header shows the path, the state of the change, the commits of the file and 
   - A file with more than 8,000 lines, more than 600,000 characters or a line longer than 1,500 characters stays plain, and the file header says why.
   - The colours are always on. Each theme has its own colours for the code. They have a contrast of 4.5 or more on the plain, the added and the removed backgrounds and on the marks inside a changed line.
 - **Full file** shows the whole new file with the added lines marked.
+- **Find.** Ctrl+F (Cmd+F on macOS) opens a find bar above the file panel. The text that you type is marked in the code of the open file, in the three layouts, and it ignores case. A match can cross the colours of a line. The bar shows the number of the current match and the total. Enter goes to the next match, Shift+Enter to the prior one, and Escape closes the bar and clears the marks. The search stays when you open another file or change the layout. It searches the code only, not the comments. It is not available in the Summarised tab.
 - **Commits.** The chips in the header list the commits of the change that touched the file. Choose one to see only what it changed, compared with its parent. A banner says which commit it is. Choose HEAD to go back. Comments and threads show at HEAD only, because the lines of a commit are not the lines of HEAD.
 - **Viewed.** The Viewed button marks the file as viewed. With a commit chosen, it marks that commit. Each commit chip has its own box. Marking HEAD as viewed marks every commit before it. With a commit chosen, `v` and Shift+V mark and unmark that commit only.
 - **Threads.** The threads of a line show under it. A thread shows its first comment, its replies and its state. You can reply, resolve and reopen. A thread on a line that the noise filter hides shows in a list at the top of the file. Threads on the whole file show above the diff.
@@ -197,4 +198,5 @@ The Theme menu lists System, Tokyo Night, Dracula, Nord, Gruvbox Dark, Solarized
 - Arrow keys, `*`: walk the file tree.
 - `n` and `p`: the next and the prior file. `v` and Shift+V: mark and unmark.
 - `c`: the next comment.
+- Ctrl+F (Cmd+F on macOS): find text in the open file of the Diff tab.
 - Enter sends a chat message, and Shift+Enter adds a line.

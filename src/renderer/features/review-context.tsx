@@ -6,6 +6,7 @@ import { acceptSection, unacceptSection, type Accepted, type SectionsDocument, t
 import type { AiStateView } from '@shared/ai'
 import type { WatchEvent } from '@shared/watch'
 import { api } from '../api'
+import type { RowAction } from './ChangesTable'
 
 /** What every part of the review screen reads and changes: the live data, the drafts and the toast. */
 export interface ReviewCtx {
@@ -25,8 +26,8 @@ export interface ReviewCtx {
   deleteNote(mr: string, noteId: number): Promise<string | null>
   resolve(mr: string, threadId: string, resolved: boolean): Promise<string | null>
   reload(): void
-  /** Shows an approval that worked, without a rebuild: the viewer joins the approvers. */
-  approveInPlace(keys: string[]): void
+  /** Shows an action that worked, without a rebuild of the review: an approval, a revoke, a draft or ready mark, or a reopen. */
+  applyInPlace(keys: string[], action: RowAction | 'changes'): void
   refreshBanner: string[] | null
   /** The file the reviewer looks at now, for the review chat. */
   screen: { path: string; where: string } | null
@@ -239,13 +240,50 @@ export function ReviewProvider(props: { slug: string; result: BuildResult; onRel
       return null
     },
     reload: props.onReload,
-    approveInPlace: (keys) =>
+    applyInPlace: (keys, action) =>
       keys.forEach((key) =>
         updateMr(key, (m) => {
-          const a = m.snapshot.approvals
-          return {
-            ...m,
-            snapshot: { ...m.snapshot, approvals: { ...a, approvedBy: [...a.approvedBy, data.viewer], userHasApproved: true, userCanApprove: false } }
+          const s = m.snapshot
+          const a = s.approvals
+          switch (action) {
+            case 'approve':
+              return {
+                ...m,
+                snapshot: {
+                  ...s,
+                  approvals: {
+                    ...a,
+                    approvedBy: [...a.approvedBy.filter((u) => u !== data.viewer), data.viewer],
+                    userHasApproved: true,
+                    userCanApprove: false
+                  },
+                  viewerState: 'approved'
+                }
+              }
+            case 'revoke':
+              return {
+                ...m,
+                snapshot: {
+                  ...s,
+                  approvals: { ...a, approvedBy: a.approvedBy.filter((u) => u !== data.viewer), userHasApproved: false, userCanApprove: true },
+                  viewerState: 'unapproved'
+                }
+              }
+            case 'changes':
+              return {
+                ...m,
+                snapshot: {
+                  ...s,
+                  approvals: { ...a, approvedBy: a.approvedBy.filter((u) => u !== data.viewer), userHasApproved: false },
+                  viewerState: 'requested_changes'
+                }
+              }
+            case 'mark-ready':
+              return { ...m, snapshot: { ...s, info: { ...s.info, draft: false } } }
+            case 'mark-draft':
+              return { ...m, snapshot: { ...s, info: { ...s.info, draft: true } } }
+            case 'reopen':
+              return { ...m, snapshot: { ...s, info: { ...s.info, state: 'opened' } } }
           }
         })
       ),

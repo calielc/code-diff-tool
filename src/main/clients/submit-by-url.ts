@@ -15,7 +15,17 @@ export interface SubmitByUrlDeps {
  * After the write the snapshots of every named url are dropped, also when some writes failed, because the forge may have changed.
  */
 export async function submitByUrls(deps: SubmitByUrlDeps, input: UrlSubmitInput): Promise<Result<Record<string, string>>> {
-  const urls = [...new Set([...input.approve, ...input.unapprove, ...input.requestChanges, ...Object.keys(input.summaries), ...input.ready, ...input.draft])]
+  const urls = [
+    ...new Set([
+      ...input.approve,
+      ...input.unapprove,
+      ...input.requestChanges,
+      ...Object.keys(input.summaries),
+      ...input.ready,
+      ...input.draft,
+      ...(input.reopen ?? [])
+    ])
+  ]
   const refs = new Map<string, ChangeRef>()
   const bad: string[] = []
   for (const url of urls) {

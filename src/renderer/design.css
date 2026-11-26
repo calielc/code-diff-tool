@@ -943,6 +943,11 @@ table.diff td.ln:first-child {
 .statepill.draft {
   background: var(--note-bg);
   color: var(--note-fg);
+  /* the global .draft card rule must not draw a card border on the pill */
+  border: 0;
+  border-radius: 10px;
+  padding: 0 8px;
+  margin: 0;
 }
 .pipechip {
   font-family: var(--mono);
@@ -1191,10 +1196,43 @@ table.diff td.ln:first-child {
   margin-right: 4px;
   vertical-align: -2px;
 }
-.actions button .ico.ready {
+/* the Mark as ready and Mark as draft buttons in the State cell */
+.statepill,
+.automerge {
+  vertical-align: middle;
+}
+.markbtn {
+  display: inline-flex;
+  vertical-align: middle;
+  align-items: center;
+  gap: 6px;
+  margin-left: 8px;
+  padding: 1px 8px;
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+.markbtn .ico {
+  flex: none;
+  width: 13px;
+  height: 13px;
+}
+.markbtn .ico-ready {
   color: var(--ok);
 }
-.actions button .ico.draft {
+.markbtn .ico-draft {
+  color: var(--note-fg);
+}
+
+/* the ready and draft icons of the table actions */
+.actions button .ico {
+  margin-right: 4px;
+  vertical-align: -2px;
+}
+.actions button .ico-ready {
+  color: var(--ok);
+}
+.actions button .ico-draft {
   color: var(--note-fg);
 }
 

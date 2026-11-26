@@ -90,6 +90,14 @@ export function registerCommentHandlers(): void {
     }
   )
 
+  handle(CH.threadsRead, z.object({ slug, mr: z.string() }), async ({ slug: s, mr }): Promise<Result<ThreadsAnswer>> => {
+    const c = await context(s)
+    if (!c.ok) return c
+    const m = c.value.mrs.get(mr)
+    if (!m) return { ok: false, error: `Not a change request of this review: ${mr}.` }
+    return { ok: true, value: await readBack(m) }
+  })
+
   handle(
     CH.threadsResolve,
     z.object({ slug, mr: z.string(), thread: z.string().max(300), resolved: z.boolean() }),
@@ -118,13 +126,22 @@ export function registerCommentHandlers(): void {
       requestChanges: lists,
       summaries: z.record(z.string(), z.string().max(65_536)),
       ready: lists,
-      draft: lists
+      draft: lists,
+      reopen: lists.optional()
     }),
     async (input: SubmitInput): Promise<Result<Record<string, string>>> => {
       const c = await context(input.slug)
       if (!c.ok) return c
       const named = [
-        ...new Set([...input.approve, ...input.unapprove, ...input.requestChanges, ...Object.keys(input.summaries), ...input.ready, ...input.draft])
+        ...new Set([
+          ...input.approve,
+          ...input.unapprove,
+          ...input.requestChanges,
+          ...Object.keys(input.summaries),
+          ...input.ready,
+          ...input.draft,
+          ...(input.reopen ?? [])
+        ])
       ]
       const unknown = named.filter((k) => !c.value.mrs.has(k))
       // One bad key refuses the whole submission before anything posts.

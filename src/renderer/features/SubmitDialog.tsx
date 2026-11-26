@@ -53,9 +53,19 @@ export function SubmitDialog(props: {
       setBanner(`Not posted: ${failed.map(([k, e]) => `!${iidOf(k)}: ${e}`).join('; ')}. The other changes were posted.`)
       return
     }
-    // read the changes again, so they show as the forge has them now
     if (props.onDone) props.onDone()
-    else r?.reload()
+    else if (r) {
+      // The review is not built again. Each row shows its new decision, and a change that got a text reads its threads again.
+      r.applyInPlace(approve, 'approve')
+      r.applyInPlace(requestChanges, 'changes')
+      const texted = Object.keys(summaries)
+      const answers = await Promise.all(texted.map((k) => api.threads.read(r.slug, k)))
+      texted.forEach((k, i) => {
+        const a = answers[i]
+        if (a?.ok && a.value.readBack) r.applyThreads(k, a.value)
+        else r.toast('Posted. Refresh the review to see the new comment.')
+      })
+    }
     props.onClose()
   }
 

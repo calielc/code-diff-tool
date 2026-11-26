@@ -525,7 +525,7 @@ function fullRead(changes: SeedChange[], opts: ChangesOptions): Fixture {
         const m = mutated(changes, body)
         if (m) {
           const to = (body as { query: string }).query
-          m.state = to.includes('markPullRequestReadyForReview') ? 'opened' : 'draft'
+          m.state = to.includes('markPullRequestReadyForReview') || to.includes('reopenPullRequest') ? 'opened' : 'draft'
           return { data: {} }
         }
         const v = (body as { variables?: { owner?: string; repo?: string; n?: number } } | undefined)?.variables
@@ -585,7 +585,7 @@ const DRAFT_PREFIX = /^(?:(?:\[draft\]|\(draft\)|draft:)\s*)+/i
  *           and to opened when it does not, and keeps the title without the prefix. POST .../draft_notes and .../draft_notes/bulk_publish take a review comment, and
  *           bulk_publish with reviewer_state requested_changes marks the viewer as having asked for changes. GET .../draft_notes is an empty list.
  *   GitHub  POST .../reviews with the event APPROVE, REQUEST_CHANGES or COMMENT adds a review of the viewer. PUT .../reviews/<id>/dismissals withdraws the approval of the viewer.
- *           POST graphql with the mutation markPullRequestReadyForReview or convertPullRequestToDraft sets the state to opened or draft.
+ *           POST graphql with the mutation markPullRequestReadyForReview, reopenPullRequest or convertPullRequestToDraft sets the state to opened, opened or draft. PUT <change> with state_event reopen sets a GitLab change to opened.
  * A change with `writeFail` answers every one of these with that failure, and `writeSleepMs` makes each wait. The updated time never changes, so a test can tell a read
  * that the app asked for again from one that the updated time made.
  */
@@ -631,6 +631,10 @@ function writes(changes: SeedChange[]): Fixture {
       dynamic: (_q, endpoint, body) => {
         const c = gl(endpoint)
         const title = String((body as { title?: string } | undefined)?.title ?? '')
+        if (c && (body as { state_event?: string } | undefined)?.state_event === 'reopen') {
+          c.state = 'opened'
+          return {}
+        }
         if (c) {
           c.state = DRAFT_PREFIX.test(title) ? 'draft' : 'opened'
           c.title = title.replace(DRAFT_PREFIX, '')

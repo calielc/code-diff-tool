@@ -103,7 +103,11 @@ export interface CodeDiffApi {
     post(slug: string, comment: PendingComment, draft: boolean): Promise<Result<ThreadsAnswer>>
   }
   notes: { delete(slug: string, mr: string, noteId: number): Promise<Result<ThreadsAnswer>> }
-  threads: { resolve(slug: string, mr: string, thread: string, resolved: boolean): Promise<Result<true>> }
+  threads: {
+    resolve(slug: string, mr: string, thread: string, resolved: boolean): Promise<Result<true>>
+    /** Reads the threads of one change again, for example after a submitted review text. */
+    read(slug: string, mr: string): Promise<Result<ThreadsAnswer>>
+  }
   review: { submit(input: SubmitInput): Promise<Result<Record<string, string>>> }
   watch: {
     start(slug: string, heads: Record<string, string>): Promise<void>

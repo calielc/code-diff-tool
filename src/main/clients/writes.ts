@@ -78,7 +78,7 @@ class StepError extends Error {}
 
 async function submitGitLab(
   ref: ChangeRef,
-  o: { approve: boolean; unapprove: boolean; changes: boolean; summary: string; ready: boolean; draft: boolean }
+  o: { approve: boolean; unapprove: boolean; changes: boolean; summary: string; ready: boolean; draft: boolean; reopen: boolean }
 ): Promise<void> {
   const base = `projects/${enc(ref.project)}/merge_requests/${ref.iid}`
   if (o.changes && !o.summary) throw new StepError('requesting changes needs an overall comment.')
@@ -103,6 +103,7 @@ async function submitGitLab(
       const current = (await forgeApi(gitlabAt(ref), base, 'GET')) as J // the title as it is now, so a rename since the page loaded stays
       await forgeApi(gitlabAt(ref), base, 'PUT', { body: { title: draftTitle(String(current.title ?? ''), !o.ready) } })
     }
+    if (o.reopen) await forgeApi(gitlabAt(ref), base, 'PUT', { body: { state_event: 'reopen' } })
   } catch (e) {
     if (e instanceof StepError) throw e
     if (stage === 'published') throw new StepError(`The overall comment went out, then: ${msg(e)}`)
@@ -112,11 +113,12 @@ async function submitGitLab(
 }
 
 const READY = 'mutation($id:ID!){markPullRequestReadyForReview(input:{pullRequestId:$id}){pullRequest{id}}}'
+const REOPEN = 'mutation($id:ID!){reopenPullRequest(input:{pullRequestId:$id}){pullRequest{id}}}'
 const TO_DRAFT = 'mutation($id:ID!){convertPullRequestToDraft(input:{pullRequestId:$id}){pullRequest{id}}}'
 
 async function submitGitHub(
   ref: ChangeRef,
-  o: { approve: boolean; unapprove: boolean; changes: boolean; summary: string; ready: boolean; draft: boolean }
+  o: { approve: boolean; unapprove: boolean; changes: boolean; summary: string; ready: boolean; draft: boolean; reopen: boolean }
 ): Promise<void> {
   const base = `repos/${ref.project}/pulls/${ref.iid}`
   if (o.changes && !o.summary) throw new StepError('requesting changes needs an overall comment.')
@@ -135,6 +137,10 @@ async function submitGitHub(
     const id = String(((await forgeApi(githubAt(ref), base, 'GET')) as J).node_id)
     await forgeApi(githubAt(ref), 'graphql', 'POST', { fields: { query: o.ready ? READY : TO_DRAFT, id } })
   }
+  if (o.reopen) {
+    const id = String(((await forgeApi(githubAt(ref), base, 'GET')) as J).node_id)
+    await forgeApi(githubAt(ref), 'graphql', 'POST', { fields: { query: REOPEN, id } })
+  }
 }
 
 /**
@@ -143,7 +149,17 @@ async function submitGitHub(
  */
 export async function submitReview(input: SubmitInput, refs: Map<string, ChangeRef>): Promise<Record<string, string>> {
   // The MRs to process: approve, unapprove, requestChanges, the keys of summaries, ready and draft, without duplicates.
-  const keys = [...new Set([...input.approve, ...input.unapprove, ...input.requestChanges, ...Object.keys(input.summaries), ...input.ready, ...input.draft])]
+  const keys = [
+    ...new Set([
+      ...input.approve,
+      ...input.unapprove,
+      ...input.requestChanges,
+      ...Object.keys(input.summaries),
+      ...input.ready,
+      ...input.draft,
+      ...(input.reopen ?? [])
+    ])
+  ]
   const errors: Record<string, string> = {}
   for (const key of keys) {
     const ref = refs.get(key)
@@ -154,7 +170,8 @@ export async function submitReview(input: SubmitInput, refs: Map<string, ChangeR
       changes: input.requestChanges.includes(key),
       summary: (input.summaries[key] ?? '').trim(),
       ready: input.ready.includes(key),
-      draft: input.draft.includes(key)
+      draft: input.draft.includes(key),
+      reopen: (input.reopen ?? []).includes(key)
     }
     try {
       await (ref.provider === 'gitlab' ? submitGitLab(ref, opts) : submitGitHub(ref, opts))

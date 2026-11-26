@@ -36,7 +36,10 @@ const api: CodeDiffApi = {
     post: (slug, comment, draft) => ipcRenderer.invoke(CH.commentsPost, { slug, comment, draft })
   },
   notes: { delete: (slug, mr, noteId) => ipcRenderer.invoke(CH.notesDelete, { slug, mr, noteId }) },
-  threads: { resolve: (slug, mr, thread, resolved) => ipcRenderer.invoke(CH.threadsResolve, { slug, mr, thread, resolved }) },
+  threads: {
+    resolve: (slug, mr, thread, resolved) => ipcRenderer.invoke(CH.threadsResolve, { slug, mr, thread, resolved }),
+    read: (slug, mr) => ipcRenderer.invoke(CH.threadsRead, { slug, mr })
+  },
   review: { submit: (input) => ipcRenderer.invoke(CH.reviewSubmit, input) },
   watch: {
     start: (slug, heads) => ipcRenderer.invoke(CH.watchStart, { slug, heads }),

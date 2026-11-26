@@ -60,7 +60,7 @@ export function stackInfo(mrs: StackMr[]): Record<string, StackInfo> {
 }
 
 export type ReviewStatusId = 'approved' | 'changes' | 'author' | 'merged' | 'closed' | 'ineligible' | 'pending'
-export type ReviewAction = 'mark-ready' | 'mark-draft' | 'submit' | 'revoke' | 'approve'
+export type ReviewAction = 'mark-ready' | 'mark-draft' | 'reopen' | 'submit' | 'revoke' | 'approve'
 
 export interface YourReviewInput {
   state: ChangeState
@@ -83,9 +83,11 @@ export interface YourReview {
   actions: ReviewAction[]
 }
 
-/** The mark-ready and mark-draft buttons: only the author of an open MR gets one. */
+/** The buttons of the State cell: the author of an open MR gets mark-ready or mark-draft, and the author of a closed MR gets reopen. A merged or locked MR gets none. */
 export function stateActions(i: YourReviewInput): ReviewAction[] {
-  if (i.state !== 'opened' || i.author !== i.viewer) return []
+  if (i.author !== i.viewer) return []
+  if (i.state === 'closed') return ['reopen']
+  if (i.state !== 'opened') return []
   return [i.draft ? 'mark-ready' : 'mark-draft']
 }
 

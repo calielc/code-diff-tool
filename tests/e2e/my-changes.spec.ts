@@ -586,7 +586,7 @@ test('the selection is shared by the two tabs, survives a change of tab, and a c
   await expect(page.getByTestId('mine-start')).toHaveText('Start review (2)')
 })
 
-test('Start review opens the New review form with the urls of every ticked change from both tabs and runs the check, and the ticks clear when the form closes', async () => {
+test('Start review opens the New review form with the urls of every ticked change from both tabs, leaves the form open for the reviewer, and the ticks clear when the form closes', async () => {
   // Arrange
   const { page, forge: f } = await start(baseFixture())
   await openTab(page, 'assigned')
@@ -599,7 +599,7 @@ test('Start review opens the New review form with the urls of every ticked chang
   // Act
   await page.getByTestId('mine-start').click()
 
-  // Assert: the form has the three urls, each once, and the check ran against the forge
+  // Assert: the form has the three urls, each once
   const dialog = page.getByRole('dialog', { name: 'New review' })
   await expect(dialog).toBeVisible({ timeout: SHORT })
   const typed = (await page.getByTestId('urls').inputValue())
@@ -607,9 +607,13 @@ test('Start review opens the New review form with the urls of every ticked chang
     .map((l) => l.trim())
     .filter(Boolean)
   expect([...typed].sort()).toEqual([glUrl(1), glUrl(3), ghUrl(23)].sort())
-  // The shown row was read once for its snapshot, so a second read of the same change is the check
-  await expect.poll(() => readCount(f, glUrl(1))).toBeGreaterThanOrEqual(2)
-  await expect(page.locator('[data-testid="check-list"], [data-testid="check-error"], [data-testid="check-summary"]').first()).toBeVisible({ timeout: SHORT })
+  // The form waits for the reviewer: no check runs, and the fields stay, so a name and issues can be typed
+  await page.waitForTimeout(1500)
+  expect(await readCount(f, glUrl(1))).toBe(1) // only the read of the shown row
+  await expect(page.getByTestId('check-list')).toHaveCount(0)
+  await page.getByTestId('name').fill('My review')
+  await page.getByTestId('issues').fill('LX-1')
+  await expect(page.getByTestId('name')).toHaveValue('My review')
   // The review is made only when the user presses Create
   expect(f.bodies.filter((c) => c.method === 'POST' && c.endpoint !== 'graphql')).toHaveLength(0)
 

@@ -3,7 +3,13 @@ import { MAX_ISSUES, MAX_URLS, parseIssueBox, parseUrlBox, slugFromName, suggest
 import type { LaunchRequest } from '@shared/launch'
 import { api } from '../api'
 
-export function NewReview(props: { initial?: LaunchRequest | null; onClose: () => void; onCreated: (slug: string) => void }): React.JSX.Element {
+export function NewReview(props: {
+  initial?: LaunchRequest | null
+  /** True when the form runs the check at once, as for a request from outside the app. Changes that the reviewer ticked wait for the reviewer. */
+  autoCheck?: boolean
+  onClose: () => void
+  onCreated: (slug: string) => void
+}): React.JSX.Element {
   const [urls, setUrls] = useState(() => props.initial?.mrs.join('\n') ?? '')
   const [issues, setIssues] = useState(() => props.initial?.issues.join('\n') ?? '')
   // Spec files picked in the dialog: a token for the main process, and the names to show.
@@ -55,12 +61,12 @@ export function NewReview(props: { initial?: LaunchRequest | null; onClose: () =
     else setError(r.error)
   }
 
-  // The slug of a new review is free among the reviews that exist. A request from outside the app then runs the check at once, and leaves Create to the reviewer.
+  // The slug of a new review is free among the reviews that exist. A request from outside the app then runs the check at once, and leaves Create to the reviewer. Ticked changes only fill the form, so the reviewer can add a name and issues first.
   useEffect(() => {
     void api.reviews.list().then((list) => {
       const taken = list.map((r) => r.slug)
       setExisting(taken)
-      if (props.initial) void check(taken)
+      if (props.initial && props.autoCheck) void check(taken)
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

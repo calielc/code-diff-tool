@@ -33,7 +33,7 @@ export interface ChangeRow {
   drafts: number
 }
 
-export type RowGroupMode = 'none' | 'repo' | 'state' | 'approval'
+export type RowGroupMode = 'none' | 'repo' | 'state' | 'approval' | 'updated'
 
 export interface RowGroup {
   /** The key for the collapsed set. Null when the list has no groups. */
@@ -43,6 +43,26 @@ export interface RowGroup {
   /** The state of the group. Null in the modes repo, approval and none. */
   state: MrStateKey | null
   rows: ChangeRow[]
+}
+
+/** The age groups of the mode `updated`, newest first. */
+export const UPDATE_BUCKETS = [
+  ['today', 'Today'],
+  ['days', 'Past few days'],
+  ['weeks', 'Past few weeks'],
+  ['months', 'Months ago']
+] as const
+export type UpdateBucket = (typeof UPDATE_BUCKETS)[number][0]
+
+/** The age group of an update time. Today is the same calendar day. Past few days is up to 7 days ago, past few weeks up to 30 days, and the rest is months ago. An unreadable time counts as months ago. */
+export function updateBucket(updatedAt: string, now: number = Date.now()): UpdateBucket {
+  const dayStart = (t: number): number => new Date(new Date(t).setHours(0, 0, 0, 0)).getTime()
+  const time = Date.parse(updatedAt)
+  if (Number.isNaN(time)) return 'months'
+  const days = Math.round((dayStart(now) - dayStart(time)) / 86_400_000)
+  if (days <= 0) return 'today'
+  if (days <= 7) return 'days'
+  return days <= 30 ? 'weeks' : 'months'
 }
 
 const STATE_ORDER: MrStateKey[] = ['draft', 'opened', 'merged', 'closed']
@@ -117,11 +137,18 @@ export function approvalCounts(rows: ChangeRow[], enabledStates: Record<MrStateK
  * Mode `state`: one group for each state that has rows, in the order draft, opened, merged, closed.
  * Mode `repo`: one group for each host and repo path, ordered by the path and then the host, always ascending.
  * Mode `approval`: the group `approved` and then `notApproved`, without the empty ones.
+ * Mode `updated`: one group for each age group that has rows, from today to months ago. The age counts from `now`.
  * Mode `none`: one group without key, label and state, even when it is empty.
  * The rows of a group follow `compare`. When it returns exactly 0, the newest update goes first and then the id ascending, in both directions.
  * The input is not changed.
  */
-export function groupRows(rows: ChangeRow[], mode: RowGroupMode, compare: (a: ChangeRow, b: ChangeRow) => number, filters: MrFilters): RowGroup[] {
+export function groupRows(
+  rows: ChangeRow[],
+  mode: RowGroupMode,
+  compare: (a: ChangeRow, b: ChangeRow) => number,
+  filters: MrFilters,
+  now: number = Date.now()
+): RowGroup[] {
   const order = (list: ChangeRow[]): ChangeRow[] =>
     [...list].sort((a, b) => {
       const result = compare(a, b)
@@ -135,6 +162,13 @@ export function groupRows(rows: ChangeRow[], mode: RowGroupMode, compare: (a: Ch
       label: state as string | null,
       state: state as MrStateKey | null,
       rows: order(shown.filter((r) => rowStateKey(r) === state))
+    })).filter((g) => g.rows.length > 0)
+  if (mode === 'updated')
+    return UPDATE_BUCKETS.map(([bucket, label]) => ({
+      key: `updated:${bucket}`,
+      label: label as string | null,
+      state: null as MrStateKey | null,
+      rows: order(shown.filter((r) => updateBucket(r.updatedAt, now) === bucket))
     })).filter((g) => g.rows.length > 0)
   if (mode === 'approval')
     return (['approved', 'notApproved'] as const)

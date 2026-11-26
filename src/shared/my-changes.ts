@@ -1,4 +1,4 @@
-// The lists "Assigned to me" and "I am the reviewer" on the home screen: the shape of one change and the pure rules that sort, group and count them.
+// The lists "Owned by me" and "I am the reviewer" on the home screen: the shape of one change and the pure rules that sort, group and count them.
 
 import type { Person } from './provider'
 

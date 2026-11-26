@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { ChangeInfo, ChangeSnapshot, ChangeState } from '../src/shared/provider'
 import { DEFAULT_MINE_APPROVALS, DEFAULT_MINE_STATES, type MineItem, type MineState } from '../src/shared/my-changes'
 import { mrStateKey, type MrFilters, type MrStateKey } from '../src/shared/mr-table'
-import { approvalCounts, groupRows, mineRows, rowApproved, rowFromMine, rowStateKey, stateCounts, type ChangeRow } from '../src/shared/mr-rows'
+import { approvalCounts, groupRows, mineRows, rowApproved, rowFromMine, rowStateKey, stateCounts, updateBucket, type ChangeRow } from '../src/shared/mr-rows'
 
 const mineItem = (n: number, over: Partial<MineItem> = {}): MineItem => ({
   provider: 'gitlab',
@@ -430,6 +430,51 @@ describe('approvalCounts', () => {
 
     // Assert
     expect(JSON.stringify(rows)).toBe(before)
+  })
+})
+
+describe('groupRows in updated mode', () => {
+  const NOW = new Date('2026-11-26T10:00:00').getTime()
+  const ago = (days: number): string => new Date(NOW - days * 86_400_000).toISOString()
+
+  it('puts each update time in its age group: today, up to 7 days, up to 30 days, and months', () => {
+    // Arrange
+    const rows = [
+      row(1, { updatedAt: ago(0) }),
+      row(2, { updatedAt: ago(1) }),
+      row(3, { updatedAt: ago(7) }),
+      row(4, { updatedAt: ago(8) }),
+      row(5, { updatedAt: ago(30) }),
+      row(6, { updatedAt: ago(31) })
+    ]
+
+    // Act
+    const groups = groupRows(rows, 'updated', NO_ORDER, ALL_ON, NOW)
+
+    // Assert
+    expect(groups.map((g) => [g.key, g.label, iids(g.rows).sort()])).toEqual([
+      ['updated:today', 'Today', [1]],
+      ['updated:days', 'Past few days', [2, 3]],
+      ['updated:weeks', 'Past few weeks', [4, 5]],
+      ['updated:months', 'Months ago', [6]]
+    ])
+  })
+
+  it('leaves out an empty group and counts an unreadable time as months ago', () => {
+    // Arrange
+    const rows = [row(1, { updatedAt: ago(0) }), row(2, { updatedAt: 'not a date' })]
+
+    // Act
+    const groups = groupRows(rows, 'updated', NO_ORDER, ALL_ON, NOW)
+
+    // Assert
+    expect(groups.map((g) => g.key)).toEqual(['updated:today', 'updated:months'])
+  })
+
+  it('treats the same calendar day as today even when it is more than a few hours back', () => {
+    // Act and assert
+    expect(updateBucket(new Date('2026-11-26T00:05:00').toISOString(), NOW)).toBe('today')
+    expect(updateBucket(new Date('2026-11-25T23:55:00').toISOString(), NOW)).toBe('days')
   })
 })
 

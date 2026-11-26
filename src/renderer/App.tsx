@@ -16,6 +16,15 @@ export function App(): React.JSX.Element {
   const [dev, setDev] = useState(false)
 
   useEffect(() => api.events.onOpenDev(() => setDev(true)), [])
+  // Settings > Prerequisites… in the menu opens the Prerequisites screen from any screen.
+  useEffect(
+    () =>
+      api.events.onOpenPrereq(() => {
+        setDev(false)
+        toPrereq()
+      }),
+    []
+  )
 
   // The saved theme applies at once, and a choice in the Theme menu applies to the open page.
   useEffect(() => {
@@ -54,9 +63,6 @@ export function App(): React.JSX.Element {
 
   if (dev) return <DevReader onClose={() => setDev(false)} />
   if (!screen) return <div className="page muted">Checking tools…</div>
-  if (screen.name === 'prereq') {
-    return <Prerequisites atStart={true} onDone={() => setScreen({ name: 'home' })} onContinueAnyway={() => setScreen({ name: 'home' })} />
-  }
   if (screen.name === 'review') {
     return <ReviewView slug={screen.slug} onHome={() => setScreen({ name: 'home' })} onOpenPrereq={toPrereq} />
   }
@@ -64,13 +70,24 @@ export function App(): React.JSX.Element {
   const problem = status?.rows.find((r) => r.required && r.state !== 'ready')
   const forgeReady = status?.rows.some((r) => r.forge && r.state === 'ready')
   const blocked = problem ? problem.name : forgeReady === false ? 'GitLab or GitHub access' : null
+  // The Prerequisites show as a dialog over Home, at the start when a requirement is missing and from the Settings menu.
   return (
-    <Home
-      blocked={blocked}
-      launch={launch}
-      onLaunchUsed={() => setLaunch(null)}
-      onOpenPrereq={toPrereq}
-      onOpenReview={(slug) => setScreen({ name: 'review', slug })}
-    />
+    <>
+      <Home
+        blocked={blocked}
+        paused={screen.name === 'prereq'}
+        launch={launch}
+        onLaunchUsed={() => setLaunch(null)}
+        onOpenPrereq={toPrereq}
+        onOpenReview={(slug) => setScreen({ name: 'review', slug })}
+      />
+      {screen.name === 'prereq' && (
+        <div className="modal-back" role="dialog" aria-modal="true" aria-label="Prerequisites">
+          <div className="modal prereq">
+            <Prerequisites atStart={true} onDone={() => setScreen({ name: 'home' })} onContinueAnyway={() => setScreen({ name: 'home' })} />
+          </div>
+        </div>
+      )}
+    </>
   )
 }

@@ -103,7 +103,7 @@ async function launch(fixture: Record<string, any>): Promise<ElectronApplication
 async function openDev(app: ElectronApplication): Promise<Page> {
   const page = await app.firstWindow()
   // Wait until the app has mounted and subscribed to the menu event.
-  await expect(page.getByTestId('row-git').or(page.getByText('Reviews'))).toBeVisible()
+  await expect(page.getByTestId('home-tab-reviews')).toBeVisible()
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.send('menu:openDev'))
   await expect(page.getByRole('heading', { name: 'Developer: read a change' })).toBeVisible()
   return page

@@ -114,7 +114,7 @@ const headerTexts = async (page: Page): Promise<string[]> =>
   (await page.locator('table.reviews thead th').allTextContents()).map((t) => t.replace(/[▲▼]/g, '').trim())
 const pill = (page: Page, name: string): Locator =>
   page.getByRole('group', { name: 'Show change requests by state' }).getByRole('button', { name: new RegExp(`^${name}`) })
-const modeBtn = (page: Page, name: 'No group' | 'Repository' | 'State' | 'Approval'): Locator =>
+const modeBtn = (page: Page, name: 'No group' | 'Repository' | 'State' | 'Approval' | 'Updated'): Locator =>
   page.getByRole('group', { name: 'Group the list' }).getByRole('button', { name, exact: true })
 const tab = (page: Page, which: 'reviews' | 'assigned' | 'reviewer'): Locator => page.getByTestId(`home-tab-${which}`)
 
@@ -148,7 +148,7 @@ test('the main screen has the three tabs, Reviews is the default and shows the t
 
   // Assert
   await expect(page.getByRole('tablist')).toBeVisible({ timeout: SHORT })
-  await expect(page.getByRole('tab')).toHaveText([/^Reviews/, /^Assigned to me/, /^I am the reviewer/])
+  await expect(page.getByRole('tab')).toHaveText([/^Reviews/, /^Owned by me/, /^I am the reviewer/])
   await expect(tab(page, 'reviews')).toHaveAttribute('aria-selected', 'true')
   await expect(tab(page, 'assigned')).toHaveAttribute('aria-selected', 'false')
   await expect(tab(page, 'reviewer')).toHaveAttribute('aria-selected', 'false')
@@ -160,7 +160,7 @@ test('the main screen has the three tabs, Reviews is the default and shows the t
   await expect(rows(page)).toHaveCount(0)
 })
 
-test('Assigned to me lists only the changes assigned to the user, from GitLab and GitHub, with the columns of the MR list', async () => {
+test('Owned by me lists only the changes assigned to the user, from GitLab and GitHub, with the columns of the MR list', async () => {
   // Arrange
   const { page } = await start(baseFixture())
 
@@ -259,7 +259,7 @@ test('on both tabs only the Open pill is on at the start, and the other pills st
   // Act
   await openTab(page, 'assigned')
 
-  // Assert: Assigned to me
+  // Assert: Owned by me
   await expect(pill(page, 'Open')).toHaveAttribute('aria-pressed', 'true')
   for (const name of ['Draft', 'Merged', 'Closed']) await expect(pill(page, name)).toHaveAttribute('aria-pressed', 'false')
   await expect(rows(page)).toHaveCount(5)
@@ -306,19 +306,19 @@ test('a ticked change that a pill hides stays ticked and still counts in Start r
   await pill(page, 'Draft').click()
   await page.getByRole('checkbox', { name: 'Select Cedar' }).check()
   await page.getByRole('checkbox', { name: 'Select Aspen' }).check()
-  await expect(page.getByTestId('mine-start')).toHaveText('Start review (2)')
+  await expect(page.getByTestId('new-review')).toHaveText('New review (2)')
 
   // Act
   await pill(page, 'Draft').click()
 
   // Assert: Cedar is hidden but still counted
   await expect(row(page, 'Cedar')).toHaveCount(0)
-  await expect(page.getByTestId('mine-start')).toHaveText('Start review (2)')
+  await expect(page.getByTestId('new-review')).toHaveText('New review (2)')
 
   // Act and assert: it is still ticked when it shows again
   await pill(page, 'Draft').click()
   await expect(page.getByRole('checkbox', { name: 'Select Cedar' })).toBeChecked()
-  await expect(page.getByTestId('mine-start')).toHaveText('Start review (2)')
+  await expect(page.getByTestId('new-review')).toHaveText('New review (2)')
 })
 
 test('the pills count the reviewer tab by its own changes', async () => {
@@ -370,7 +370,7 @@ test('the group mode is a four-way choice None, Repo, State, Approval in one gro
   const modes = page.getByTestId('group-mode')
   await expect(modes).toHaveAttribute('role', 'group')
   await expect(modes).toHaveAttribute('aria-label', 'Group the list')
-  await expect(modes.getByRole('button')).toHaveText(['No group', 'Repository', 'State', 'Approval'])
+  await expect(modes.getByRole('button')).toHaveText(['No group', 'Repository', 'State', 'Approval', 'Updated'])
   await expect(modeBtn(page, 'No group')).toHaveAttribute('aria-pressed', 'false')
   await expect(modeBtn(page, 'Repository')).toHaveAttribute('aria-pressed', 'false')
   await expect(modeBtn(page, 'State')).toHaveAttribute('aria-pressed', 'true')
@@ -534,26 +534,26 @@ test('with no GitLab or GitHub access the tabs show the empty state with a butto
   await expect(page.getByRole('heading', { name: 'Prerequisites' })).toBeVisible()
 })
 
-test('Start review is off until a change is ticked, and the count in it follows the ticks', async () => {
+test('New review shows the count of the ticked changes, and stays on with none ticked', async () => {
   // Arrange
   const { page } = await start(baseFixture())
   await openTab(page, 'assigned')
-  const start_ = page.getByTestId('mine-start')
+  const start_ = page.getByTestId('new-review')
 
   // Assert: nothing ticked
-  await expect(start_).toBeDisabled()
+  await expect(start_).toHaveText('New review')
   await expect(row(page, 'Aspen').getByRole('checkbox', { name: 'Select Aspen' })).not.toBeChecked()
 
   // Act and assert
   await page.getByRole('checkbox', { name: 'Select Aspen' }).check()
   await expect(start_).toBeEnabled()
-  await expect(start_).toHaveText('Start review (1)')
+  await expect(start_).toHaveText('New review (1)')
   await page.getByRole('checkbox', { name: 'Select Birch' }).check()
-  await expect(start_).toHaveText('Start review (2)')
+  await expect(start_).toHaveText('New review (2)')
   await page.getByRole('checkbox', { name: 'Select Aspen' }).uncheck()
-  await expect(start_).toHaveText('Start review (1)')
+  await expect(start_).toHaveText('New review (1)')
   await page.getByRole('checkbox', { name: 'Select Birch' }).uncheck()
-  await expect(start_).toBeDisabled()
+  await expect(start_).toHaveText('New review')
 })
 
 test('the selection is shared by the two tabs, survives a change of tab, and a change with both roles counts once', async () => {
@@ -562,32 +562,32 @@ test('the selection is shared by the two tabs, survives a change of tab, and a c
   await openTab(page, 'assigned')
   await page.getByRole('checkbox', { name: 'Select Aspen' }).check()
   await page.getByRole('checkbox', { name: 'Select Elm' }).check()
-  await expect(page.getByTestId('mine-start')).toHaveText('Start review (2)')
+  await expect(page.getByTestId('new-review')).toHaveText('New review (2)')
 
   // Act
   await openTab(page, 'reviewer')
 
   // Assert: the button is on this tab too, Elm is already ticked here, and it counts once
-  await expect(page.getByTestId('mine-start')).toHaveText('Start review (2)')
+  await expect(page.getByTestId('new-review')).toHaveText('New review (2)')
   await expect(page.getByRole('checkbox', { name: 'Select Elm' })).toBeChecked()
   await expect(page.getByRole('checkbox', { name: 'Select Linden' })).not.toBeChecked()
   await page.getByRole('checkbox', { name: 'Select Linden' }).check()
-  await expect(page.getByTestId('mine-start')).toHaveText('Start review (3)')
+  await expect(page.getByTestId('new-review')).toHaveText('New review (3)')
 
   // Act and assert: back on the first tab, every tick is still there
   await openTab(page, 'assigned')
   await expect(page.getByRole('checkbox', { name: 'Select Aspen' })).toBeChecked()
   await expect(page.getByRole('checkbox', { name: 'Select Elm' })).toBeChecked()
-  await expect(page.getByTestId('mine-start')).toHaveText('Start review (3)')
+  await expect(page.getByTestId('new-review')).toHaveText('New review (3)')
 
   // Act and assert: unticking Elm here unticks it in the other tab too
   await page.getByRole('checkbox', { name: 'Select Elm' }).uncheck()
   await openTab(page, 'reviewer')
   await expect(page.getByRole('checkbox', { name: 'Select Elm' })).not.toBeChecked()
-  await expect(page.getByTestId('mine-start')).toHaveText('Start review (2)')
+  await expect(page.getByTestId('new-review')).toHaveText('New review (2)')
 })
 
-test('Start review opens the New review form with the urls of every ticked change from both tabs, leaves the form open for the reviewer, and the ticks clear when the form closes', async () => {
+test('New review opens the form with the urls of every ticked change from both tabs and runs the check, and the ticks clear when the form closes', async () => {
   // Arrange
   const { page, forge: f } = await start(baseFixture())
   await openTab(page, 'assigned')
@@ -595,10 +595,10 @@ test('Start review opens the New review form with the urls of every ticked chang
   await page.getByRole('checkbox', { name: 'Select Elm' }).check()
   await openTab(page, 'reviewer')
   await page.getByRole('checkbox', { name: 'Select Nettle' }).check()
-  await expect(page.getByTestId('mine-start')).toHaveText('Start review (3)')
+  await expect(page.getByTestId('new-review')).toHaveText('New review (3)')
 
   // Act
-  await page.getByTestId('mine-start').click()
+  await page.getByTestId('new-review').click()
 
   // Assert: the form has the three urls, each once
   const dialog = page.getByRole('dialog', { name: 'New review' })
@@ -625,14 +625,47 @@ test('Start review opens the New review form with the urls of every ticked chang
   await expect(dialog).toHaveCount(0)
 
   // Assert: nothing is ticked any more, in either tab
-  await expect(page.getByTestId('mine-start')).toBeDisabled()
+  await expect(page.getByTestId('new-review')).toHaveText('New review')
   await expect(page.getByRole('checkbox', { name: 'Select Nettle' })).not.toBeChecked()
   await openTab(page, 'assigned')
   await expect(page.getByRole('checkbox', { name: 'Select Aspen' })).not.toBeChecked()
   await expect(page.getByRole('checkbox', { name: 'Select Elm' })).not.toBeChecked()
 })
 
-test('Start review is off while the Prerequisites are not ready, like New review', async () => {
+test('New review with nothing ticked opens an empty form, and does not run the check', async () => {
+  // Arrange
+  const { page } = await start(baseFixture())
+  await openTab(page, 'assigned')
+
+  // Act
+  await page.getByTestId('new-review').click()
+
+  // Assert
+  const dialog = page.getByRole('dialog', { name: 'New review' })
+  await expect(dialog).toBeVisible()
+  await expect(dialog.locator('textarea').first()).toHaveValue('')
+})
+
+test('the New review form with ticked changes stays open while the lists poll and the window gains focus', async () => {
+  // Arrange
+  const { page } = await start(baseFixture(), { clock: true })
+  await openTab(page, 'assigned')
+  await page.getByRole('checkbox', { name: 'Select Aspen' }).check()
+  await page.getByRole('checkbox', { name: 'Select Elm' }).check()
+  await page.getByTestId('new-review').click()
+  const dialog = page.getByRole('dialog', { name: 'New review' })
+  await expect(dialog).toBeVisible({ timeout: SHORT })
+
+  // Act: the window gains focus and the poll runs
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')))
+  await page.clock.fastForward(61_000)
+  await page.waitForTimeout(1500)
+
+  // Assert
+  await expect(dialog).toBeVisible()
+})
+
+test('New review is off while the Prerequisites are not ready', async () => {
   // Arrange: tokens are saved, but the workspace root is not set, so Home is blocked
   const { page } = await start(baseFixture(), { root: false })
   await expect(page.getByTestId('blocked-strip')).toBeVisible({ timeout: SHORT })
@@ -642,8 +675,8 @@ test('Start review is off while the Prerequisites are not ready, like New review
   await page.getByRole('checkbox', { name: 'Select Aspen' }).check()
 
   // Assert
-  await expect(page.getByTestId('mine-start')).toBeDisabled()
-  await expect(page.getByTestId('mine-start')).toHaveAttribute('title', 'Fix the Prerequisites first')
+  await expect(page.getByTestId('new-review')).toBeDisabled()
+  await expect(page.getByTestId('new-review')).toHaveAttribute('title', 'Fix the Prerequisites first')
   await expect(page.getByTestId('new-review')).toBeDisabled()
 })
 
@@ -734,7 +767,7 @@ test.describe('the lists reload by themselves while a list tab is shown', () => 
     const { page, forge: f } = await start(baseFixture(), { clock: true })
     await openTab(page, 'assigned')
     await snapshotsLoaded(page)
-    await page.getByRole('button', { name: 'Prerequisites…' }).click()
+    await app?.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.webContents.send('menu:openPrereq')) // the Settings menu item
     await expect(page.getByRole('heading', { name: 'Prerequisites' })).toBeVisible()
     await page.waitForTimeout(QUIET_MS)
     const before = f.calls.length
@@ -755,7 +788,7 @@ test.describe('the lists reload by themselves while a list tab is shown', () => 
     await pill(page, 'Open').click()
     await modeBtn(page, 'No group').click()
     await page.getByRole('checkbox', { name: 'Select Cedar' }).check()
-    await expect(page.getByTestId('mine-start')).toHaveText('Start review (1)')
+    await expect(page.getByTestId('new-review')).toHaveText('New review (1)')
     const afterLoad = mineCalls(f)
     const added: SeedChange = { provider: 'github', project: GH, iid: 42, title: 'Quince', state: 'draft', author: 'lee', updatedAt: ago(0.1), assigned: true }
     f.setFixture(baseFixture([...SEED, added]))
@@ -767,7 +800,7 @@ test.describe('the lists reload by themselves while a list tab is shown', () => 
     await expect(row(page, 'Quince')).toHaveCount(1)
     expect(mineCalls(f)).toBeGreaterThan(afterLoad)
     await expect(page.getByRole('checkbox', { name: 'Select Cedar' })).toBeChecked()
-    await expect(page.getByTestId('mine-start')).toHaveText('Start review (1)')
+    await expect(page.getByTestId('new-review')).toHaveText('New review (1)')
     await expect(pill(page, 'Draft')).toHaveAttribute('aria-pressed', 'true')
     await expect(pill(page, 'Open')).toHaveAttribute('aria-pressed', 'false')
     await expect(pill(page, 'Draft')).toContainText('3')
@@ -953,7 +986,7 @@ test.describe('sorting the list', () => {
     expect(await layout(page)).toEqual(['G', 'Cedar', 'Juniper', 'G', 'Aspen', 'Birch', 'Dogwood', 'Elm', 'Kauri', 'G', 'Fir', 'G', 'Hazel'])
   })
 
-  test('the sort is kept when the other list tab is shown', async () => {
+  test('each list tab has its own sort, and a tab shows its own sort again when it is shown again', async () => {
     // Arrange
     const { page } = await start(baseFixture())
     await openTab(page, 'assigned')
@@ -964,10 +997,16 @@ test.describe('sorting the list', () => {
     // Act
     await openTab(page, 'reviewer')
 
-    // Assert: the open changes of the reviewer tab are Elm, Linden and Nettle
+    // Assert: the reviewer tab starts with its own default sort, Updated, newest first
+    await expect(sortBtn(page, 'updated')).toContainText('▼')
+    await expect(sortBtn(page, 'title')).not.toContainText(/[▲▼]/)
+
+    // Act and assert: a sort in the reviewer tab does not change the first tab, which shows its own sort again
+    await sortBtn(page, 'title').click()
+    expect(await titles(page)).toEqual(['Elm', 'Linden', 'Nettle'])
+    await openTab(page, 'assigned')
     await expect(sortBtn(page, 'title')).toContainText('▼')
-    await expect(sortBtn(page, 'updated')).not.toContainText(/[▲▼]/)
-    expect(await titles(page)).toEqual(['Nettle', 'Linden', 'Elm'])
+    expect(await titles(page)).toEqual(['Kauri', 'Elm', 'Dogwood', 'Birch', 'Aspen'])
   })
 
   test('the sort is kept across a refresh and across a poll', async () => {
@@ -1371,7 +1410,7 @@ test.describe('collapsing the groups', () => {
     const { page } = await start(baseFixture(), { clock: true })
     await openTab(page, 'assigned')
     await row(page, 'Aspen').getByRole('checkbox').check()
-    await expect(page.getByTestId('mine-start')).toHaveText('Start review (1)')
+    await expect(page.getByTestId('new-review')).toHaveText('New review (1)')
 
     // Act
     await toggle(page, 'Open').click()
@@ -1384,7 +1423,7 @@ test.describe('collapsing the groups', () => {
     await expect(page.getByTestId('group-row')).toHaveCount(1)
     await expect(toggle(page, 'Open')).toHaveAttribute('aria-expanded', 'false')
     await expect(rows(page)).toHaveCount(0)
-    await expect(page.getByTestId('mine-start')).toHaveText('Start review (1)')
+    await expect(page.getByTestId('new-review')).toHaveText('New review (1)')
     await toggle(page, 'Open').click()
     await expect(row(page, 'Aspen').getByRole('checkbox')).toBeChecked()
   })
@@ -1513,7 +1552,7 @@ test.describe('grouping by repo', () => {
     await expect(toggle(page, 'team/backend/x')).toHaveAttribute('aria-expanded', 'false')
     await expect(toggle(page, 'team/backend/x')).toHaveText('▾')
     await expect(toggle(page, 'acme/web')).toHaveText('▴')
-    await expect(page.getByTestId('mine-start')).toHaveText('Start review (1)')
+    await expect(page.getByTestId('new-review')).toHaveText('New review (1)')
   })
 
   test('a collapsed group is kept for each mode: collapsing Open in State mode collapses nothing in Repo mode, and it is still collapsed back in State mode', async () => {
@@ -1546,6 +1585,28 @@ test.describe('grouping by repo', () => {
     await expect(row(page, 'Birch')).toHaveCount(0)
   })
 
+  test('Updated puts the rows under age headers, newest first, and Repository is the name of the repo button', async () => {
+    // Arrange
+    const { page } = await start(baseFixture())
+    await openTab(page, 'assigned')
+
+    // Act
+    await modeBtn(page, 'Updated').click()
+
+    // Assert: every header is one of the age groups, in the order of their age
+    await expect(modeBtn(page, 'Updated')).toHaveAttribute('aria-pressed', 'true')
+    const names = (await page.getByTestId('group-row').allTextContents()).map((t) =>
+      t
+        .replace(/[▴▾]/g, '')
+        .replace(/\s*·.*$/, '')
+        .trim()
+    )
+    const order = ['Today', 'Past few days', 'Past few weeks', 'Months ago']
+    expect(names.length).toBeGreaterThan(0)
+    expect(names.every((n) => order.includes(n))).toBe(true)
+    expect(names).toEqual([...names].sort((a, b) => order.indexOf(a) - order.indexOf(b)))
+  })
+
   test('No group removes every header and shows one flat list, and Repo brings the headers back', async () => {
     // Arrange
     const { page } = await start(baseFixture())
@@ -1570,7 +1631,7 @@ test.describe('grouping by repo', () => {
     await expect(page.getByTestId('group-row')).toHaveCount(2)
   })
 
-  test('the group mode is shared by both tabs and kept after a poll', async () => {
+  test('each list tab has its own group mode, and each one is kept after a poll', async () => {
     // Arrange
     const { page, forge: f } = await start(withZinnia(), { clock: true })
     await openTab(page, 'assigned')
@@ -1579,7 +1640,13 @@ test.describe('grouping by repo', () => {
     await modeBtn(page, 'Repository').click()
     await openTab(page, 'reviewer')
 
-    // Assert: Nettle (acme/web) and Linden, Elm (team/backend/x) are the open reviewer changes
+    // Assert: the reviewer tab still has the default group State
+    await expect(modeBtn(page, 'Repository')).toHaveAttribute('aria-pressed', 'false')
+    await expect(modeBtn(page, 'State')).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.getByTestId('group-row')).toHaveText([/^[▴▾]?\s*Open\s*·\s*3$/])
+
+    // Act: choose Repository here too. Nettle (acme/web) and Linden, Elm (team/backend/x) are the open reviewer changes
+    await modeBtn(page, 'Repository').click()
     await expect(modeBtn(page, 'Repository')).toHaveAttribute('aria-pressed', 'true')
     await expect(page.getByTestId('group-row')).toHaveText([/^[▴▾]?\s*acme\/web\s*·\s*1$/, /^[▴▾]?\s*team\/backend\/x\s*·\s*2$/])
 
@@ -1750,7 +1817,7 @@ test.describe('the approval filter', () => {
     await expect(apill(page, 'Not approved')).toHaveAttribute('aria-pressed', 'false')
     expect(await sortedTitles(page)).toEqual(['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo'])
     await expect(page.getByTestId('group-row')).toHaveText([/^[▴▾]?\s*Open\s*·\s*5$/])
-    await expect(page.getByTestId('mine-start')).toBeDisabled()
+    await expect(page.getByTestId('new-review')).toHaveText('New review')
 
     // Act and assert: a state pill still filters
     await pill(page, 'Open').click()
@@ -1844,7 +1911,7 @@ test.describe('the approval filter', () => {
     expect(await sortedTitles(page)).toEqual(['Charlie', 'Echo', 'Golf', 'India', 'Juliet'])
   })
 
-  test('the reviewer tab has the same filter with the counts of its own changes, and the choice is kept when the tab changes', async () => {
+  test('the reviewer tab has its own approval filter with the counts of its own changes, and each tab keeps its choice when the tab changes', async () => {
     // Arrange
     const { page } = await start(approvalFixture())
     await openTab(page, 'assigned')
@@ -1855,12 +1922,12 @@ test.describe('the approval filter', () => {
     await openTab(page, 'reviewer')
     await snapshotsLoaded(page)
 
-    // Assert: Kilo is approved and Lima is not, and the pill is still off
-    await expect(apill(page, 'Approved')).toHaveAttribute('aria-pressed', 'false')
+    // Assert: Kilo is approved and Lima is not, and this tab still has both pills on, because the pill is off in the other tab only
+    await expect(apill(page, 'Approved')).toHaveAttribute('aria-pressed', 'true')
     await expect(apill(page, 'Not approved')).toHaveAttribute('aria-pressed', 'true')
     await expect(apill(page, 'Approved')).toHaveText(/^Approved\s*1$/)
     await expect(apill(page, 'Not approved')).toHaveText(/^Not approved\s*1$/)
-    expect(await sortedTitles(page)).toEqual(['Lima'])
+    expect(await sortedTitles(page)).toEqual(['Kilo', 'Lima'])
 
     // Act and assert: back on the first tab
     await openTab(page, 'assigned')
@@ -1951,19 +2018,19 @@ test.describe('the approval filter', () => {
     await snapshotsLoaded(page)
     await page.getByRole('checkbox', { name: 'Select Alpha' }).check()
     await page.getByRole('checkbox', { name: 'Select Charlie' }).check()
-    await expect(page.getByTestId('mine-start')).toHaveText('Start review (2)')
+    await expect(page.getByTestId('new-review')).toHaveText('New review (2)')
 
     // Act
     await apill(page, 'Approved').click()
 
     // Assert: Alpha is hidden but still counted
     await expect(row(page, 'Alpha')).toHaveCount(0)
-    await expect(page.getByTestId('mine-start')).toHaveText('Start review (2)')
+    await expect(page.getByTestId('new-review')).toHaveText('New review (2)')
 
     // Act and assert: it is still ticked when it shows again
     await apill(page, 'Approved').click()
     await expect(page.getByRole('checkbox', { name: 'Select Alpha' })).toBeChecked()
-    await expect(page.getByTestId('mine-start')).toHaveText('Start review (2)')
+    await expect(page.getByTestId('new-review')).toHaveText('New review (2)')
   })
 })
 
@@ -2036,7 +2103,7 @@ test.describe('grouping by approval', () => {
     await expect(toggle(page, 'Not approved')).toHaveAttribute('aria-expanded', 'true')
     await expect(page.getByTestId('group-row')).toHaveText([/^[▴▾]?\s*Approved\s*·\s*3$/, /^[▴▾]?\s*Not approved\s*·\s*2$/])
     expect(await sortedTitles(page)).toEqual(['Charlie', 'Echo'])
-    await expect(page.getByTestId('mine-start')).toHaveText('Start review (1)')
+    await expect(page.getByTestId('new-review')).toHaveText('New review (1)')
 
     // Act and assert
     await toggle(page, 'Approved').click()
@@ -2063,7 +2130,7 @@ test.describe('grouping by approval', () => {
     expect(await sortedTitles(page)).toEqual(['Alpha', 'Bravo', 'Delta'])
   })
 
-  test('the mode and a collapsed group are kept after a tab switch and after a poll', async () => {
+  test('the mode and a collapsed group belong to their tab, and are kept after a tab switch and after a poll', async () => {
     // Arrange
     const { page, forge: f } = await setup({ clock: true })
     await toggle(page, 'Approved').click()
@@ -2075,11 +2142,20 @@ test.describe('grouping by approval', () => {
     await openTab(page, 'reviewer')
     await snapshotsLoaded(page)
 
-    // Assert: Kilo is approved and Lima is not. Approved is collapsed here too, because the key is the same.
-    await expect(modeBtn(page, 'Approval')).toHaveAttribute('aria-pressed', 'true')
+    // Assert: the reviewer tab has the default group State and nothing collapsed
+    await expect(modeBtn(page, 'Approval')).toHaveAttribute('aria-pressed', 'false')
+    await expect(page.getByTestId('group-row')).toHaveText([/^[▴▾]?\s*Open\s*·\s*2$/])
+
+    // Act: Approval here has its own collapsed groups. Kilo is approved and Lima is not.
+    await modeBtn(page, 'Approval').click()
     await expect(page.getByTestId('group-row')).toHaveText([/^[▴▾]?\s*Approved\s*·\s*1$/, /^[▴▾]?\s*Not approved\s*·\s*1$/])
+    await expect(toggle(page, 'Approved')).toHaveAttribute('aria-expanded', 'true')
+    expect(await sortedTitles(page)).toEqual(['Kilo', 'Lima'])
+
+    // Assert: the first tab kept its mode and its collapsed group
+    await openTab(page, 'assigned')
+    await expect(modeBtn(page, 'Approval')).toHaveAttribute('aria-pressed', 'true')
     await expect(toggle(page, 'Approved')).toHaveAttribute('aria-expanded', 'false')
-    expect(await sortedTitles(page)).toEqual(['Lima'])
   })
 
   test('a change that is not loaded yet sits in Not approved and moves to Approved when its details arrive', async () => {
@@ -2196,7 +2272,7 @@ test.describe('the shared table of the MR list', () => {
     await expect(page.getByTestId('group-mode')).toHaveCount(1)
     await expect(page.getByTestId('group-toggle')).toHaveCount(1)
     await expect(page.getByTestId('mine-refresh')).toHaveCount(1)
-    await expect(page.getByTestId('mine-start')).toHaveCount(1)
+    await expect(page.getByTestId('new-review')).toHaveCount(1)
   })
 
   test('the cells that only a snapshot can fill show the placeholder until the snapshot arrives, and then the real values', async () => {
@@ -2297,8 +2373,8 @@ test.describe('the shared table of the MR list', () => {
     // Assert
     await expect.poll(opened).toEqual([glUrl(1)])
     await expect(page.getByRole('checkbox', { name: 'Select Aspen' })).not.toBeChecked()
-    await expect(page.getByTestId('mine-start')).toBeDisabled()
-    await expect(page.getByTestId('mine-start')).toHaveText('Start review (0)')
+    await expect(page.getByTestId('new-review')).toBeEnabled()
+    await expect(page.getByTestId('new-review')).toHaveText('New review')
 
     // Act
     await cellAt(row(page, 'Birch'), 'Change request').locator('a').click()
@@ -2306,7 +2382,7 @@ test.describe('the shared table of the MR list', () => {
     // Assert: the GitHub address, and the first one is not opened again
     await expect.poll(opened).toEqual([glUrl(1), ghUrl(21)])
     await expect(page.getByRole('checkbox', { name: 'Select Birch' })).not.toBeChecked()
-    await expect(page.getByTestId('mine-start')).toHaveText('Start review (0)')
+    await expect(page.getByTestId('new-review')).toHaveText('New review')
   })
 
   test('a click on the change request link of a ticked row keeps the row ticked and keeps the count', async () => {
@@ -2322,7 +2398,7 @@ test.describe('the shared table of the MR list', () => {
     // Assert
     await expect.poll(opened).toEqual([glUrl(1)])
     await expect(page.getByRole('checkbox', { name: 'Select Aspen' })).toBeChecked()
-    await expect(page.getByTestId('mine-start')).toHaveText('Start review (1)')
+    await expect(page.getByTestId('new-review')).toHaveText('New review (1)')
   })
 
   test('sorting by MR orders by the number as a number, so 9 comes before 10 and 100, and equal numbers go to the newest update and then the address, in both directions', async () => {
@@ -2985,7 +3061,7 @@ test.describe('actions on the home rows', () => {
   ]
   const patch = (iid: number, over: Partial<SeedChange>): SeedChange[] => ACTION_SEED.map((c) => (c.iid === iid ? { ...c, ...over } : c))
 
-  /** Starts on the list "Assigned to me" with every state shown and every snapshot read, unless `settle` is false. */
+  /** Starts on the list "Owned by me" with every state shown and every snapshot read, unless `settle` is false. */
   async function startActions(
     seed: SeedChange[] = ACTION_SEED,
     extra: Fixture = {},
@@ -3566,7 +3642,7 @@ test.describe('actions on the home rows', () => {
       await expect(dialog(page)).toHaveCount(0, WAIT)
       await expect(page.getByLabel('Select Acacia')).not.toBeChecked()
       await expect(page.getByLabel('Select Ebony')).toBeChecked()
-      await expect(page.getByTestId('mine-start')).toHaveText('Start review (1)')
+      await expect(page.getByTestId('new-review')).toHaveText('New review (1)')
     })
   })
 
@@ -3626,7 +3702,7 @@ test.describe('actions on the home rows', () => {
       const { page } = await startActions()
       await page.getByLabel('Select Acacia').check()
       await page.getByLabel('Select Camphor').check()
-      await expect(page.getByTestId('mine-start')).toHaveText('Start review (2)')
+      await expect(page.getByTestId('new-review')).toHaveText('New review (2)')
 
       // Act
       await approveBtn(page, 'Acacia').click()
@@ -3640,7 +3716,7 @@ test.describe('actions on the home rows', () => {
       await expect(page.getByLabel('Select Acacia')).toBeChecked()
       await expect(page.getByLabel('Select Camphor')).toBeChecked()
       await expect(page.getByLabel('Select Ebony')).not.toBeChecked()
-      await expect(page.getByTestId('mine-start')).toHaveText('Start review (2)')
+      await expect(page.getByTestId('new-review')).toHaveText('New review (2)')
     })
   })
 

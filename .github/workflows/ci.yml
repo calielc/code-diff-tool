@@ -36,8 +36,9 @@ jobs:
       - run: npm test
       - run: npm run build
 
-  e2e:
-    name: End-to-end tests (${{ matrix.os }})
+  # The end-to-end tests are split in four parts. Each part runs on its own runner, so the run takes about a quarter of the time.
+  e2e-shard:
+    name: End-to-end tests, part ${{ matrix.shard }} of 4 (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     env:
       # A hidden window does not render on a runner, so the tests show their windows.
@@ -48,6 +49,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -60,7 +62,21 @@ jobs:
       # Linux has no screen on a runner. xvfb gives Electron a virtual one.
       - name: Run the tests (Linux)
         if: runner.os == 'Linux'
-        run: xvfb-run --auto-servernum npm run test:e2e
+        run: xvfb-run --auto-servernum npm run test:e2e -- --shard=${{ matrix.shard }}/4
       - name: Run the tests (Windows)
         if: runner.os != 'Linux'
-        run: npm run test:e2e
+        run: npm run test:e2e -- --shard=${{ matrix.shard }}/4
+
+  # The ruleset requires the checks named "End-to-end tests (ubuntu-latest)" and "End-to-end tests (windows-latest)".
+  # This job keeps those names. It passes only when all parts passed.
+  e2e:
+    name: End-to-end tests (${{ matrix.os }})
+    needs: e2e-shard
+    if: always()
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - name: Check that every part passed
+        run: test "${{ needs.e2e-shard.result }}" = "success"

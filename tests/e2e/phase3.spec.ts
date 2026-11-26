@@ -198,6 +198,18 @@ test('Cancel stops a slow build and returns to Home', async () => {
   await app.close()
 })
 
+test('the loading page shows the saved title of the review and not its slug', async () => {
+  const { env, shas } = makeEnv()
+  seed(env, 'slug-name', { title: 'Renamed review', mrs: [{ projectPath: 'team/backend/x', iid: 12 }], issues: [] })
+  const app = await launch(env, mr('team/backend/x', 12, 'opened', shas.a, shas.b, 30_000))
+  const page = await home(app)
+  await page.getByTestId('review-slug-name').dblclick()
+  await expect(page.getByTestId('stage-reading')).toHaveAttribute('data-state', 'running')
+  await expect(page.getByTestId('build').getByRole('heading', { level: 1 })).toHaveText('Renamed review')
+  await page.getByTestId('cancel-build').click()
+  await app.close()
+})
+
 test('the steps of the loading page sit one below the other', async () => {
   const { env, shas } = makeEnv()
   seed(env, 'steps', { title: 'Steps', mrs: [{ projectPath: 'team/backend/x', iid: 12 }], issues: [] })

@@ -13,6 +13,8 @@ export function ReviewView(props: { slug: string; onHome: () => void; onOpenPrer
   const [now, setNow] = useState(Date.now())
   const [lastChange, setLastChange] = useState(Date.now())
   const [canceling, setCanceling] = useState(false)
+  // The saved title of the review, for the loading page. The slug is the name the review had when it was made, so it is wrong after a rename.
+  const [savedTitle, setSavedTitle] = useState<string | null>(null)
   const run = useRef(0)
 
   const build = useCallback(async () => {
@@ -20,6 +22,7 @@ export function ReviewView(props: { slug: string; onHome: () => void; onOpenPrer
     setError(null)
     setResult(null)
     setCanceling(false)
+    void api.reviews.list().then((list) => setSavedTitle(list.find((r) => r.slug === props.slug)?.title ?? null))
     const r = await api.reviews.build(props.slug)
     if (id !== run.current) return
     if (r.ok) setResult(r.value)
@@ -56,7 +59,7 @@ export function ReviewView(props: { slug: string; onHome: () => void; onOpenPrer
   }
 
   const failedStage = progress?.stages.find((s) => s.state === 'failed')
-  const title = result?.title ?? props.slug
+  const title = result?.title ?? savedTitle ?? props.slug
 
   if (result) return <MrsScreen result={result} slug={props.slug} onHome={props.onHome} onReload={() => void build()} />
 

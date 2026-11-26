@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { parseUrlBox } from '@shared/review'
 import { api } from '../api'
 
-/** The row at the bottom of the Code changes tab: paste merge or pull request URLs and add them to the open review. */
+/** The row at the bottom of the Code changes tab: paste change request URLs and add them to the open review. */
 export function AddChanges(props: { slug: string; onAdded: () => void }): React.JSX.Element {
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
@@ -26,10 +26,10 @@ export function AddChanges(props: { slug: string; onAdded: () => void }): React.
   return (
     <form className="addissues" data-testid="add-changes-form" onSubmit={(e) => (e.preventDefault(), void add())}>
       <input
-        aria-label="Merge or pull requests to add"
+        aria-label="Change requests to add"
         data-testid="add-urls"
         className="mono grow"
-        placeholder="Paste merge request or pull request URLs to add them to this review"
+        placeholder="Paste change request URLs to add them to this review"
         value={text}
         onChange={(e) => setText(e.target.value)}
       />

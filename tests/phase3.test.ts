@@ -83,7 +83,7 @@ describe('form parsing (file 07 section 6)', () => {
     expect(r.refs).toHaveLength(1)
     expect(r.refs[0]).toMatchObject({ project: 'team/backend/x', iid: 12 })
     expect(r.duplicates).toBe(1)
-    expect(r.errors[0].message).toBe("Line 2: 'https://example.com/x' is not a merge request or pull request URL.")
+    expect(r.errors[0].message).toBe("Line 2: 'https://example.com/x' is not a change request URL.")
   })
   it('reads GitHub pull request URLs in the same box', () => {
     expect(parseUrlBox('https://github.com/o/r/pull/3').refs[0]).toMatchObject({ provider: 'github', project: 'o/r', iid: 3 })
@@ -116,7 +116,7 @@ describe('check and create', () => {
   it('refuses when every change is closed', async () => {
     setFixture(mrFixture('team/backend/x', 12, 'closed', shas.a, shas.b))
     const r = await checkReview(root, { urls: URL_X, issues: '', slug: 'LX-1' })
-    expect(r).toEqual({ ok: false, error: 'No change to review: every merge or pull request is closed or has no clone in the workspace.' })
+    expect(r).toEqual({ ok: false, error: 'No change to review: every change request is closed or has no clone in the workspace.' })
   })
   it('shows a failed read as <url>: <message>', async () => {
     setFixture({ [`GET projects/team%2Fbackend%2Fx/merge_requests/12`]: { fail: 'HTTP 404 Not Found' } })

@@ -43,7 +43,7 @@ export async function fileAtCommit(slug: string, mrKey: string, sha: string, pat
     const all = await commitList(range.value.dir, range.value.base, range.value.head)
     if (!all.some((c) => c.sha === sha)) return { ok: false, error: 'That commit is not part of this change.' }
     const parent = await parentOf(range.value.dir, sha)
-    if (!parent) return { ok: false, error: 'That is the first commit of the repo, so it has no parent to compare with.' }
+    if (!parent) return { ok: false, error: 'That is the first commit of the repository, so it has no parent to compare with.' }
     const files = await buildFiles(range.value.dir, parent, sha, new Map(), undefined, new Set([path, oldPath]))
     const file = files.find((f) => f.path === path || f.oldPath === oldPath || f.path === oldPath)
     return file ? { ok: true, value: file } : { ok: false, error: 'That commit does not change this file.' }

@@ -149,7 +149,7 @@ async function checkAi(): Promise<PrereqRow> {
 
 async function checkRoot(root: string | undefined, fresh: boolean): Promise<{ row: PrereqRow; clones: Clone[] }> {
   const base: Base = { id: 'root', name: 'Workspace root', required: true }
-  const choose = 'Choose the folder that holds your repo clones.'
+  const choose = 'Choose the folder that holds your repository clones.'
   if (!root) {
     return { row: row({ ...base, state: 'not-set-up', detail: `No workspace root is set. ${choose}` }), clones: [] }
   }
@@ -164,7 +164,7 @@ async function checkRoot(root: string | undefined, fresh: boolean): Promise<{ ro
     }
   }
   return {
-    row: row({ ...base, state: 'ready', version: root, detail: root, note: `Found ${clones.length} ${clones.length === 1 ? 'repo' : 'repos'}.` }),
+    row: row({ ...base, state: 'ready', version: root, detail: root, note: `Found ${clones.length} ${clones.length === 1 ? 'repository' : 'repositories'}.` }),
     clones
   }
 }

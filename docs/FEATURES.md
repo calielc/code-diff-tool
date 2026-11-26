@@ -4,7 +4,7 @@ This file describes what the app does for the user. The pictures show made-up da
 
 ## 1. What the app is
 
-The app helps a reviewer read the code changes of one piece of work. A piece of work often has several merge requests or pull requests in several repos, and one or more issues. The app puts them in one review, shows the code of all of them together, and keeps your progress.
+The app helps a reviewer read the code changes of one piece of work. A piece of work often has several change requests in several repositories, and one or more issues. The app puts them in one review, shows the code of all of them together, and keeps your progress.
 
 - Hosts: GitLab and GitHub, in any mix. The app calls their REST interfaces with your tokens. Jira gives the issues.
 - Code: the app reads the diffs from your local clones with `git`. A change with no local clone is listed, but it has no diff.
@@ -12,7 +12,7 @@ The app helps a reviewer read the code changes of one piece of work. A piece of 
 
 ## 2. Reviews
 
-The home screen lists your reviews with their name, title, number of changes, number of issues, last opened time and the state of the Summarised page (Ready, Not written or Failed). A new review shows Not written until you open the Summarised tab. Every column sorts. A filter box narrows the list. Above the grid, at the right, four pills (Writing, Failed, Ready, Not written) filter by the state of the Summarised page. They look like the pills of the MR list. Each pill shows how many reviews are in that state, and a click turns the state on or off.
+The home screen lists your reviews with their name, title, number of changes, number of issues, last opened time and the state of the Summarised page (Ready, Not written or Failed). A new review shows Not written until you open the Summarised tab. Every column sorts. A filter box narrows the list. Above the grid, at the right, four pills (Writing, Failed, Ready, Not written) filter by the state of the Summarised page. They look like the pills of the change request list. Each pill shows how many reviews are in that state, and a click turns the state on or off.
 
 ![The Reviews tab of the home screen](docs/images/home.png)
 
@@ -30,7 +30,7 @@ The home screen has three tabs: Reviews, Assigned to me and I am the reviewer. R
 
 - **New review** asks for a name, the issue keys with an optional spec file, and the URLs of the merge or pull requests, in that order. The name is required, but when you leave it empty the app uses the first issue key, or else the first change as `<repo>-<number>`. The app makes the folder name of the review from the name, and adds `-2`, `-3` and so on when it is taken. The check step reads each change and shows what the review will hold. A change with no local clone is skipped, and the list says so. Create and open builds the review.
 - A review is built when it opens. The build shows its stages: finding the clones, checking your login, reading the issues, reading the code changes, fetching the missing commits, diffing the files and preparing the review. A reload builds it again.
-- **Add changes** at the bottom of the Code changes tab adds more merge or pull requests to the open review. **Add issues** at the bottom of the Issues tab adds issues. What the review holds stays, and nothing is added twice.
+- **Add changes** at the bottom of the Code changes tab adds more change requests to the open review. **Add issues** at the bottom of the Issues tab adds issues. What the review holds stays, and nothing is added twice.
 - **Start from outside.** A second start of the app, or a `codediff://new?...` link, hands a request to the open app. The request can hold `mr`, `issue`, `title` and `review`. It fills in the New review form and runs the check, and you press Create. When it names an existing review, a dialog lists what it brings and adds it when you agree. On the command line, use the form `--mr=<url>` and `--issue=<key>`, because the app receives the arguments of a second start in a different order. The link works only in the installed app.
 
 ## 3. The screen of a review
@@ -70,7 +70,7 @@ The table has one row for each change. The columns are Repo, MR, Stack, Title, P
 
 ### 6.1 The toolbar
 
-- **View**: Linear or Stacked. Linear shows the files of each change by itself. Stacked shows the files of all the changes of one repo as one diff, when they merge cleanly. The Summarised page has its own tab, described in section 7. It has no file tree, and it shows only the Noise group.
+- **View**: Linear or Stacked. Linear shows the files of each change by itself. Stacked shows the files of all the changes of one repository as one diff, when they merge cleanly. The Summarised page has its own tab, described in section 7. It has no file tree, and it shows only the Noise group.
 - **Noise**: Code only, Keep mechanical, or Everything. Code only hides blank lines, white space, imports, comments and mechanical modifiers. A file with no change at that level is hidden, and the tree says how many.
 - **Layout**: Inline, Side by side, or Full file.
 - **Files**: New, Modified and Deleted, each with its count.
@@ -82,7 +82,7 @@ The table has one row for each change. The columns are Repo, MR, Stack, Title, P
 
 ### 6.2 The file tree
 
-The tree groups the files by repo, change and folder. A box on each row marks the file or the whole folder as viewed. In the Stacked view, a mark on a file also marks the same path in every change of that part, so the Linear view shows it under each change. Taking the mark away in either view clears it in the other: a stacked file shows as viewed only while none of its changes lost its mark. A mark on one change in Linear stays on that change. The bar above the tree shows how many files you viewed. A row shows the status of the file (A, M, D or R), its counts of added and removed lines, and its open threads. A field filters the files by name.
+The tree groups the files by repository, change and folder. A box on each row marks the file or the whole folder as viewed. In the Stacked view, a mark on a file also marks the same path in every change of that part, so the Linear view shows it under each change. Taking the mark away in either view clears it in the other: a stacked file shows as viewed only while none of its changes lost its mark. A mark on one change in Linear stays on that change. The bar above the tree shows how many files you viewed. A row shows the status of the file (A, M, D or R), its counts of added and removed lines, and its open threads. A field filters the files by name.
 
 - The arrow keys move through the rows. Up and Down open the file that the focus reaches. Left folds a folder or moves to the parent. Right unfolds a folder or moves to its first child. `*` unfolds everything below the row.
 - `n` and `p` open the next and the prior file in the order of the tree. `v` marks the open file as viewed and goes to the next file. Shift+V takes the mark away.
@@ -178,7 +178,7 @@ Each issue lists its criteria. **Validate ACs** asks the AI tool to check each c
 ![The AI review box](docs/images/ai-review.png)
 
 - **AI review.** The AI button opens a box. Choose a skill and a model, then start the review. A skill is a markdown file with review rules. One skill is built in. You can point the app at a folder of skill files whose front matter says they are for a code review. The run reads the review context, which is a folder of files that the app writes. It takes a few minutes, and it keeps going when you close the window. Each finding becomes a draft comment that starts with a robot mark, the lens and the severity. A finding with no line becomes a comment on the change.
-- **Chat.** The button at the bottom right opens a chat about the whole review. A chat on one line is available from the gutter. The AI answers with the code of the repos at hand. A code block of an answer has syntax colours when its fence names a known language, as in three backticks and `ts`. It can propose comments, open a file or mark files as viewed, as cards that you apply or not.
+- **Chat.** The button at the bottom right opens a chat about the whole review. A chat on one line is available from the gutter. The AI answers with the code of the repositories at hand. A code block of an answer has syntax colours when its fence names a known language, as in three backticks and `ts`. It can propose comments, open a file or mark files as viewed, as cards that you apply or not.
 - **Tools.** Claude Code is the default. Codex and a custom command also work. The Prerequisites screen shows the choice. A custom command can use the placeholders `{prompt}`, `{instructions}`, `{model}`, `{effort}`, `{dir}` and `{session}`.
 - The AI tools run with read-only tools. They cannot change a file, and nothing they write reaches a host without your action.
 

@@ -76,8 +76,8 @@ const row = (page: Page, title: string): Locator => rows(page).filter({ hasText:
 /** The 15 columns, left to right: the checkbox column has no header text. */
 const HEADERS = [
   '',
-  'Repo',
-  'MR',
+  'Repository',
+  'Change request',
   'Stack',
   'Title',
   'Pipeline',
@@ -112,8 +112,9 @@ const SNAPSHOT_ONLY = ['Stack', 'Pipeline', 'Your review', 'Comments', 'Created'
 const cellAt = (r: Locator, header: string): Locator => r.locator('td').nth(HEADERS.indexOf(header))
 const headerTexts = async (page: Page): Promise<string[]> =>
   (await page.locator('table.reviews thead th').allTextContents()).map((t) => t.replace(/[▲▼]/g, '').trim())
-const pill = (page: Page, name: string): Locator => page.getByRole('group', { name: 'Show MRs by state' }).getByRole('button', { name: new RegExp(`^${name}`) })
-const modeBtn = (page: Page, name: 'No group' | 'Repo' | 'State' | 'Approval'): Locator =>
+const pill = (page: Page, name: string): Locator =>
+  page.getByRole('group', { name: 'Show change requests by state' }).getByRole('button', { name: new RegExp(`^${name}`) })
+const modeBtn = (page: Page, name: 'No group' | 'Repository' | 'State' | 'Approval'): Locator =>
   page.getByRole('group', { name: 'Group the list' }).getByRole('button', { name, exact: true })
 const tab = (page: Page, which: 'reviews' | 'assigned' | 'reviewer'): Locator => page.getByTestId(`home-tab-${which}`)
 
@@ -152,7 +153,7 @@ test('the main screen has the three tabs, Reviews is the default and shows the t
   await expect(tab(page, 'assigned')).toHaveAttribute('aria-selected', 'false')
   await expect(tab(page, 'reviewer')).toHaveAttribute('aria-selected', 'false')
   const headers = (await page.locator('table.reviews thead th').allTextContents()).map((t) => t.replace(/[▲▼]/g, '').trim())
-  expect(headers).toEqual(['Name', 'Changes', 'Issues', 'Last opened', 'Summarised', ''])
+  expect(headers).toEqual(['Name', 'Change requests', 'Issues', 'Last opened', 'Summarised', ''])
   await expect(page.getByTestId('review-R-1')).toBeVisible()
   await expect(page.getByTestId('review-R-2')).toBeVisible()
   await expect(page.getByTestId('new-review')).toBeEnabled()
@@ -219,7 +220,7 @@ test('the state pills show the counts of all loaded changes, only Open is on at 
   // Arrange
   const { page } = await start(baseFixture())
   await openTab(page, 'assigned')
-  const group = page.getByRole('group', { name: 'Show MRs by state' })
+  const group = page.getByRole('group', { name: 'Show change requests by state' })
 
   // Assert: counts of the 9 assigned changes are the real ones, also for the pills that are off
   await expect(group).toHaveClass(/seg/)
@@ -369,9 +370,9 @@ test('the group mode is a four-way choice None, Repo, State, Approval in one gro
   const modes = page.getByTestId('group-mode')
   await expect(modes).toHaveAttribute('role', 'group')
   await expect(modes).toHaveAttribute('aria-label', 'Group the list')
-  await expect(modes.getByRole('button')).toHaveText(['No group', 'Repo', 'State', 'Approval'])
+  await expect(modes.getByRole('button')).toHaveText(['No group', 'Repository', 'State', 'Approval'])
   await expect(modeBtn(page, 'No group')).toHaveAttribute('aria-pressed', 'false')
-  await expect(modeBtn(page, 'Repo')).toHaveAttribute('aria-pressed', 'false')
+  await expect(modeBtn(page, 'Repository')).toHaveAttribute('aria-pressed', 'false')
   await expect(modeBtn(page, 'State')).toHaveAttribute('aria-pressed', 'true')
   await expect(modeBtn(page, 'Approval')).toHaveAttribute('aria-pressed', 'false')
   await expect(page.getByTestId('group-row')).toHaveText([/^[▴▾]?\s*Open\s*·\s*5$/])
@@ -1432,10 +1433,10 @@ test.describe('grouping by repo', () => {
     await openTab(page, 'assigned')
 
     // Act
-    await modeBtn(page, 'Repo').click()
+    await modeBtn(page, 'Repository').click()
 
     // Assert
-    await expect(modeBtn(page, 'Repo')).toHaveAttribute('aria-pressed', 'true')
+    await expect(modeBtn(page, 'Repository')).toHaveAttribute('aria-pressed', 'true')
     await expect(modeBtn(page, 'State')).toHaveAttribute('aria-pressed', 'false')
     await expect(page.getByTestId('group-row')).toHaveText([/^[▴▾]?\s*acme\/web\s*·\s*1$/, /^[▴▾]?\s*team\/api\s*·\s*1$/, /^[▴▾]?\s*team\/backend\/x\s*·\s*4$/])
     const order = await page
@@ -1448,7 +1449,7 @@ test.describe('grouping by repo', () => {
     // Arrange
     const { page } = await start(baseFixture())
     await openTab(page, 'assigned')
-    await modeBtn(page, 'Repo').click()
+    await modeBtn(page, 'Repository').click()
     await expect(page.getByTestId('group-row')).toHaveCount(2)
 
     // Act: Title ascending, then descending
@@ -1477,7 +1478,7 @@ test.describe('grouping by repo', () => {
     // Arrange
     const { page } = await start(baseFixture())
     await openTab(page, 'assigned')
-    await modeBtn(page, 'Repo').click()
+    await modeBtn(page, 'Repository').click()
 
     // Act: show every state
     await showAll(page)
@@ -1499,7 +1500,7 @@ test.describe('grouping by repo', () => {
     // Arrange
     const { page } = await start(baseFixture())
     await openTab(page, 'assigned')
-    await modeBtn(page, 'Repo').click()
+    await modeBtn(page, 'Repository').click()
     await row(page, 'Kauri').getByRole('checkbox').check()
 
     // Act
@@ -1523,7 +1524,7 @@ test.describe('grouping by repo', () => {
     await expect(rows(page)).toHaveCount(0)
 
     // Act
-    await modeBtn(page, 'Repo').click()
+    await modeBtn(page, 'Repository').click()
 
     // Assert
     await expect(rows(page)).toHaveCount(5)
@@ -1539,7 +1540,7 @@ test.describe('grouping by repo', () => {
     await expect(rows(page)).toHaveCount(0)
 
     // Act and assert: in Repo mode the repo is still collapsed too
-    await modeBtn(page, 'Repo').click()
+    await modeBtn(page, 'Repository').click()
     await expect(toggle(page, 'acme/web')).toHaveAttribute('aria-expanded', 'false')
     await expect(row(page, 'Aspen')).toHaveCount(1)
     await expect(row(page, 'Birch')).toHaveCount(0)
@@ -1549,7 +1550,7 @@ test.describe('grouping by repo', () => {
     // Arrange
     const { page } = await start(baseFixture())
     await openTab(page, 'assigned')
-    await modeBtn(page, 'Repo').click()
+    await modeBtn(page, 'Repository').click()
     await expect(page.getByTestId('group-row')).toHaveCount(2)
 
     // Act
@@ -1557,13 +1558,13 @@ test.describe('grouping by repo', () => {
 
     // Assert
     await expect(modeBtn(page, 'No group')).toHaveAttribute('aria-pressed', 'true')
-    await expect(modeBtn(page, 'Repo')).toHaveAttribute('aria-pressed', 'false')
+    await expect(modeBtn(page, 'Repository')).toHaveAttribute('aria-pressed', 'false')
     await expect(page.getByTestId('group-row')).toHaveCount(0)
     await expect(page.getByRole('button', { name: /^(Collapse|Expand) the / })).toHaveCount(0)
     expect(await titles(page)).toEqual(['Aspen', 'Birch', 'Dogwood', 'Elm', 'Kauri'])
 
     // Act
-    await modeBtn(page, 'Repo').click()
+    await modeBtn(page, 'Repository').click()
 
     // Assert
     await expect(page.getByTestId('group-row')).toHaveCount(2)
@@ -1575,11 +1576,11 @@ test.describe('grouping by repo', () => {
     await openTab(page, 'assigned')
 
     // Act
-    await modeBtn(page, 'Repo').click()
+    await modeBtn(page, 'Repository').click()
     await openTab(page, 'reviewer')
 
     // Assert: Nettle (acme/web) and Linden, Elm (team/backend/x) are the open reviewer changes
-    await expect(modeBtn(page, 'Repo')).toHaveAttribute('aria-pressed', 'true')
+    await expect(modeBtn(page, 'Repository')).toHaveAttribute('aria-pressed', 'true')
     await expect(page.getByTestId('group-row')).toHaveText([/^[▴▾]?\s*acme\/web\s*·\s*1$/, /^[▴▾]?\s*team\/backend\/x\s*·\s*2$/])
 
     // Act
@@ -1588,10 +1589,10 @@ test.describe('grouping by repo', () => {
     await expect.poll(() => mineCalls(f)).toBeGreaterThan(before)
 
     // Assert
-    await expect(modeBtn(page, 'Repo')).toHaveAttribute('aria-pressed', 'true')
+    await expect(modeBtn(page, 'Repository')).toHaveAttribute('aria-pressed', 'true')
     await expect(page.getByTestId('group-row')).toHaveCount(2)
     await openTab(page, 'assigned')
-    await expect(modeBtn(page, 'Repo')).toHaveAttribute('aria-pressed', 'true')
+    await expect(modeBtn(page, 'Repository')).toHaveAttribute('aria-pressed', 'true')
     await expect(page.getByTestId('group-row')).toHaveText([/^[▴▾]?\s*acme\/web\s*·\s*1$/, /^[▴▾]?\s*team\/api\s*·\s*1$/, /^[▴▾]?\s*team\/backend\/x\s*·\s*4$/])
   })
 })
@@ -1614,7 +1615,7 @@ const APPROVAL_SEED: SeedChange[] = [
   { provider: 'gitlab', project: GL, iid: 310, title: 'Lima', state: 'opened', author: 'hal', updatedAt: ago(2.2), reviewer: true }
 ]
 const approvalFixture = (extra: { snapshotSleepMs?: number } = {}): Fixture => changesFixture(APPROVAL_SEED, extra)
-const approvalGroup = (page: Page): Locator => page.getByRole('group', { name: 'Show MRs by approval' })
+const approvalGroup = (page: Page): Locator => page.getByRole('group', { name: 'Show change requests by approval' })
 const apill = (page: Page, which: 'Approved' | 'Not approved'): Locator => approvalGroup(page).getByRole('button', { name: new RegExp(`^${which}`) })
 const shownTitles = (page: Page): Promise<string[]> => rows(page).evaluateAll((els) => els.map((e) => e.querySelector('td.titlecell > div')?.textContent ?? ''))
 const sortedTitles = async (page: Page): Promise<string[]> => (await shownTitles(page)).sort()
@@ -1636,7 +1637,7 @@ test.describe('the approval filter', () => {
     await expect(group.getByRole('button')).toHaveText([/^Approved/, /^Not approved/])
     await expect(apill(page, 'Approved')).toHaveAttribute('aria-pressed', 'true')
     await expect(apill(page, 'Not approved')).toHaveAttribute('aria-pressed', 'true')
-    await expect(page.getByRole('group', { name: 'Show MRs by state' })).toHaveCount(1)
+    await expect(page.getByRole('group', { name: 'Show change requests by state' })).toHaveCount(1)
     expect(await sortedTitles(page)).toEqual(['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo'])
   })
 
@@ -1822,7 +1823,7 @@ test.describe('the approval filter', () => {
     await expect(page.getByTestId('group-row')).toHaveText([/^[▴▾]?\s*Draft\s*·\s*1$/, /^[▴▾]?\s*Open\s*·\s*3$/, /^[▴▾]?\s*Merged\s*·\s*1$/])
 
     // Act and assert: Repo mode, Foxtrot, Alpha, Bravo and Hotel are in team/backend/x and Delta is in acme/web
-    await modeBtn(page, 'Repo').click()
+    await modeBtn(page, 'Repository').click()
     await expect(page.getByTestId('group-row')).toHaveText([/^[▴▾]?\s*acme\/web\s*·\s*1$/, /^[▴▾]?\s*team\/backend\/x\s*·\s*4$/])
     expect(await sortedTitles(page)).toEqual(['Alpha', 'Bravo', 'Delta', 'Foxtrot', 'Hotel'])
 
@@ -1838,7 +1839,7 @@ test.describe('the approval filter', () => {
     // Act and assert: swap the pills, Repo mode drops acme/web only when it has no row left
     await apill(page, 'Not approved').click()
     await apill(page, 'Approved').click()
-    await modeBtn(page, 'Repo').click()
+    await modeBtn(page, 'Repository').click()
     await expect(page.getByTestId('group-row')).toHaveText([/^[▴▾]?\s*acme\/web\s*·\s*1$/, /^[▴▾]?\s*team\/backend\/x\s*·\s*4$/])
     expect(await sortedTitles(page)).toEqual(['Charlie', 'Echo', 'Golf', 'India', 'Juliet'])
   })
@@ -2207,8 +2208,8 @@ test.describe('the shared table of the MR list', () => {
 
     // Assert: a GitLab row, the real cells of the list
     const alder = row(page, 'Alder')
-    await expect(cellAt(alder, 'Repo')).toHaveText(GL)
-    await expect(cellAt(alder, 'MR')).toHaveText('!101')
+    await expect(cellAt(alder, 'Repository')).toHaveText(GL)
+    await expect(cellAt(alder, 'Change request')).toHaveText('!101')
     await expect(cellAt(alder, 'Title')).toHaveText('Alder')
     await expect(cellAt(alder, 'Author').locator('.avatar')).toHaveAttribute('data-user', 'ann')
     expect(await usersIn(cellAt(alder, 'Reviewers'))).toEqual(['bob', 'cy'])
@@ -2274,24 +2275,24 @@ test.describe('the shared table of the MR list', () => {
     await openTab(page, 'assigned')
 
     // Assert
-    const gitlab = cellAt(row(page, 'Aspen'), 'MR').locator('a')
+    const gitlab = cellAt(row(page, 'Aspen'), 'Change request').locator('a')
     await expect(gitlab).toHaveText('!1')
     await expect(gitlab).toHaveAttribute('href', glUrl(1))
     await expect(gitlab).toHaveAttribute('title', glUrl(1))
-    const github = cellAt(row(page, 'Birch'), 'MR').locator('a')
+    const github = cellAt(row(page, 'Birch'), 'Change request').locator('a')
     await expect(github).toHaveText('#21')
     await expect(github).toHaveAttribute('href', ghUrl(21))
     await expect(github).toHaveAttribute('title', ghUrl(21))
   })
 
-  test('a click on the MR link opens the address in the browser, once for each click, and does not tick the row', async () => {
+  test('a click on the change request link opens the address in the browser, once for each click, and does not tick the row', async () => {
     // Arrange
     const { page } = await start(baseFixture())
     await openTab(page, 'assigned')
     await captureOpens()
 
     // Act
-    await cellAt(row(page, 'Aspen'), 'MR').locator('a').click()
+    await cellAt(row(page, 'Aspen'), 'Change request').locator('a').click()
 
     // Assert
     await expect.poll(opened).toEqual([glUrl(1)])
@@ -2300,7 +2301,7 @@ test.describe('the shared table of the MR list', () => {
     await expect(page.getByTestId('mine-start')).toHaveText('Start review (0)')
 
     // Act
-    await cellAt(row(page, 'Birch'), 'MR').locator('a').click()
+    await cellAt(row(page, 'Birch'), 'Change request').locator('a').click()
 
     // Assert: the GitHub address, and the first one is not opened again
     await expect.poll(opened).toEqual([glUrl(1), ghUrl(21)])
@@ -2308,7 +2309,7 @@ test.describe('the shared table of the MR list', () => {
     await expect(page.getByTestId('mine-start')).toHaveText('Start review (0)')
   })
 
-  test('a click on the MR link of a ticked row keeps the row ticked and keeps the count', async () => {
+  test('a click on the change request link of a ticked row keeps the row ticked and keeps the count', async () => {
     // Arrange
     const { page } = await start(baseFixture())
     await openTab(page, 'assigned')
@@ -2316,7 +2317,7 @@ test.describe('the shared table of the MR list', () => {
     await page.getByRole('checkbox', { name: 'Select Aspen' }).check()
 
     // Act
-    await cellAt(row(page, 'Aspen'), 'MR').locator('a').click()
+    await cellAt(row(page, 'Aspen'), 'Change request').locator('a').click()
 
     // Assert
     await expect.poll(opened).toEqual([glUrl(1)])
@@ -2350,7 +2351,7 @@ test.describe('the shared table of the MR list', () => {
     // Arrange
     const { page } = await start(baseFixture(MR_SEED))
     await openTab(page, 'assigned')
-    await modeBtn(page, 'Repo').click()
+    await modeBtn(page, 'Repository').click()
 
     // Act
     await sortBtn(page, 'mr').click()
@@ -3526,12 +3527,12 @@ test.describe('actions on the home rows', () => {
   })
 
   test.describe('the same actions in every layout', () => {
-    test('work in every group mode: No group, Repo, State and Approval', async () => {
+    test('work in every group mode: No group, Repository, State and Approval', async () => {
       // Arrange
       const { page, forge: f } = await startActions()
-      const steps: { mode: 'No group' | 'Repo' | 'State' | 'Approval'; title: string; button: string; after: string }[] = [
+      const steps: { mode: 'No group' | 'Repository' | 'State' | 'Approval'; title: string; button: string; after: string }[] = [
         { mode: 'No group', title: 'Acacia', button: 'Approve', after: '✓ Approved by you' },
-        { mode: 'Repo', title: 'Acacia', button: 'Revoke approval', after: 'Not reviewed by you yet' },
+        { mode: 'Repository', title: 'Acacia', button: 'Revoke approval', after: 'Not reviewed by you yet' },
         { mode: 'State', title: 'Ebony', button: 'Approve', after: '✓ Approved by you' },
         { mode: 'Approval', title: 'Ebony', button: 'Revoke approval', after: 'Not reviewed by you yet' }
       ]
@@ -3705,7 +3706,7 @@ test.describe('actions on the home rows', () => {
       expect(reads(f, glEp(901))).toBe(read)
     })
 
-    test('refuses the whole call when a url is not a merge request or pull request url, writing nothing', async () => {
+    test('refuses the whole call when a url is not a change request url, writing nothing', async () => {
       // Arrange
       const { page, forge: f } = await startActions()
 

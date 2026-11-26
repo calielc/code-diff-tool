@@ -5,7 +5,7 @@ import { useReview } from './review-context'
 import { loadModel, saveModel, useChat, type Model } from './useChat'
 
 const EMPTY =
-  'Ask anything about this change: how the changes fit together, what a file does, what could break. The AI reads every diff, the descriptions, the threads, the issues and the code of each repo. Ask it to do something, such as check the tests and comment on gaps: it proposes the comments and other steps as cards, and you apply them.'
+  'Ask anything about this change: how the changes fit together, what a file does, what could break. The AI reads every diff, the descriptions, the threads, the issues and the code of each repository. Ask it to do something, such as check the tests and comment on gaps: it proposes the comments and other steps as cards, and you apply them.'
 
 /** The round button at the bottom right, and the panel about the whole review (file 02 section 10.3). */
 export function ReviewChat(): React.JSX.Element {
@@ -52,7 +52,7 @@ export function ReviewChat(): React.JSX.Element {
           <div className="chathead">
             <strong>✦ Ask about this change</strong>
             <span className="muted small">
-              · {r.data.mrs.length} {r.data.mrs.length === 1 ? 'MR' : 'MRs'}
+              · {r.data.mrs.length} {r.data.mrs.length === 1 ? 'change request' : 'change requests'}
             </span>
             <span className="grow" />
             <ModelSelect value={model} onChange={setModel} />

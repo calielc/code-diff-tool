@@ -1,6 +1,6 @@
 # Code Diff Tool
 
-Code Diff Tool is a desktop app for reviewing merge requests and pull requests, from GitLab and from GitHub, together with the issues that they belong to. One review holds all the code changes and all the issues of one piece of work. The app shows the diffs, the threads and the acceptance criteria in one place, and an AI tool can help with the review. It runs on Windows, macOS and Linux.
+Code Diff Tool is a desktop app for reviewing change requests (GitLab merge requests and GitHub pull requests), together with the issues that they belong to. One review holds all the code changes and all the issues of one piece of work. The app shows the diffs, the threads and the acceptance criteria in one place, and an AI tool can help with the review. It runs on Windows, macOS and Linux.
 
 ![The Diff tab: the file tree on the left, the diff of one file on the right](docs/images/diff.png)
 
@@ -8,7 +8,7 @@ The picture shows made-up data. `docs/FEATURES.md` describes every feature with 
 
 ## Features
 
-- A review holds one or more code changes (merge requests or pull requests, from any mix of repos and hosts) and one or more issues (Jira issues or spec files).
+- A review holds one or more code changes (change requests, from any mix of repositories and hosts) and one or more issues (Jira issues or spec files).
 - The Issues tab lists the issues with their status and acceptance criteria. You can paste Jira keys or add spec files (`.md`, `.txt` or `.html`).
 - The Code changes tab lists the changes with their state, pipeline, approvals, threads and review status. It shows if a change is behind its target branch. Every column sorts. You can approve, mark as ready or mark as draft from the table.
 - The tabs are Code changes, Summarised, Diff, Issues and Acceptance criteria.
@@ -91,7 +91,7 @@ The branch `main` is protected. A change goes in a branch and reaches `main` thr
 ## How it works
 
 - The app reads GitLab, GitHub and Jira over their REST interfaces. It saves each token per host, encrypted with the operating system, and never sends a token to the page.
-- It finds your clones by the `origin` remote of each repo in a workspace folder that you choose, and reads the code with `git`.
+- It finds your clones by the `origin` remote of each repository in a workspace folder that you choose, and reads the code with `git`.
 - A review is a folder under `.code-diff/` in the workspace. It keeps the list of changes and issues, your draft comments and the results of the AI tools.
 - The AI tools run as child processes with a read-only tool set. They read a folder of files that the app writes for them, and never post anything. The app turns their answers into drafts that you read first.
 

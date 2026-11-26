@@ -41,7 +41,7 @@ export function registerCommentHandlers(): void {
   handle(CH.commentsSave, z.object({ slug, comment: pendingSchema }), async ({ slug: s, comment }): Promise<Result<true>> => {
     const c = await context(s)
     if (!c.ok) return c
-    if (!c.value.mrs.has(comment.mr)) return { ok: false, error: `Not an MR of this review: ${comment.mr}.` }
+    if (!c.value.mrs.has(comment.mr)) return { ok: false, error: `Not a change request of this review: ${comment.mr}.` }
     await saveComment(c.value.root, s, comment as PendingComment)
     return { ok: true, value: true }
   })
@@ -61,7 +61,7 @@ export function registerCommentHandlers(): void {
       const c = await context(s)
       if (!c.ok) return c
       const m = c.value.mrs.get(comment.mr)
-      if (!m) return { ok: false, error: `Not an MR of this review: ${comment.mr}.` }
+      if (!m) return { ok: false, error: `Not a change request of this review: ${comment.mr}.` }
       try {
         await postComment(m.ref, comment as PendingComment)
       } catch (e) {
@@ -80,7 +80,7 @@ export function registerCommentHandlers(): void {
       const c = await context(s)
       if (!c.ok) return c
       const m = c.value.mrs.get(mr)
-      if (!m) return { ok: false, error: `Not an MR of this review: ${mr}.` }
+      if (!m) return { ok: false, error: `Not a change request of this review: ${mr}.` }
       try {
         await deleteNote(m.ref, noteId)
       } catch (e) {
@@ -97,7 +97,7 @@ export function registerCommentHandlers(): void {
       const c = await context(s)
       if (!c.ok) return c
       const m = c.value.mrs.get(mr)
-      if (!m) return { ok: false, error: `Not an MR of this review: ${mr}.` }
+      if (!m) return { ok: false, error: `Not a change request of this review: ${mr}.` }
       if (!isValidThreadId(m.ref.provider, thread)) return { ok: false, error: 'This is not a thread id.' }
       try {
         await resolveThread(m.ref, thread, resolved)
@@ -128,7 +128,7 @@ export function registerCommentHandlers(): void {
       ]
       const unknown = named.filter((k) => !c.value.mrs.has(k))
       // One bad key refuses the whole submission before anything posts.
-      if (unknown.length > 0) return { ok: false, error: `Not an MR of this review: ${unknown.join(', ')}.` }
+      if (unknown.length > 0) return { ok: false, error: `Not a change request of this review: ${unknown.join(', ')}.` }
       const refs = new Map([...c.value.mrs].map(([k, v]) => [k, v.ref]))
       return { ok: true, value: await submitReview(input, refs) }
     }

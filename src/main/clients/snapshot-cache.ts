@@ -23,7 +23,7 @@ export function createSnapshotCache(deps: SnapshotCacheDeps): SnapshotCache {
   return {
     get(url, updatedAt) {
       const ref = parseChangeUrl(url)
-      if (!ref) return Promise.resolve({ ok: false, error: 'This is not a merge request or pull request URL.' })
+      if (!ref) return Promise.resolve({ ok: false, error: 'This is not a change request URL.' })
       if (!deps.hasAccess(ref)) return Promise.resolve({ ok: false, error: `No access is saved for ${ref.host}.` })
       const known = cache.get(url)
       if (known?.updatedAt === updatedAt) return known.answer

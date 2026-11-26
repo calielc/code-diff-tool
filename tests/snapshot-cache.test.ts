@@ -236,7 +236,7 @@ describe('createSnapshotCache', () => {
     const results = await Promise.all(['', 'https://example.com/page', 'not a url', 'https://gitlab.com/team/x/-/issues/4'].map((u) => cache.get(u, 't')))
 
     // Assert
-    for (const r of results) expect(r).toEqual({ ok: false, error: 'This is not a merge request or pull request URL.' })
+    for (const r of results) expect(r).toEqual({ ok: false, error: 'This is not a change request URL.' })
     expect(reads.started).toHaveLength(0)
   })
 

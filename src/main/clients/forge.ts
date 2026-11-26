@@ -12,7 +12,7 @@ export const viewerOf = (ref: Pick<ChangeRef, 'provider' | 'host'>): Promise<str
 /** Read one change by URL, for the developer screen. */
 export async function readChangeByUrl(url: string): Promise<Result<ChangeSnapshot>> {
   const ref = parseChangeUrl(url)
-  if (!ref) return { ok: false, error: 'This is not a merge request or pull request URL.' }
+  if (!ref) return { ok: false, error: 'This is not a change request URL.' }
   try {
     return { ok: true, value: await readSnapshot(ref) }
   } catch (e) {

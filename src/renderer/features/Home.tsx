@@ -230,7 +230,7 @@ export function Home(props: {
                 <thead>
                   <tr>
                     {head('title', 'Name')}
-                    {head('mrs', 'Changes', true)}
+                    {head('mrs', 'Change requests', true)}
                     {head('issues', 'Issues', true)}
                     {head('lastOpened', 'Last opened')}
                     {head('summarised', 'Summarised')}

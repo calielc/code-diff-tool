@@ -61,7 +61,7 @@ export function parseUrlBox(text: string): ParsedUrls {
     for (const item of lineText.split(/\s+/).filter(Boolean)) {
       const ref = parseChangeUrl(item)
       if (!ref) {
-        errors.push({ line: i + 1, text: item, message: `Line ${i + 1}: '${item}' is not a merge request or pull request URL.` })
+        errors.push({ line: i + 1, text: item, message: `Line ${i + 1}: '${item}' is not a change request URL.` })
         continue
       }
       const id = `${ref.host}|${changeKey(ref).toLowerCase()}`

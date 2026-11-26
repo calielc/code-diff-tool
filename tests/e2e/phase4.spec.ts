@@ -200,6 +200,6 @@ test('Stacked is disabled with one change in the repo', async () => {
   const { app, page } = await open(s, [12], mr(12, s.shas.base, s.shas.mr1, '2026-01-01T00:00:00Z'))
   const combined = page.getByRole('button', { name: /^Stacked/ })
   await expect(combined).toBeDisabled()
-  await expect(combined).toHaveAttribute('title', 'Stacked needs 2+ MRs in the same repo')
+  await expect(combined).toHaveAttribute('title', 'Stacked needs 2+ change requests in the same repository')
   await app.close()
 })

@@ -184,7 +184,7 @@ export function DraftCard(props: { draft: PendingComment }): React.JSX.Element {
   const [posting, setPosting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const iid = d.mr.slice(d.mr.lastIndexOf('!') + 1)
-  const where = d.path === null ? ' · on the MR' : d.oldLine === null && d.newLine === null ? ` · general comment on ${d.path}` : ''
+  const where = d.path === null ? ' · on the change request' : d.oldLine === null && d.newLine === null ? ` · general comment on ${d.path}` : ''
 
   if (editing) {
     return (

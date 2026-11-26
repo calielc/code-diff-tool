@@ -297,7 +297,7 @@ describe('yourReview', () => {
       id: 'closed',
       text: 'Closed, not in the diff',
       tone: 'muted',
-      tooltip: 'A closed MR is listed here only: its files are not in the tree, the diffs or the Summarised page.',
+      tooltip: 'A closed change request is listed here only: its files are not in the tree, the diffs or the Summarised page.',
       actions: []
     })
   })
@@ -630,7 +630,7 @@ describe('commentsCell', () => {
     expect(cell.detail).toBe('1 open, 0 resolved')
   })
 
-  it('adds how many threads sit on the MR and not on a file', () => {
+  it('adds how many threads sit on the change request and not on a file', () => {
     // Arrange
     const threads = [thread(false, false), thread(true, false), thread(true)]
 
@@ -638,7 +638,7 @@ describe('commentsCell', () => {
     const cell = commentsCell(threads, 0)
 
     // Assert
-    expect(cell.detail).toBe('1 open, 2 resolved, 2 on the MR, not on a file')
+    expect(cell.detail).toBe('1 open, 2 resolved, 2 on the change request, not on a file')
   })
 
   it('adds the on-the-MR text after all resolved', () => {
@@ -646,7 +646,7 @@ describe('commentsCell', () => {
     const cell = commentsCell([thread(true, false)], 0)
 
     // Assert
-    expect(cell.detail).toBe('all resolved, 1 on the MR, not on a file')
+    expect(cell.detail).toBe('all resolved, 1 on the change request, not on a file')
   })
 
   it('shows one draft in the singular with its tooltip, also without threads', () => {

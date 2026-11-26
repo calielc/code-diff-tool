@@ -63,7 +63,8 @@ export function MineList(props: {
       requestChanges: [],
       summaries: {},
       ready: action === 'mark-ready' ? [url] : [],
-      draft: action === 'mark-draft' ? [url] : []
+      draft: action === 'mark-draft' ? [url] : [],
+      reopen: action === 'reopen' ? [url] : []
     })
     const error = res.ok ? res.value[url] : res.error
     if (!error) return refreshRow(url)

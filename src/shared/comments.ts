@@ -44,6 +44,8 @@ export interface SubmitInput {
   summaries: Record<string, string>
   ready: string[]
   draft: string[]
+  /** The closed MRs to open again. A request that leaves it out reopens nothing. */
+  reopen?: string[]
 }
 
 /** One submit request by url, from the home lists. The lists and the keys of summaries hold change urls, not review keys. */

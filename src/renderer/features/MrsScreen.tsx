@@ -206,11 +206,13 @@ function Screen(props: { onHome: () => void }): React.JSX.Element {
       requestChanges: [],
       summaries: {},
       ready: action === 'mark-ready' ? [key] : [],
-      draft: action === 'mark-draft' ? [key] : []
+      draft: action === 'mark-draft' ? [key] : [],
+      reopen: action === 'reopen' ? [key] : []
     })
     const error = res.ok ? res.value[key] : res.error
-    if (!error) return r.reload()
     setBusy((b) => without(b, [key]))
+    // A write that worked is shown in the row at once. The review is not built again, so the tab, the scroll and the open file stay where they are.
+    if (!error) return r.applyInPlace([key], action)
     setErrors((e) => ({ ...e, [key]: { action, message: error } }))
   }
   const approveAll = async (keys: string[]): Promise<void> => {
@@ -218,10 +220,13 @@ function Screen(props: { onHome: () => void }): React.JSX.Element {
     setErrors((e) => without(e, keys))
     const res = await api.review.submit({ slug: r.slug, approve: keys, unapprove: [], requestChanges: [], summaries: {}, ready: [], draft: [] })
     const failed: Record<string, string> = res.ok ? res.value : Object.fromEntries(keys.map((k) => [k, res.error]))
-    if (Object.keys(failed).length === 0) return r.reload()
     setBusy((b) => without(b, keys))
+    r.applyInPlace(
+      keys.filter((k) => !failed[k]),
+      'approve'
+    )
+    if (Object.keys(failed).length === 0) return
     setErrors((e) => ({ ...e, ...Object.fromEntries(Object.entries(failed).map(([k, message]) => [k, { action: 'approve' as const, message }])) }))
-    r.approveInPlace(keys.filter((k) => !failed[k]))
   }
   const rows = data.mrs.map((m) => ({
     ...rowFromSnapshot(m, Object.values(r.drafts).filter((d) => d.mr === m.key).length),

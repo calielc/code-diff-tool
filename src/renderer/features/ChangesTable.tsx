@@ -23,7 +23,7 @@ import { Avatar } from './ui'
 
 export const STATE_TEXT: Record<MrStateKey, string> = { draft: 'Draft', opened: 'Open', merged: 'Merged', closed: 'Closed' }
 
-export type RowAction = 'approve' | 'revoke' | 'mark-ready' | 'mark-draft'
+export type RowAction = 'approve' | 'revoke' | 'mark-ready' | 'mark-draft' | 'reopen'
 export interface RowError {
   action: RowAction
   message: string
@@ -37,7 +37,8 @@ const BUSY_TEXT: Record<RowAction, string> = {
   approve: 'Approving…',
   revoke: 'Revoking…',
   'mark-ready': 'Marking as ready…',
-  'mark-draft': 'Marking as draft…'
+  'mark-draft': 'Marking as draft…',
+  reopen: 'Reopening…'
 }
 const REVIEW_LABEL = { submit: 'Submit review', approve: 'Approve', revoke: 'Revoke approval' } as const
 const STAGE_GLYPH: Record<string, string> = { success: '✓', failed: '✕', warning: '!', running: '▶', pending: '…', canceled: '⊘', skipped: '»', manual: '▷' }
@@ -50,13 +51,13 @@ const GROUP_MODES: [RowGroupMode, string][] = [
 /** Small icons of the state actions. Ready is a circle with a check, draft is a pencil on a dashed circle. */
 const ACTION_ICON: Record<'mark-ready' | 'mark-draft', React.JSX.Element> = {
   'mark-ready': (
-    <svg className="ico ready" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" data-testid="icon-mark-ready">
+    <svg className="ico ico-ready" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" data-testid="icon-mark-ready">
       <circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" strokeWidth="1.5" />
       <path d="M5.2 8.3l2 2 3.7-4.2" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   ),
   'mark-draft': (
-    <svg className="ico draft" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" data-testid="icon-mark-draft">
+    <svg className="ico ico-draft" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" data-testid="icon-mark-draft">
       <circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" strokeWidth="1.3" strokeDasharray="2.2 2" />
       <path d="M5.4 10.8l.5-2 3.6-3.6 1.5 1.5-3.6 3.6z" fill="currentColor" />
     </svg>
@@ -341,7 +342,7 @@ const COLUMN_DEFS: ColumnDef[] = [
           : stateActions({ state: row.state, draft: row.draft, author, viewer: row.viewer, viewerState: null, userCanApprove: false, userHasApproved: false })
       const busy = ctx.busy[row.id]
       const error = ctx.errors[row.id]
-      const markBusy = busy === 'mark-ready' || busy === 'mark-draft'
+      const markBusy = busy === 'mark-ready' || busy === 'mark-draft' || busy === 'reopen'
       const autoMerge = row.snapshot?.info.autoMerge
       return (
         <td data-testid={`state-${row.id}`}>
@@ -364,14 +365,19 @@ const COLUMN_DEFS: ColumnDef[] = [
               {actions.map((a) => (
                 <button
                   key={a}
-                  title={a === 'mark-ready' ? 'Removes the Draft prefix from the title' : 'Adds Draft: to the title'}
+                  className="markbtn"
+                  title={
+                    a === 'mark-ready' ? 'Removes the Draft prefix from the title' : a === 'reopen' ? 'Opens this change again' : 'Adds Draft: to the title'
+                  }
                   onClick={() => ctx.onAction?.(row, a as RowAction)}
                 >
-                  {ACTION_ICON[a as 'mark-ready' | 'mark-draft']}
-                  {a === 'mark-ready' ? 'Mark as ready' : 'Mark as draft'}
+                  {a !== 'reopen' && ACTION_ICON[a as 'mark-ready' | 'mark-draft']}
+                  {a === 'mark-ready' ? 'Mark as ready' : a === 'reopen' ? 'Reopen' : 'Mark as draft'}
                 </button>
               ))}
-              {error && (error.action === 'mark-ready' || error.action === 'mark-draft') && <span className="err">{error.message}</span>}
+              {error && (error.action === 'mark-ready' || error.action === 'mark-draft' || error.action === 'reopen') && (
+                <span className="err">{error.message}</span>
+              )}
             </>
           )}
         </td>

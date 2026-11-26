@@ -18,7 +18,8 @@ const submitRequest = z.object({
   requestChanges: urlList,
   summaries: z.record(z.string().max(2048), z.string().max(65_536)),
   ready: urlList,
-  draft: urlList
+  draft: urlList,
+  reopen: urlList.optional()
 })
 const dropRequest = z.object({ urls: z.array(z.string().max(2048)).max(1000) })
 

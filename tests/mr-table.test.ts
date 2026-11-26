@@ -987,7 +987,9 @@ describe('stateActions', () => {
     ['someone else on a ready MR', {}, []],
     ['someone else on a draft', { draft: true }, []],
     ['the author of a merged MR', { author: 'me', state: 'merged' }, []],
-    ['the author of a closed draft', { author: 'me', state: 'closed', draft: true }, []],
+    ['the author of a closed draft', { author: 'me', state: 'closed', draft: true }, ['reopen']],
+    ['the author of a closed MR', { author: 'me', state: 'closed' }, ['reopen']],
+    ['someone else on a closed MR', { state: 'closed' }, []],
     ['the author of a locked MR', { author: 'me', state: 'locked' }, []],
     ['the author who approved their own MR', { author: 'me', userHasApproved: true }, ['mark-draft']],
     ['the author who cannot approve', { author: 'me', userCanApprove: false, draft: true }, ['mark-ready']]
@@ -1021,13 +1023,14 @@ describe('stateActions', () => {
                 const i = input({ state, draft, author, userCanApprove, userHasApproved, viewerState })
                 expect(yourReview(i).actions, JSON.stringify(i)).not.toContain('mark-ready')
                 expect(yourReview(i).actions, JSON.stringify(i)).not.toContain('mark-draft')
-                const expected = state === 'opened' && author === 'me' ? [draft ? 'mark-ready' : 'mark-draft'] : []
+                expect(yourReview(i).actions, JSON.stringify(i)).not.toContain('reopen')
+                const expected = author !== 'me' ? [] : state === 'closed' ? ['reopen'] : state === 'opened' ? [draft ? 'mark-ready' : 'mark-draft'] : []
                 expect(stateActions(i), JSON.stringify(i)).toEqual(expected)
                 checked++
                 given += expected.length
               }
     expect(checked).toBe(4 * 2 * 2 * 2 * 2 * 2)
-    expect(given).toBe(2 * 2 * 2 * 2) // opened and the author, times draft, can approve, has approved and the viewer state
+    expect(given).toBe(2 * 2 * 2 * 2 * 2) // opened or closed, and the author, times draft, can approve, has approved and the viewer state
   })
 
   it('does not change its input', () => {

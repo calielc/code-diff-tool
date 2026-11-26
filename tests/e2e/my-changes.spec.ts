@@ -3054,16 +3054,15 @@ test.describe('actions on the home rows', () => {
       await expect(page.getByRole('button', { name: /^Mark as (ready|draft)$/ })).toHaveCount(4)
     })
 
-    test('a merged row and a closed row have no button in either cell, whoever wrote them', async () => {
+    test('a merged row has no button, and a closed row has no Your review button and only Reopen in the State cell, for its author', async () => {
       // Arrange
       const seed = ACTION_SEED.map((c) => (c.iid === 905 || c.iid === 906 ? { ...c, author: 'me' } : c))
       const { page } = await startActions(seed)
 
       // Act and Assert
-      for (const t of ['Iroko', 'Juniperus']) {
-        expect(await buttonsOf(review(page, t)), t).toEqual([])
-        expect(await buttonsOf(state(page, t)), t).toEqual([])
-      }
+      for (const t of ['Iroko', 'Juniperus']) expect(await buttonsOf(review(page, t)), t).toEqual([])
+      expect(await buttonsOf(state(page, 'Iroko'))).toEqual([])
+      expect(await buttonsOf(state(page, 'Juniperus'))).toEqual(['Reopen'])
       await expect(row(page, 'Iroko').locator('.statepill')).toHaveText('Merged')
       await expect(row(page, 'Juniperus').locator('.statepill')).toHaveText('Closed')
     })
@@ -3263,6 +3262,51 @@ test.describe('actions on the home rows', () => {
       expect(sent[1].query).toContain('markPullRequestReadyForReview')
       expect(await buttonsOf(state(page, 'Gum'))).toEqual(['Mark as ready'])
       expect(await buttonsOf(state(page, 'Hickory'))).toEqual(['Mark as draft'])
+    })
+
+    test('a closed change of someone else has no Reopen button', async () => {
+      // Arrange
+      const { page } = await startActions()
+
+      // Assert
+      expect(await buttonsOf(state(page, 'Juniperus'))).toEqual([])
+    })
+
+    test('Reopen on an own closed GitLab change says Reopening…, sends state_event reopen and then the row is open', async () => {
+      // Arrange
+      const { page, forge: f } = await startActions(patch(906, { author: 'me', writeSleepMs: 1_200 }))
+
+      // Act
+      await state(page, 'Juniperus').getByRole('button', { name: 'Reopen' }).click()
+
+      // Assert
+      await expect(state(page, 'Juniperus')).toContainText('Reopening…')
+      await expect.poll(() => writeCalls(f), WAIT).toEqual([{ method: 'PUT', endpoint: glEp(906), body: { state_event: 'reopen' } }])
+      await expect(state(page, 'Juniperus').locator('.statepill')).toHaveText('Open', WAIT)
+      expect(await buttonsOf(state(page, 'Juniperus'))).toEqual(['Mark as draft'])
+    })
+
+    test('Reopen on an own closed GitHub pull request sends the GraphQL mutation reopenPullRequest', async () => {
+      // Arrange
+      const seed = [
+        ...ACTION_SEED,
+        { provider: 'github', project: GH, iid: 915, title: 'Ironwood', state: 'closed', author: 'me', updatedAt: ago(2.4), assigned: true } as SeedChange
+      ]
+      const { page, forge: f } = await startActions(seed)
+
+      // Act
+      await state(page, 'Ironwood').getByRole('button', { name: 'Reopen' }).click()
+      await expect(state(page, 'Ironwood').locator('.statepill')).toHaveText('Open', WAIT)
+
+      // Assert
+      const sent = writeCalls(f).map((w) => ({
+        endpoint: w.endpoint,
+        query: String((w.body as { query: string }).query),
+        id: (w.body as { variables: { id: string } }).variables.id
+      }))
+      expect(sent).toHaveLength(1)
+      expect(sent[0]).toMatchObject({ endpoint: 'graphql', id: `PR_${GH}#915` })
+      expect(sent[0].query).toContain('reopenPullRequest')
     })
 
     test('after the write the list is read again and the row moves to its new State group', async () => {

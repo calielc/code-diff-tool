@@ -24,6 +24,7 @@ export const CH = {
   commentsPost: 'comments:post',
   notesDelete: 'notes:delete',
   threadsResolve: 'threads:resolve',
+  threadsRead: 'threads:read',
   reviewSubmit: 'review:submit',
   watchStart: 'watch:start',
   watchStop: 'watch:stop',

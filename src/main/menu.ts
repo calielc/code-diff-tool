@@ -19,6 +19,10 @@ export function buildMenu(getWindow: () => BrowserWindow | null, currentTheme: s
         }))
       },
       {
+        label: 'Settings',
+        submenu: [{ label: 'Prerequisites…', click: () => getWindow()?.webContents.send(CH.menuOpenPrereq) }]
+      },
+      {
         label: 'Developer',
         submenu: [{ label: 'Read change by URL…', click: () => getWindow()?.webContents.send(CH.menuOpenDev) }]
       },

@@ -314,6 +314,13 @@ button.danger {
   padding: 16px 20px;
   position: relative;
 }
+.modal.prereq {
+  width: min(900px, 94vw);
+  overflow: auto;
+}
+.modal.prereq .page {
+  padding: 0;
+}
 .modal.narrow {
   width: min(480px, 94vw);
 }
@@ -420,6 +427,14 @@ textarea {
   border-radius: 8px;
   padding: 12px;
   margin-top: 16px;
+}
+.tabbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.tabbar .tabs {
+  flex: 1;
 }
 .tabs {
   display: flex;

@@ -127,6 +127,11 @@ const api: CodeDiffApi = {
       const listener = (): void => cb()
       ipcRenderer.on(CH.menuOpenDev, listener)
       return () => ipcRenderer.removeListener(CH.menuOpenDev, listener)
+    },
+    onOpenPrereq: (cb) => {
+      const listener = (): void => cb()
+      ipcRenderer.on(CH.menuOpenPrereq, listener)
+      return () => ipcRenderer.removeListener(CH.menuOpenPrereq, listener)
     }
   },
   system: {

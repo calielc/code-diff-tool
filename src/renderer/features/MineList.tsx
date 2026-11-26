@@ -17,19 +17,34 @@ function rowOf(item: MineItem, viewer: string, answer: Answer | undefined): Chan
   return { ...full, state: stub.state, draft: stub.draft, title: stub.title, updatedAt: stub.updatedAt, people: { ...stub.people, ...full.people } }
 }
 
+interface ListView {
+  filters: MrFilters
+  mode: RowGroupMode
+  sort: TableSort
+  collapsed: Set<string>
+}
+const freshView = (): ListView => ({
+  filters: { states: DEFAULT_MINE_STATES, approvals: DEFAULT_MINE_APPROVALS },
+  mode: 'state',
+  sort: { key: 'updated', dir: 'desc' },
+  collapsed: new Set()
+})
+
 export function MineList(props: {
   role: MineRole
   mine: Mine
   picked: Set<string>
   onToggle: (url: string) => void
-  onStart: () => void
   blocked: string | null
   onOpenPrereq: () => void
 }): React.JSX.Element {
   const { data, answers, request, refresh, reread, reload } = props.mine
-  const [filters, setFilters] = useState<MrFilters>({ states: DEFAULT_MINE_STATES, approvals: DEFAULT_MINE_APPROVALS })
-  const [mode, setMode] = useState<RowGroupMode>('state')
-  const [sort, setSort] = useState<TableSort>({ key: 'updated', dir: 'desc' })
+  // Each tab has its own filters, group mode, sort and collapsed groups. They stay while the app runs, and a switch of tab shows the view of that tab.
+  const [views, setViews] = useState<Record<MineRole, ListView>>(() => ({ assigned: freshView(), reviewer: freshView() }))
+  const { filters, mode, sort, collapsed } = views[props.role]
+  const patch = (change: Partial<ListView>): void => setViews((v) => ({ ...v, [props.role]: { ...v[props.role], ...change } }))
+  const setFilters = (next: MrFilters): void => patch({ filters: next })
+  const setMode = (next: RowGroupMode): void => patch({ mode: next })
   const [busy, setBusy] = useState<Record<string, RowAction>>({})
   const [errors, setErrors] = useState<Record<string, RowError>>({})
   const [submitFor, setSubmitFor] = useState<string | null>(null)
@@ -44,7 +59,7 @@ export function MineList(props: {
   }, [items, filters.states])
   useEffect(() => request(shown), [request, shown])
   // A click on a new column sorts ascending. A click on the sorted column reverses it.
-  const sortBy = (key: MrSortKey): void => setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }))
+  const sortBy = (key: MrSortKey): void => patch({ sort: sort.key === key ? { key, dir: sort.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' } })
 
   const without = <T,>(o: Record<string, T>, url: string): Record<string, T> => Object.fromEntries(Object.entries(o).filter(([k]) => k !== url))
   /** After a write the row reads its snapshot again and the list loads again. The busy text stays until both are done, so the old cells never show as if nothing happened. */
@@ -86,7 +101,6 @@ export function MineList(props: {
     refresh(shown)
     void reload()
   }
-  const count = props.picked.size
   return (
     <div>
       {data?.errors.map((e) => (
@@ -100,6 +114,8 @@ export function MineList(props: {
         onSort={sortBy}
         filters={filters}
         onFilters={setFilters}
+        collapsed={collapsed}
+        onCollapsed={(next) => patch({ collapsed: next })}
         groupMode={mode}
         onGroupMode={setMode}
         leading={{
@@ -117,15 +133,6 @@ export function MineList(props: {
           <>
             <button data-testid="mine-refresh" disabled={props.mine.loading} onClick={refreshAll}>
               Refresh
-            </button>
-            <button
-              className="primary"
-              data-testid="mine-start"
-              disabled={count === 0 || !!props.blocked}
-              title={props.blocked ? 'Fix the Prerequisites first' : undefined}
-              onClick={props.onStart}
-            >
-              Start review ({count})
             </button>
           </>
         }

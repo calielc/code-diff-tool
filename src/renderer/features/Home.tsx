@@ -37,6 +37,8 @@ function compare(a: ReviewSummary, b: ReviewSummary, key: SortKey): number {
 
 export function Home(props: {
   blocked: string | null
+  /** True while the Prerequisites dialog is open over Home. The lists of changes stop polling until it closes. */
+  paused?: boolean
   launch: LaunchRequest | null
   onLaunchUsed: () => void
   onOpenPrereq: () => void
@@ -54,16 +56,17 @@ export function Home(props: {
   const [tab, setTab] = useState<Tab>('reviews')
   // The ticks of the two lists of changes are one selection, kept by url. It clears when the New review form closes.
   const [picked, setPicked] = useState<Set<string>>(new Set())
-  const mine = useMine(tab !== 'reviews')
+  const mine = useMine(tab !== 'reviews' && !props.paused)
   const toggle = (url: string): void =>
     setPicked((p) => {
       const next = new Set(p)
       if (!next.delete(url)) next.add(url)
       return next
     })
-  const startPicked = (): void => {
+  // With changes ticked, the New review form opens with them. With none, it opens empty. Either way the reviewer fills in the name and the issues.
+  const newReview = (): void => {
     setAutoCheck(false)
-    setInitial({ mrs: [...picked], issues: [], title: '', review: '' })
+    setInitial(picked.size > 0 ? { mrs: [...picked], issues: [], title: '', review: '' } : null)
     setShowNew(true)
   }
   // A request from outside adds to the review it names when that review exists, else it starts a new review.
@@ -142,38 +145,32 @@ export function Home(props: {
           <button onClick={props.onOpenPrereq}>Open Prerequisites</button>
         </div>
       )}
-      <div className="tabs" role="tablist">
-        {(
-          [
-            ['reviews', 'Reviews'],
-            ['assigned', 'Assigned to me'],
-            ['reviewer', 'I am the reviewer']
-          ] as const
-        ).map(([key, label]) => (
-          <button
-            key={key}
-            role="tab"
-            className={tab === key ? 'on' : ''}
-            aria-selected={tab === key}
-            data-testid={`home-tab-${key}`}
-            onClick={() => setTab(key)}
-          >
-            {label}
-          </button>
-        ))}
+      <div className="tabbar">
+        <div className="tabs" role="tablist">
+          {(
+            [
+              ['reviews', 'Reviews'],
+              ['assigned', 'Owned by me'],
+              ['reviewer', 'I am the reviewer']
+            ] as const
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              role="tab"
+              className={tab === key ? 'on' : ''}
+              aria-selected={tab === key}
+              data-testid={`home-tab-${key}`}
+              onClick={() => setTab(key)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <button className="primary" data-testid="new-review" disabled={!!props.blocked} title={gate} onClick={newReview}>
+          {picked.size > 0 ? `New review (${picked.size})` : 'New review'}
+        </button>
       </div>
-      {tab !== 'reviews' && (
-        <header>
-          <span className="grow" />
-          <button className="primary" data-testid="new-review" disabled={!!props.blocked} title={gate} onClick={() => setShowNew(true)}>
-            New review
-          </button>
-          <button onClick={props.onOpenPrereq}>Prerequisites…</button>
-        </header>
-      )}
-      {tab !== 'reviews' && (
-        <MineList role={tab} mine={mine} picked={picked} onToggle={toggle} onStart={startPicked} blocked={props.blocked} onOpenPrereq={props.onOpenPrereq} />
-      )}
+      {tab !== 'reviews' && <MineList role={tab} mine={mine} picked={picked} onToggle={toggle} blocked={props.blocked} onOpenPrereq={props.onOpenPrereq} />}
       {tab === 'reviews' && (
         <>
           <header>
@@ -190,10 +187,6 @@ export function Home(props: {
                 />
               </>
             )}
-            <button className="primary" data-testid="new-review" disabled={!!props.blocked} title={gate} onClick={() => setShowNew(true)}>
-              New review
-            </button>
-            <button onClick={props.onOpenPrereq}>Prerequisites…</button>
           </header>
           <p className="muted" data-testid="review-count">
             {reviews === null ? 'Reading reviews…' : `${total} ${total === 1 ? 'review' : 'reviews'}`}
@@ -202,8 +195,8 @@ export function Home(props: {
           {reviews !== null && total === 0 && (
             <div className="empty">
               <p>No reviews yet.</p>
-              <p className="muted">Create a review from the merge or pull requests of an issue.</p>
-              <button className="primary" disabled={!!props.blocked} title={gate} onClick={() => setShowNew(true)}>
+              <p className="muted">Create a review from the change requests of an issue.</p>
+              <button className="primary" disabled={!!props.blocked} title={gate} onClick={newReview}>
                 New review
               </button>
             </div>

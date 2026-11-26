@@ -197,6 +197,8 @@ export interface CodeDiffApi {
   events: {
     /** Developer menu item. Returns an unsubscribe function (file 05 section 9.3, push channels). */
     onOpenDev(cb: () => void): () => void
+    /** Settings menu item Prerequisites. Returns an unsubscribe function. */
+    onOpenPrereq(cb: () => void): () => void
   }
   system: {
     copyText(text: string): Promise<void>

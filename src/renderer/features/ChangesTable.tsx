@@ -46,7 +46,8 @@ const GROUP_MODES: [RowGroupMode, string][] = [
   ['none', 'No group'],
   ['repo', 'Repository'],
   ['state', 'State'],
-  ['approval', 'Approval']
+  ['approval', 'Approval'],
+  ['updated', 'Updated']
 ]
 /** Small icons of the state actions. Ready is a circle with a check, draft is a pencil on a dashed circle. */
 const ACTION_ICON: Record<'mark-ready' | 'mark-draft', React.JSX.Element> = {
@@ -402,6 +403,9 @@ export interface ChangesTableProps {
   onFilters: (next: MrFilters) => void
   groupMode: RowGroupMode
   onGroupMode: (mode: RowGroupMode) => void
+  /** The collapsed group keys, when the caller keeps them (for example one set for each tab). Without it, the table keeps them itself. */
+  collapsed?: Set<string>
+  onCollapsed?: (next: Set<string>) => void
   /** An extra first column, for example a checkbox. */
   leading?: { header: React.ReactNode; cell: (row: ChangeRow) => React.ReactNode }
   onAction?: (row: ChangeRow, action: RowAction) => void
@@ -421,13 +425,13 @@ export interface ChangesTableProps {
 /** The table of changes: the pills, the group buttons, the sortable columns and the group header rows. The caller owns the data, the sort cycle and the filters. */
 export function ChangesTable(props: ChangesTableProps): React.JSX.Element {
   const { rows, sort, filters } = props
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
-  const toggle = (key: string): void =>
-    setCollapsed((c) => {
-      const next = new Set(c)
-      if (!next.delete(key)) next.add(key)
-      return next
-    })
+  const [ownCollapsed, setOwnCollapsed] = useState<Set<string>>(new Set())
+  const collapsed = props.collapsed ?? ownCollapsed
+  const toggle = (key: string): void => {
+    const next = new Set(collapsed)
+    if (!next.delete(key)) next.add(key)
+    ;(props.onCollapsed ?? setOwnCollapsed)(next)
+  }
 
   const stacks = stackInfo(
     rows.flatMap((row) =>

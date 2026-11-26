@@ -51,6 +51,7 @@ export const CH = {
   accessRemove: 'access:remove',
   devReadChange: 'dev:readChange',
   menuOpenDev: 'menu:openDev',
+  menuOpenPrereq: 'menu:openPrereq',
   commitsList: 'commits:list',
   commitsFile: 'commits:file',
   themeGet: 'theme:get',

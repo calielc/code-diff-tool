@@ -169,7 +169,7 @@ export function forgeEnv(url: string): Record<string, string> {
 /** The id the fake GitLab gives the current user. A request for the reviewer role must carry it as `reviewer_id`. */
 export const FAKE_GITLAB_USER_ID = 7
 
-/** One change (merge request or pull request) for the lists of "Assigned to me" and "I am the reviewer". */
+/** One change (change request) for the lists of "Owned by me" and "I am the reviewer". */
 export interface SeedChange {
   provider: 'gitlab' | 'github'
   /** The repo path, for example `team/backend/x`. */

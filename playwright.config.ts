@@ -15,6 +15,8 @@ export default defineConfig({
   // A page check waits longer than the default 5 seconds, because a busy machine draws the screen slowly.
   expect: { timeout: 10_000 },
   workers,
+  // The tests of one file also run side by side. A group that shares one app is marked serial, so it stays on one worker.
+  fullyParallel: true,
   // On a CI runner a slow start can fail a test that passes on a second try. A test that needs a retry is shown as flaky.
   retries: process.env['CI'] ? 2 : 0,
   reporter: 'list'

@@ -105,10 +105,10 @@ test('the Diff tab has no Summarised button, and keeps Linear and Stacked', asyn
   await close()
 })
 
-test('a stored view of summarised opens the Diff tab on Linear, not on the sections', async () => {
+test('a saved view of summarised opens the Diff tab on Linear, not on the sections', async () => {
   const { page, close } = await open({
     saved: true,
-    before: (p) => p.evaluate(() => localStorage.setItem('codediff:view', JSON.stringify('summarised')))
+    before: (p) => p.evaluate(() => window.codeDiff.prefs.set('review:R-1', 'diff.view', 'summarised'))
   })
   await page.getByTestId('tab-diff').click()
   await expect(page.getByRole('button', { name: 'Linear', exact: true })).toHaveClass(/on/, { timeout: SHORT })

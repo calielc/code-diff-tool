@@ -9,14 +9,16 @@ import {
   type PointerEvent as ReactPointerEvent
 } from 'react'
 import type { CommitInfo } from '@shared/commits'
-import { countKinds, fileKind, visibleKinds, type FileKind } from '@shared/file-kinds'
+import { countKinds, fileKind, FILE_KINDS, visibleKinds } from '@shared/file-kinds'
 import { newCommentId, type PendingComment } from '@shared/comments'
 import type { FileObject, LevelName, LineObj } from '@shared/diff'
 import type { DiffRefs } from '@shared/provider'
 import type { BuildResult } from '@shared/review'
 import { draftAtLine, fileThreads, isFileDraft, positionMatchesLine, threadCounts, threadOnFile, threadsAtLine } from '@shared/threads'
 import { clampTreeWidth, nextTreeWidth, parseStoredTreeWidth, treeWidthFromPointer } from '@shared/tree-width'
+import { parseBool, parseChoice, parseChoices, parseText } from '@shared/view-prefs'
 import { api } from '../api'
+import { GLOBAL, reviewScope, usePref } from '../prefs'
 import { Code, SyntaxNotice } from '../highlight/Code'
 import { FindBar } from './FindBar'
 import { useFileHighlight } from '../highlight/useFileHighlight'
@@ -77,14 +79,6 @@ interface TreeNode {
   entry?: Entry
 }
 
-function store<T>(key: string, fallback: T): T {
-  try {
-    const v = localStorage.getItem(key)
-    return v === null ? fallback : (JSON.parse(v) as T)
-  } catch {
-    return fallback
-  }
-}
 function save(key: string, value: unknown): void {
   try {
     localStorage.setItem(key, JSON.stringify(value))
@@ -194,27 +188,41 @@ export function DiffTab(props: { mode: 'summarised' | 'diff'; visible?: (mrKey: 
   const r = useReview()
   const result = r.data
   const hasCombined = result.combined.length > 0
-  const [view, setView] = useState<ViewName>(() => {
-    return props.mode === 'summarised' ? 'summarised' : store<ViewName>('codediff:view', 'mr') === 'combined' && hasCombined ? 'combined' : 'mr'
-  })
-  const [level, setLevel] = useState<LevelName>(() => store<LevelName>('codediff:noise', 'strict'))
-  const [filter, setFilter] = useState('')
+  // The view, the filters and the layout are kept in the settings file. The ones of a review belong to that review, and the noise level and the layout are the same for every review.
+  const scope = reviewScope(r.slug)
+  const key = (name: string): string => `${props.mode}.${name}`
+  const [view, setView] = usePref<ViewName>(scope, key('view'), (v) =>
+    props.mode === 'summarised' ? 'summarised' : v === 'combined' && hasCombined ? 'combined' : 'mr'
+  )
+  const [level, setLevel] = usePref<LevelName>(GLOBAL, 'noise', (v) => parseChoice(v, ['raw', 'basic', 'strict'], 'strict'))
+  const [filter, setFilter] = usePref(scope, key('filter'), (v) => parseText(v, ''))
   const [selected, setSelected] = useState<string | null>(null)
   const [closed, setClosed] = useState<Set<string>>(new Set())
   const [showGenerated, setShowGenerated] = useState<Set<string>>(new Set())
   const { viewed, setViewed } = r
   const [noiseOpen, setNoiseOpen] = useState(false)
-  const [layout, setLayout] = useState<LayoutName>(() => store<LayoutName>('codediff:layout', 'inline'))
+  const [layout, setLayout] = usePref<LayoutName>(GLOBAL, 'layout', (v) => parseChoice(v, ['inline', 'side', 'full'], 'inline'))
   // The Files, Types and Comments filters narrow the files only when a button is on. With none on, every file shows.
-  const [statuses, setStatuses] = useState<Set<'A' | 'M' | 'D'>>(new Set())
-  const [kinds, setKinds] = useState<Set<FileKind>>(new Set())
-  const [hideViewed, setHideViewed] = useState(false)
-  const [onlyComments, setOnlyComments] = useState(false)
+  const toList = (v: Set<string>): string[] => [...v]
+  const [statuses, setStatuses] = usePref(scope, key('statuses'), (v) => new Set(parseChoices(v, ['A', 'M', 'D'] as const)), toList)
+  const [kinds, setKinds] = usePref(
+    scope,
+    key('kinds'),
+    (v) =>
+      new Set(
+        parseChoices(
+          v,
+          FILE_KINDS.map((k) => k.id)
+        )
+      ),
+    toList
+  )
+  const [hideViewed, setHideViewed] = usePref(scope, key('hideViewed'), (v) => parseBool(v, false))
+  const [onlyComments, setOnlyComments] = usePref(scope, key('onlyComments'), (v) => parseBool(v, false))
   // The Comments filter: files with open threads, files with resolved threads, both, or none (no filter)
-  const [commentFilter, setCommentFilter] = useState<Set<'open' | 'resolved'>>(new Set())
+  const [commentFilter, setCommentFilter] = usePref(scope, key('commentFilter'), (v) => new Set(parseChoices(v, ['open', 'resolved'] as const)), toList)
   // The commit chosen in the open file. It belongs to that file only.
   const [commitSel, setCommitSel] = useState<{ id: string; sha: string } | null>(null)
-  useEffect(() => save('codediff:layout', layout), [layout])
   const layoutRef = useRef<HTMLDivElement>(null)
   const [areaWidth, setAreaWidth] = useState(0)
   const [rawTreeWidth, setRawTreeWidth] = useState(() => {
@@ -269,11 +277,6 @@ export function DiffTab(props: { mode: 'summarised' | 'diff'; visible?: (mrKey: 
   const [submitOpen, setSubmitOpen] = useState(false)
   // The place in the left column where the Summarised tab draws its index
   const [indexHost, setIndexHost] = useState<HTMLDivElement | null>(null)
-
-  useEffect(() => {
-    if (props.mode === 'diff') save('codediff:view', view)
-  }, [view, props.mode])
-  useEffect(() => save('codediff:noise', level), [level])
 
   // Opening the Summarised tab writes the page when it is missing or out of date. A build never does.
   // A failed run is not started again by itself. The reader presses Try again.

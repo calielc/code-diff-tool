@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { SummarisedState, ReviewSummary } from '@shared/review'
 import type { LaunchRequest } from '@shared/launch'
+import { parseChoice, parseFlags, parseSort, parseText } from '@shared/view-prefs'
 import { api } from '../api'
+import { HOME, usePref } from '../prefs'
 import { AddToReview } from './AddToReview'
 import { NewReview } from './NewReview'
 import { MineList } from './MineList'
@@ -9,6 +11,9 @@ import { useMine } from './useMine'
 
 type Tab = 'reviews' | 'assigned' | 'reviewer'
 type SortKey = 'title' | 'mrs' | 'issues' | 'lastOpened' | 'summarised'
+const SORT_KEYS: SortKey[] = ['title', 'mrs', 'issues', 'lastOpened', 'summarised']
+const DEFAULT_SORT: { key: SortKey; dir: 'asc' | 'desc' } = { key: 'lastOpened', dir: 'desc' }
+const TABS: Tab[] = ['reviews', 'assigned', 'reviewer']
 
 const SUMMARISED_LABEL: Record<SummarisedState, string> = { writing: 'Writing…', failed: 'Failed', ready: 'Ready', 'not-written': 'Not written' }
 const ALL_SUMMARISED: Record<SummarisedState, boolean> = { writing: true, failed: true, ready: true, 'not-written': true }
@@ -45,15 +50,16 @@ export function Home(props: {
   onOpenReview: (slug: string) => void
 }): React.JSX.Element {
   const [reviews, setReviews] = useState<ReviewSummary[] | null>(null)
-  const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'lastOpened', dir: 'desc' })
-  const [filter, setFilter] = useState('')
-  const [summarised, setSummarised] = useState<Record<SummarisedState, boolean>>(ALL_SUMMARISED)
+  // The sort, the search, the Summarised pills and the open tab are kept in the settings file, so the page opens as it was left.
+  const [sort, setSort] = usePref(HOME, 'reviewsSort', (v) => parseSort(v, SORT_KEYS, DEFAULT_SORT) ?? DEFAULT_SORT)
+  const [filter, setFilter] = usePref(HOME, 'reviewsSearch', (v) => parseText(v, ''))
+  const [summarised, setSummarised] = usePref(HOME, 'reviewsSummarised', (v) => parseFlags(v, ALL_SUMMARISED))
   const [selected, setSelected] = useState<string | null>(null)
   const [showNew, setShowNew] = useState(false)
   const [initial, setInitial] = useState<LaunchRequest | null>(null)
   const [autoCheck, setAutoCheck] = useState(false)
   const [addTo, setAddTo] = useState<LaunchRequest | null>(null)
-  const [tab, setTab] = useState<Tab>('reviews')
+  const [tab, setTab] = usePref(HOME, 'tab', (v) => parseChoice(v, TABS, 'reviews'))
   // The ticks of the two lists of changes are one selection, kept by url. It clears when the New review form closes.
   const [picked, setPicked] = useState<Set<string>>(new Set())
   const mine = useMine(tab !== 'reviews' && !props.paused)
@@ -109,7 +115,7 @@ export function Home(props: {
 
   const head = (key: SortKey, label: string, right = false): React.JSX.Element => (
     <th className={right ? 'num' : ''}>
-      <button className="link" onClick={() => setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }))}>
+      <button className="link" onClick={() => setSort(sort.key === key ? { key, dir: sort.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' })}>
         {label}
         {sort.key === key ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}
       </button>

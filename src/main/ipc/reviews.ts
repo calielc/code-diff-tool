@@ -7,6 +7,7 @@ import { readAppState, writeAppState } from '../services/app-state'
 import { cancelBuild, isBuilding, startBuild } from '../services/build'
 import { addSpecFiles } from '../services/issues'
 import { addToReview, checkDeletable, checkReview, createReview, listReviews, pendingCommentCount, renameReview } from '../services/reviews'
+import { dropUiPrefs } from '../services/ui-prefs'
 import { takePick } from './issues'
 import { handle } from './guard'
 
@@ -95,6 +96,7 @@ export function registerReviewHandlers(): void {
       recentReviews: state.recentReviews.filter((r) => r.slug !== s),
       lastReview: state.lastReview === s ? undefined : state.lastReview
     })
+    await dropUiPrefs(`review:${s}`)
     return { ok: true, value: true }
   })
 }

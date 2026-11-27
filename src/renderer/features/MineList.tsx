@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { DEFAULT_MINE_APPROVALS, DEFAULT_MINE_STATES, type MineItem, type MineRole } from '@shared/my-changes'
 import { rowFromMine, rowFromSnapshot, type ChangeRow, type RowGroupMode } from '@shared/mr-rows'
-import type { MrFilters, MrSortKey } from '@shared/mr-table'
+import { SORT_KEYS, type MrFilters, type MrSortKey } from '@shared/mr-table'
+import { parseChoice, parseFlags, parseList, parseSort } from '@shared/view-prefs'
 import { api } from '../api'
+import { HOME, readPref, savePref } from '../prefs'
 import { useAvatars } from './ui'
 import { ChangesTable, type RowAction, type RowError, type TableSort } from './ChangesTable'
 import { SubmitDialog } from './SubmitDialog'
@@ -23,12 +25,22 @@ interface ListView {
   sort: TableSort
   collapsed: Set<string>
 }
-const freshView = (): ListView => ({
-  filters: { states: DEFAULT_MINE_STATES, approvals: DEFAULT_MINE_APPROVALS },
-  mode: 'state',
-  sort: { key: 'updated', dir: 'desc' },
-  collapsed: new Set()
-})
+const DEFAULT_SORT: TableSort = { key: 'updated', dir: 'desc' }
+const GROUP_MODES: RowGroupMode[] = ['none', 'repo', 'state', 'approval', 'updated']
+
+/** The view of a tab as the settings file kept it. A part that is missing or has an old shape takes its default. */
+function savedView(role: MineRole): ListView {
+  return readPref(HOME, `list:${role}`, (v) => {
+    const saved = typeof v === 'object' && v !== null ? (v as Record<string, unknown>) : {}
+    const filters = (typeof saved['filters'] === 'object' && saved['filters'] !== null ? saved['filters'] : {}) as Record<string, unknown>
+    return {
+      filters: { states: parseFlags(filters['states'], DEFAULT_MINE_STATES), approvals: parseFlags(filters['approvals'], DEFAULT_MINE_APPROVALS) },
+      mode: parseChoice(saved['mode'], GROUP_MODES, 'state'),
+      sort: parseSort(saved['sort'], SORT_KEYS, DEFAULT_SORT) ?? DEFAULT_SORT,
+      collapsed: new Set(parseList(saved['collapsed']))
+    }
+  })
+}
 
 export function MineList(props: {
   role: MineRole
@@ -39,10 +51,15 @@ export function MineList(props: {
   onOpenPrereq: () => void
 }): React.JSX.Element {
   const { data, answers, request, refresh, reread, reload } = props.mine
-  // Each tab has its own filters, group mode, sort and collapsed groups. They stay while the app runs, and a switch of tab shows the view of that tab.
-  const [views, setViews] = useState<Record<MineRole, ListView>>(() => ({ assigned: freshView(), reviewer: freshView() }))
+  // Each tab has its own filters, group mode, sort and collapsed groups. The settings file keeps them, so the tab opens as it was left.
+  const [views, setViews] = useState<Record<MineRole, ListView>>(() => ({ assigned: savedView('assigned'), reviewer: savedView('reviewer') }))
   const { filters, mode, sort, collapsed } = views[props.role]
-  const patch = (change: Partial<ListView>): void => setViews((v) => ({ ...v, [props.role]: { ...v[props.role], ...change } }))
+  const patch = (change: Partial<ListView>): void =>
+    setViews((v) => {
+      const next = { ...v[props.role], ...change }
+      savePref(HOME, `list:${props.role}`, { ...next, collapsed: [...next.collapsed] })
+      return { ...v, [props.role]: next }
+    })
   const setFilters = (next: MrFilters): void => patch({ filters: next })
   const setMode = (next: RowGroupMode): void => patch({ mode: next })
   const [busy, setBusy] = useState<Record<string, RowAction>>({})

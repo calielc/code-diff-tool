@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { descriptionPreview, initialsOf, sortIssues, type IssueRow, type IssueSortKey } from '@shared/issues'
+import { parseSort, sortToPref } from '@shared/view-prefs'
 import { api } from '../api'
+import { reviewScope, usePref } from '../prefs'
 import { useReview } from './review-context'
 import { Markdown } from './ui'
-
-type Sort = { key: IssueSortKey; dir: 'asc' | 'desc' } | null
 
 const COLUMNS: { key: IssueSortKey; label: string; header: string }[] = [
   { key: 'key', label: 'issue', header: 'Issue' },
@@ -16,30 +16,24 @@ const COLUMNS: { key: IssueSortKey; label: string; header: string }[] = [
   { key: 'description', label: 'description', header: 'Description' }
 ]
 
-function loadSort(): Sort {
-  try {
-    const v = JSON.parse(localStorage.getItem('codediff:issueSort') ?? 'null') as Sort
-    return v && COLUMNS.some((c) => c.key === v.key) && (v.dir === 'asc' || v.dir === 'desc') ? v : null
-  } catch {
-    return null
-  }
-}
-
 export function IssuesTab(): React.JSX.Element {
   const r = useReview()
   const rows = r.data.issues
-  const [sort, setSort] = useState<Sort>(loadSort)
+  // The sort is kept in the settings file, for this review only.
+  const [sort, setSort] = usePref(
+    reviewScope(r.slug),
+    'issuesSort',
+    (v) =>
+      parseSort(
+        v,
+        COLUMNS.map((c) => c.key),
+        null
+      ),
+    sortToPref
+  )
   const [selected, setSelected] = useState<string | null>(null)
   // The file of each issue is asked for once and kept until the review is built again.
   const [files, setFiles] = useState<Record<string, { state: 'waiting' | 'ready' | 'error'; text: string }>>({})
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('codediff:issueSort', JSON.stringify(sort))
-    } catch {
-      /* storage can be blocked */
-    }
-  }, [sort])
 
   const sorted = useMemo(() => sortIssues(rows, sort?.key ?? null, sort?.dir ?? 'asc'), [rows, sort])
   useEffect(() => {
@@ -67,7 +61,7 @@ export function IssuesTab(): React.JSX.Element {
       : `${rows.length} ${rows.length === 1 ? 'issue' : 'issues'} · ${total} acceptance criteria${failed > 0 ? `, ${failed} Jira did not give` : ''}`
 
   const clickHeader = (key: IssueSortKey): void =>
-    setSort((s) => (!s || s.key !== key ? { key, dir: 'asc' } : s.dir === 'asc' ? { key, dir: 'desc' } : { key, dir: 'asc' }))
+    setSort(!sort || sort.key !== key ? { key, dir: 'asc' } : sort.dir === 'asc' ? { key, dir: 'desc' } : { key, dir: 'asc' })
 
   const keyCell = (t: IssueRow): React.JSX.Element =>
     t.url ? (

@@ -1,17 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { BuildResult } from '@shared/review'
-import {
-  DEFAULT_MR_FILTERS,
-  DEFAULT_MR_SORT,
-  approveAllCandidates,
-  mrStateKey,
-  mrVisible,
-  parseStoredMrSort,
-  type MrFilters,
-  type MrSortKey
-} from '@shared/mr-table'
+import { DEFAULT_MR_FILTERS, DEFAULT_MR_SORT, approveAllCandidates, mrStateKey, mrVisible, SORT_KEYS, type MrSortKey } from '@shared/mr-table'
 import { rowFromSnapshot, stateCounts, type RowGroupMode } from '@shared/mr-rows'
+import { parseChoice, parseFlags, parseList, parseSort, sortToPref } from '@shared/view-prefs'
 import { api } from '../api'
+import { reviewScope, usePref } from '../prefs'
 import { ChangesTable, STATE_TEXT, type RowAction, type RowError } from './ChangesTable'
 import { DiffTab } from './DiffTab'
 import { ReviewChat } from './ReviewChat'
@@ -24,8 +17,8 @@ import { AiPanel } from './AiPanel'
 import { useAvatars } from './ui'
 
 type Tab = 'mrs' | 'summarised' | 'diff' | 'issues' | 'ac'
-// The tab of each review, kept while the review is built again, so a reload does not lose your place.
-const lastTab = new Map<string, Tab>()
+const TAB_IDS: Tab[] = ['mrs', 'summarised', 'diff', 'issues', 'ac']
+const GROUP_MODES: RowGroupMode[] = ['none', 'repo', 'state', 'approval', 'updated']
 
 const TABS: { id: Tab; label: string; testId: string }[] = [
   { id: 'mrs', label: 'Code changes', testId: 'tab-mrs' },
@@ -37,17 +30,6 @@ const TABS: { id: Tab; label: string; testId: string }[] = [
 
 // Other screens import the text of a state from here.
 export { STATE_TEXT }
-
-function loadFilters(): MrFilters {
-  try {
-    const v = JSON.parse(localStorage.getItem('codediff:mrFilters') ?? 'null') as Partial<MrFilters> | null
-    return v?.states && v.approvals
-      ? { states: { ...DEFAULT_MR_FILTERS.states, ...v.states }, approvals: { ...DEFAULT_MR_FILTERS.approvals, ...v.approvals } }
-      : DEFAULT_MR_FILTERS
-  } catch {
-    return DEFAULT_MR_FILTERS
-  }
-}
 
 /** The name of the review in the header. A click turns it into an input: Enter or a blur saves, Escape cancels. */
 function ReviewName(props: { slug: string; name: string; onSaved: (title: string) => void }): React.JSX.Element {
@@ -158,41 +140,32 @@ export function MrsScreen(props: { result: BuildResult; slug: string; onHome: ()
 
 function Screen(props: { onHome: () => void }): React.JSX.Element {
   const r = useReview()
-  const [tab, setTabState] = useState<Tab>(() => lastTab.get(r.slug) ?? 'mrs')
-  const setTab = (t: Tab): void => (lastTab.set(r.slug, t), setTabState(t))
+  // The tab, the sort, the filters, the grouping and the collapsed groups of this review are kept in the settings file, for this review only.
+  const scope = reviewScope(r.slug)
+  const [tab, setTab] = usePref(scope, 'tab', (v) => parseChoice(v, TAB_IDS, 'mrs'))
   const [name, setName] = useState(r.data.title)
   useEffect(() => setName(r.data.title), [r.data.title])
   const [submitFor, setSubmitFor] = useState<string | null>(null)
   const { data } = r
   const draftCount = Object.keys(r.drafts).length
   useAvatars(r.people)
-  const [mrSort, setMrSort] = useState(() => {
-    try {
-      return parseStoredMrSort(localStorage.getItem('codediff:mrSort'))
-    } catch {
-      return DEFAULT_MR_SORT
-    }
-  })
+  const [mrSort, setMrSort] = usePref(scope, 'mrSort', (v) => parseSort(v, SORT_KEYS, DEFAULT_MR_SORT), sortToPref)
   /** A click sorts ascending, a second click descending, a third click returns to the order of the review. */
   const clickMrHeader = (key: MrSortKey): void => {
     const next = mrSort?.key !== key ? { key, dir: 'asc' as const } : mrSort.dir === 'asc' ? { key, dir: 'desc' as const } : null
     setMrSort(next)
-    try {
-      localStorage.setItem('codediff:mrSort', JSON.stringify(next))
-    } catch {
-      /* the sort then lasts until the window closes */
-    }
   }
-  const [filters, setFiltersState] = useState<MrFilters>(loadFilters)
-  const setFilters = (next: MrFilters): void => {
-    setFiltersState(next)
-    try {
-      localStorage.setItem('codediff:mrFilters', JSON.stringify(next))
-    } catch {
-      /* the toggles then last until the window closes */
-    }
-  }
-  const [groupMode, setGroupMode] = useState<RowGroupMode>('none')
+  const [filters, setFilters] = usePref(scope, 'mrFilters', (v) => {
+    const saved = (typeof v === 'object' && v !== null ? v : {}) as Record<string, unknown>
+    return { states: parseFlags(saved['states'], DEFAULT_MR_FILTERS.states), approvals: parseFlags(saved['approvals'], DEFAULT_MR_FILTERS.approvals) }
+  })
+  const [groupMode, setGroupMode] = usePref(scope, 'mrGroup', (v) => parseChoice(v, GROUP_MODES, 'none'))
+  const [collapsed, setCollapsed] = usePref(
+    scope,
+    'mrCollapsed',
+    (v) => new Set(parseList(v)),
+    (c) => [...c]
+  )
   const [busy, setBusy] = useState<Record<string, RowAction>>({})
   const [errors, setErrors] = useState<Record<string, RowError>>({})
   const without = <T,>(o: Record<string, T>, keys: string[]): Record<string, T> => Object.fromEntries(Object.entries(o).filter(([k]) => !keys.includes(k)))
@@ -407,6 +380,8 @@ function Screen(props: { onHome: () => void }): React.JSX.Element {
                 onFilters={setFilters}
                 groupMode={groupMode}
                 onGroupMode={setGroupMode}
+                collapsed={collapsed}
+                onCollapsed={setCollapsed}
                 onAction={(row, action) => void act(row.id, action)}
                 onSubmit={(row) => setSubmitFor(row.id)}
                 busy={busy}

@@ -57,6 +57,8 @@ export const CH = {
   themeGet: 'theme:get',
   themeChoose: 'theme:choose',
   themeSet: 'theme:set',
+  prefsGet: 'prefs:get',
+  prefsSet: 'prefs:set',
   reviewsAddTo: 'reviews:addTo',
   launchTake: 'launch:take',
   launchNew: 'launch:new',

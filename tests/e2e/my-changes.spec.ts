@@ -1032,7 +1032,7 @@ test.describe('sorting the list', () => {
     await expect(sortBtn(page, 'title')).toContainText('▲')
   })
 
-  test('the sort is not kept when the app starts again', async () => {
+  test('the sort is kept when the app starts again', async () => {
     // Arrange
     const env = makeEnv()
     const first = await start(baseFixture(), { env })
@@ -1047,8 +1047,8 @@ test.describe('sorting the list', () => {
     await openTab(page, 'assigned')
 
     // Assert
-    await expect(sortBtn(page, 'updated')).toHaveText('Updated ▼')
-    await expect(sortBtn(page, 'title')).not.toContainText(/[▲▼]/)
+    await expect(sortBtn(page, 'title')).toContainText('▲')
+    await expect(sortBtn(page, 'updated')).not.toContainText(/[▲▼]/)
   })
 })
 
@@ -1953,7 +1953,7 @@ test.describe('the approval filter', () => {
     expect(await sortedTitles(page)).toEqual(['Alpha', 'Bravo', 'Delta'])
   })
 
-  test('the approval pills are not kept when the app starts again', async () => {
+  test('the approval pills are kept when the app starts again', async () => {
     // Arrange
     const env = makeEnv()
     const first = await start(approvalFixture(), { env })
@@ -1968,7 +1968,7 @@ test.describe('the approval filter', () => {
     await openTab(page, 'assigned')
 
     // Assert
-    await expect(apill(page, 'Approved')).toHaveAttribute('aria-pressed', 'true')
+    await expect(apill(page, 'Approved')).toHaveAttribute('aria-pressed', 'false')
     await expect(apill(page, 'Not approved')).toHaveAttribute('aria-pressed', 'true')
   })
 

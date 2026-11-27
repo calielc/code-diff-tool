@@ -349,7 +349,7 @@ export function compareValues(x: string | number | null, y: string | number | nu
 export const DEFAULT_MR_SORT: { key: MrSortKey; dir: 'asc' | 'desc' } = { key: 'created', dir: 'asc' }
 
 /** Reads the stored sort. Nothing, bad JSON, an unknown key (an old one such as "branch") or a bad direction gives the default. The stored text "null" gives null: the order of the review. */
-const SORT_KEYS: MrSortKey[] = [
+export const SORT_KEYS: MrSortKey[] = [
   'mr',
   'stack',
   'title',

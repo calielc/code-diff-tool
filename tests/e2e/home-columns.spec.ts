@@ -21,7 +21,7 @@ test('the list of reviews has a Name column and no Slug column, and the filter w
   const headers = (await page.locator('table.reviews thead th').allTextContents()).map((t) => t.replace(/[▲▼]/g, '').trim())
 
   // Assert
-  expect(headers).toEqual(['Name', 'Issues', 'Last opened', 'Approved', 'Comments', 'Pipelines', ''])
+  expect(headers).toEqual(['Name', 'Issues', 'Last opened', 'Changes', 'Approved', 'Comments', 'Pipelines', ''])
   const first = page.getByTestId('review-R-1')
   await expect(first.locator('td').first()).toHaveText('Old name', { timeout: SHORT })
   await expect(first).not.toContainText('R-1')
@@ -102,7 +102,11 @@ const openThread = [
 ]
 
 /** A change with the given approvals, discussions and pipeline status. Its pipeline has no jobs. */
-function change(env: Env, iid: number, over: { approvedBy?: string[]; discussions?: unknown[]; pipeline?: string; state?: string }): Record<string, unknown> {
+function change(
+  env: Env,
+  iid: number,
+  over: { approvedBy?: string[]; discussions?: unknown[]; pipeline?: string; state?: string; draft?: boolean }
+): Record<string, unknown> {
   const base = mrFixture('team/backend/x', iid, env.shas.a, env.shas.b)
   const k = `projects/${encodeURIComponent('team/backend/x')}/merge_requests/${iid}`
   const info = (base[`GET ${k}`] as { json: Record<string, unknown> }).json
@@ -112,6 +116,8 @@ function change(env: Env, iid: number, over: { approvedBy?: string[]; discussion
       json: {
         ...info,
         state: over.state ?? 'opened',
+        draft: over.draft === true,
+        work_in_progress: over.draft === true,
         head_pipeline: over.pipeline ? { id: iid, project_id: 1, status: over.pipeline, web_url: 'https://gitlab.com/p' } : null
       }
     },
@@ -153,7 +159,7 @@ test('a review row shows how many changes are approved, the open comments and th
   await expect(cell('R-2', 'pipeline')).toHaveText('all green')
 
   // Assert: a review whose changes cannot be read shows dashes
-  await expect(page.getByTestId('review-R-3').locator('td').nth(3)).toHaveText('–')
+  await expect(page.getByTestId('review-R-3').locator('td').nth(4)).toHaveText('–')
   await started.app.close()
 })
 
@@ -238,6 +244,66 @@ test.describe('the status columns refresh by themselves', () => {
     expect(reads(forge!)).toBe(before)
     await app.close()
   })
+})
+
+test('the Changes column counts the open, draft, merged and closed changes, and says all merged when nothing is left to do', async () => {
+  // Arrange
+  const env = makeEnv()
+  seedReview(env, 'R-A', { title: 'Still going', mrs: [mr(12), mr(13), mr(14), mr(15)] })
+  seedReview(env, 'R-B', { title: 'All done', mrs: [mr(16), mr(17)] })
+  seedReview(env, 'R-C', { title: 'Done with one closed', mrs: [mr(18), mr(19)] })
+  const fixture = {
+    ...change(env, 12, {}),
+    ...change(env, 13, { draft: true }),
+    ...change(env, 14, { state: 'merged' }),
+    ...change(env, 15, { state: 'closed' }),
+    ...change(env, 16, { state: 'merged' }),
+    ...change(env, 17, { state: 'merged' }),
+    ...change(env, 18, { state: 'merged' }),
+    ...change(env, 19, { state: 'closed' })
+  }
+  const started = await launch(env, fixture)
+  forge = started.forge
+  const page = await home(started.app)
+  const cell = (slug: string): Locator => page.getByTestId(`review-${slug}`).getByTestId('status-states')
+  const pills = (slug: string): Promise<string[]> => cell(slug).locator('.statepill').allTextContents()
+
+  // Assert: a review that is still going shows a pill for each state that has changes, in the order open, draft, merged, closed
+  await expect(cell('R-A').locator('.statepill')).toHaveCount(4, { timeout: 10_000 })
+  expect(await pills('R-A')).toEqual(['1 open', '1 draft', '1 merged', '1 closed'])
+  await expect(cell('R-A')).not.toContainText('all merged')
+  await expect(cell('R-A').locator('.statepill.opened')).toHaveCount(1)
+  await expect(cell('R-A').locator('.statepill.draft')).toHaveCount(1)
+
+  // Assert: when every change is merged, one green word says so and no pill repeats it
+  await expect(cell('R-B')).toHaveText('all merged')
+  await expect(cell('R-B').locator('.statepill')).toHaveCount(0)
+
+  // Assert: a closed change still shows after it
+  await expect(cell('R-C')).toContainText('all merged')
+  expect(await pills('R-C')).toEqual(['1 closed'])
+  await started.app.close()
+})
+
+test('the Changes header sorts by the changes that are still to do, and the review with the most comes last when ascending', async () => {
+  // Arrange
+  const env = makeEnv()
+  seedReview(env, 'R-A', { title: 'Still going', mrs: [mr(12), mr(13)] })
+  seedReview(env, 'R-B', { title: 'All done', mrs: [mr(16)] })
+  const fixture = { ...change(env, 12, {}), ...change(env, 13, { draft: true }), ...change(env, 16, { state: 'merged' }) }
+  const started = await launch(env, fixture)
+  forge = started.forge
+  const page = await home(started.app)
+  await expect(page.getByTestId('review-R-B').getByTestId('status-states')).toHaveText('all merged', { timeout: 10_000 })
+  await expect(page.getByTestId('review-R-A').locator('.statepill')).toHaveCount(2)
+  const names = async (): Promise<string[]> => (await page.locator('table.reviews tbody tr td:first-child').allTextContents()).map((t) => t.trim())
+
+  // Act and assert
+  await page.getByRole('button', { name: /^Changes/ }).click()
+  expect(await names()).toEqual(['All done', 'Still going'])
+  await page.getByRole('button', { name: /^Changes/ }).click()
+  expect(await names()).toEqual(['Still going', 'All done'])
+  await started.app.close()
 })
 
 test('the Approved, Comments and Pipelines headers sort the reviews, and the Summarised column and pills are gone', async () => {

@@ -155,7 +155,7 @@ test('the main screen has the three tabs, Reviews is the default and shows the t
   await expect(tab(page, 'assigned')).toHaveAttribute('aria-selected', 'false')
   await expect(tab(page, 'reviewer')).toHaveAttribute('aria-selected', 'false')
   const headers = (await page.locator('table.reviews thead th').allTextContents()).map((t) => t.replace(/[▲▼]/g, '').trim())
-  expect(headers).toEqual(['Name', 'Issues', 'Last opened', 'Approved', 'Comments', 'Pipelines', ''])
+  expect(headers).toEqual(['Name', 'Issues', 'Last opened', 'Changes', 'Approved', 'Comments', 'Pipelines', ''])
   await expect(page.getByTestId('review-R-1')).toBeVisible()
   await expect(page.getByTestId('review-R-2')).toBeVisible()
   await expect(page.getByTestId('new-review')).toBeEnabled()

@@ -436,6 +436,13 @@ textarea {
 .tabbar .tabs {
   flex: 1;
 }
+/* The pills of the Changes column on the Reviews tab: one for each state that has changes. */
+.statepills {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+}
 /* The New review bar at the foot of the home page. It sticks to the bottom of the window while the list is long, and sits right under the list when the list is short. */
 .newbar {
   position: sticky;

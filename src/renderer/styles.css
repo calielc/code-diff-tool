@@ -454,9 +454,9 @@ textarea {
 }
 .difftab .difftoolbar {
   display: flex;
-  gap: 16px;
-  align-items: center;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
   padding: 6px 0;
 }
 .difftab .difftoolbar .group {

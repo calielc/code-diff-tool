@@ -38,7 +38,7 @@ The home screen has three tabs: Reviews, Owned by me and I am the reviewer. Revi
 The app saves how you left each screen, so it opens the same way next time. Every change of a toggle, a filter, a sort, a group choice or a tab is saved at once, in the file `ui-prefs.json` in the data folder of the app. Each screen keeps its own settings, so a choice in one place never changes another.
 
 - **The home screen** keeps the open tab. The Reviews tab keeps its sort, its search text and its four Summarised pills. Each of the two list tabs keeps its state pills, approval pills, group choice, collapsed groups and sort.
-- **Each review** keeps its own settings, and a review never changes the settings of another review: the open tab, and in the Code changes tab the sort, the state and approval filters, the group choice and the collapsed groups. The Issues tab keeps its sort. The Diff tab keeps its view (Linear or Stacked), the file filter text, the Files, Types and Comments buttons and the two Show checkboxes. Deleting a review forgets its settings.
+- **Each review** keeps its own settings, and a review never changes the settings of another review: the open tab, and in the Code changes tab the sort, the state and approval filters, the group choice and the collapsed groups. The Issues tab keeps its sort. The Diff tab keeps its view (Linear or Stacked), the file filter text, the Status, Type, Comments and Show buttons. Deleting a review forgets its settings.
 - **Every screen** shares the Noise setting and the Layout of the Diff tab.
 - The width of the file tree, the Viewed marks, the accepted sections and the folded sections stay where they were. They are kept in the browser storage of the window, as before.
 - A saved setting that the app no longer knows, for example a column that was removed, is ignored and the default is used. Delete `ui-prefs.json` to go back to the defaults.
@@ -81,15 +81,17 @@ The table has one row for each change. The columns are Repository, change reques
 
 ### 6.1 The toolbar
 
+The toolbar has two rows. The first row says how the diff looks: View, Noise and Layout. The second row says which files show: the filters Status, Type, Comments and Show, and a Clear filters link.
+
 - **View**: Linear or Stacked. Linear shows the files of each change by itself. Stacked shows the files of all the changes of one repository as one diff, when they merge cleanly. The Summarised page has its own tab, described in section 7. It has no file tree, and it shows only the Noise group.
-- **Noise**: Code only, Keep mechanical, or Everything. Code only hides blank lines, white space, imports, comments and mechanical modifiers. A file with no change at that level is hidden, and the tree says how many.
-- **Layout**: Inline, Side by side, or Full file.
-- **Files**: New, Modified and Deleted, each with its count.
-- **Types**: Code, Tests, Config, Docs, Images and Binary, each with its count. A file has one type. The app checks in this order and the first match wins: Images (by extension: png, jpg, jpeg, gif, webp, bmp, ico, svg, avif, tiff, heic and similar), then Binary (a file that git marks as binary, or a known binary extension such as zip, dll, exe, pdf, fonts, jar and wasm), then Docs, Tests, Config, and Code for the rest. An image is never Binary, and a picture in a `tests` folder is an Image. An SVG is an Image, and the diff still shows its text lines. The diff of another image, or of any binary file, shows the note "Binary file, no text diff." and no preview.
-- The Types group shows only the options that have files. An option with no file is not shown, and the group is not shown when the review has no file at all. The counts come from the files that the View and Noise settings show, so the other filters do not change them. An option that is on stays visible when its count falls to 0, so you can turn it off.
+- **Noise**: Code, Mechanical or All. Code shows code only: it hides blank lines, white space, imports, comments and mechanical modifiers. Mechanical keeps the mechanical changes and hides blank lines, white space, imports and moved namespaces. All follows the diff of git. A tooltip on each button says so. A file with no change at that level is hidden, and the tree says how many.
+- **Layout**: Inline, Split (side by side) or Full (the whole file).
+- **Status**: New, Modified and Deleted, each with its count.
+- **Type**: Code, Tests, Config, Docs, Images and Binary, each with its count. A file has one type. The app checks in this order and the first match wins: Images (by extension: png, jpg, jpeg, gif, webp, bmp, ico, svg, avif, tiff, heic and similar), then Binary (a file that git marks as binary, or a known binary extension such as zip, dll, exe, pdf, fonts, jar and wasm), then Docs, Tests, Config, and Code for the rest. An image is never Binary, and a picture in a `tests` folder is an Image. An SVG is an Image, and the diff still shows its text lines. The diff of another image, or of any binary file, shows the note "Binary file, no text diff." and no preview.
+- The Type group shows only the options that have files. An option with no file is not shown, and the group is not shown when the review has no file at all. The counts come from the files that the View and Noise settings show, so the other filters do not change them. An option that is on stays visible when its count falls to 0, so you can turn it off.
 - **Comments**: Open and Resolved, each with the number of threads. With Open on, the tree shows only the files with open threads, and the diff shows only the open threads, so resolved threads are hidden. Resolved works the same way.
-- Filters with buttons (Files, Types and Comments) narrow the list only when a button is on. With no button on, every file shows.
-- **Show**: a group at the right end of the toolbar with two checkboxes, Hide viewed and Only files with comments.
+- **Show**: Hide viewed and Commented. Hide viewed hides the files that you marked as viewed. Commented keeps the files that have comments or drafts. Each shows how many of the shown files it covers.
+- The filters are buttons that work the same way: a click turns one on, a second click turns it off, and the filters narrow the list only when a button is on. With no button on, every file shows. **Clear filters** shows only while a filter is on, and turns every filter off at once.
 
 ### 6.2 The file tree
 
@@ -105,7 +107,7 @@ The tree groups the files by repository, change and folder. A box on each row ma
 The header shows the path, the state of the change, the commits of the file and the Viewed button. The body shows the diff in the layout that you chose. A line has a gutter with a `+` button to comment, and a button to ask the AI about the line.
 
 - **Marks inside a line.** When a line changed by a few characters, the changed characters are marked more strongly than the rest of the line. The app compares the two lines word by word, and compares the characters only inside a changed word. A line that changed almost completely gets no marks. Inline and side by side show the marks.
-- **Syntax colours.** The code has colours by its language in the Inline, Side by side and Full file layouts, and in the code blocks of the chat. The app picks the language from the name of the file, for example `.ts`, `.tsx`, `.cs`, `.py`, `.csproj`, `.tf`, `Dockerfile` and `Makefile`. A file in an unknown language stays plain.
+- **Syntax colours.** The code has colours by its language in the Inline, Split and Full layouts, and in the code blocks of the chat. The app picks the language from the name of the file, for example `.ts`, `.tsx`, `.cs`, `.py`, `.csproj`, `.tf`, `Dockerfile` and `Makefile`. A file in an unknown language stays plain.
   - A removed line takes its colours from the whole old file. An added or unchanged line takes them from the whole new file. A comment or a string over several lines then has the right colour on each line. A file with no whole text, such as a generated file, gets its colours one hunk at a time, so a comment that starts above a hunk can have a wrong colour. The text is always right.
   - The text shows at once and the colours follow a moment later, because a worker colours the file in the background. The marks inside a changed line stay visible over the colours.
   - A file with more than 8,000 lines, more than 600,000 characters or a line longer than 1,500 characters stays plain, and the file header says why.

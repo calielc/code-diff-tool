@@ -220,6 +220,72 @@ test('resolves a thread, folds it and updates the chip; deletes the viewer’s l
   await app.close()
 })
 
+test('the Show filters are toggle buttons like the other filters, with counts: Hide viewed and Commented', async () => {
+  const s = setup()
+  const { app, page } = await open(s, fixtures(s, { [`GET ${EP(12)}/discussions`]: { json: [thread('d', 72, 'bob', 'a note')] } }))
+  await toDiff(page)
+  const group = page.getByRole('group', { name: 'Show' })
+  const hide = group.getByTestId('hide-viewed')
+  const only = group.getByTestId('only-comments')
+
+  // The two buttons sit in the same kind of group as Files, Types and Comments, and show a count
+  await expect(group.getByRole('button')).toHaveCount(2)
+  await expect(hide).toHaveAttribute('aria-pressed', 'false')
+  await expect(only).toHaveAttribute('aria-pressed', 'false')
+  await expect(group.locator('input')).toHaveCount(0)
+  await expect(hide.locator('small')).toHaveText('0')
+  await expect(only.locator('small')).toHaveText('1')
+
+  // Hide viewed counts the viewed files, and hides them when it is on
+  await page.getByTestId('viewed-now').check()
+  await expect(hide.locator('small')).toHaveText('1')
+  await hide.click()
+  await expect(hide).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByTestId('file-src/a.txt')).toHaveCount(0)
+  await hide.click()
+  await expect(page.getByTestId('file-src/a.txt')).toHaveCount(1)
+
+  // Commented keeps the file that has a thread
+  await only.click()
+  await expect(only).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByTestId('file-src/a.txt')).toHaveCount(1)
+  await app.close()
+})
+
+test('the toolbar has two rows, the view settings and the filters, and Clear filters turns every filter off', async () => {
+  const s = setup()
+  const { app, page } = await open(s, fixtures(s, { [`GET ${EP(12)}/discussions`]: { json: [thread('d', 72, 'bob', 'a note')] } }))
+  await toDiff(page)
+  const rows = page.locator('.difftoolbar .toolrow')
+  const groups = (row: number): Promise<string[]> =>
+    rows
+      .nth(row)
+      .locator('.fgroup')
+      .evaluateAll((els) => els.map((el) => el.getAttribute('aria-label') ?? ''))
+
+  // The first row says how the diff looks. The second row says which files show.
+  await expect(rows).toHaveCount(2)
+  expect(await groups(0)).toEqual(['View', 'Noise', 'Layout'])
+  expect((await groups(1)).filter((g) => g !== 'Type')).toEqual(['Status', 'Comments', 'Show'])
+
+  // The noise and layout buttons have short names
+  await expect(page.getByRole('group', { name: 'Noise' }).getByRole('button')).toHaveText(['Code', 'Mechanical', 'All'])
+  await expect(page.getByRole('group', { name: 'Layout' }).getByRole('button')).toHaveText(['Inline', 'Split', 'Full'])
+
+  // With no filter on there is no Clear button. A filter that hides the file shows it, and Clear brings the file back.
+  await expect(page.getByTestId('clear-filters')).toHaveCount(0)
+  await page.getByTestId('status-D').click()
+  await expect(page.getByTestId('file-src/a.txt')).toHaveCount(0)
+  await page.getByTestId('only-comments').click()
+  await expect(page.getByTestId('clear-filters')).toBeVisible()
+  await page.getByTestId('clear-filters').click()
+  await expect(page.getByTestId('file-src/a.txt')).toHaveCount(1)
+  await expect(page.getByTestId('clear-filters')).toHaveCount(0)
+  await expect(page.getByTestId('status-D')).toHaveAttribute('aria-pressed', 'false')
+  await expect(page.getByTestId('only-comments')).toHaveAttribute('aria-pressed', 'false')
+  await app.close()
+})
+
 test('the Open filter of the comments shows only the open threads, and another person’s note has no Delete', async () => {
   const s = setup()
   const resolved = thread('c', 71, 'bob', 'old', { resolved: true })

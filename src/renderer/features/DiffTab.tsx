@@ -40,9 +40,9 @@ const nameOf = (p: string): string => p.slice(p.lastIndexOf('/') + 1)
 
 /** The three noise buttons. The ids are the internal level names (file 02 section 2). */
 const NOISE: { id: LevelName; label: string; hint: string }[] = [
-  { id: 'strict', label: 'Code only', hint: 'Hides blank lines, whitespace, imports, comments and mechanical modifiers' },
-  { id: 'basic', label: 'Keep mechanical', hint: 'Hides blank lines, whitespace, imports and moved namespaces' },
-  { id: 'raw', label: 'Everything', hint: "Follows git's own diff" }
+  { id: 'strict', label: 'Code', hint: 'Code only: hides blank lines, whitespace, imports, comments and mechanical modifiers' },
+  { id: 'basic', label: 'Mechanical', hint: 'Keep mechanical changes: hides blank lines, whitespace, imports and moved namespaces' },
+  { id: 'raw', label: 'All', hint: "Everything: follows git's own diff" }
 ]
 
 const STATUS_WORD = { A: 'New', M: 'Modified', D: 'Deleted', R: 'Renamed' } as const
@@ -328,6 +328,17 @@ export function DiffTab(props: { mode: 'summarised' | 'diff'; visible?: (mrKey: 
     { open: 0, resolved: 0 }
   )
   const statusCount = (st: 'A' | 'M' | 'D'): number => shown.filter((e) => statusOf(e) === st).length
+  // The counts of the Show buttons come from the shown files too.
+  const filtersOn = statuses.size > 0 || kinds.size > 0 || commentFilter.size > 0 || hideViewed || onlyComments
+  const clearFilters = (): void => {
+    setStatuses(new Set())
+    setKinds(new Set())
+    setCommentFilter(new Set())
+    setHideViewed(false)
+    setOnlyComments(false)
+  }
+  const viewedFiles = shown.filter((e) => viewed.has(e.id)).length
+  const commentedFiles = shown.filter(hasComments).length
   // The counts of the Types filter come from the shown files, as the counts of the Files filter do. Only the options with files show, and an option that is on stays.
   const kindOptions = useMemo(() => visibleKinds(countKinds(shown.map((e) => ({ path: e.file.path, binary: e.file.binary }))), kinds), [shown, kinds])
   const visible = useMemo(() => {
@@ -647,40 +658,40 @@ export function DiffTab(props: { mode: 'summarised' | 'diff'; visible?: (mrKey: 
   return (
     <div className="difftab" data-testid="diff-tab">
       <div className="difftoolbar">
-        {props.mode === 'diff' && (
-          <div className="fgroup" role="group" aria-label="View">
-            <span className="glabel">View</span>
+        <div className="toolrow">
+          {props.mode === 'diff' && (
+            <div className="fgroup" role="group" aria-label="View">
+              <span className="glabel">View</span>
+              <span className="seg">
+                <button className={view === 'mr' ? 'on' : ''} onClick={() => setView('mr')}>
+                  Linear
+                </button>
+                <button className={view === 'combined' ? 'on' : ''} disabled={!hasCombined} title={combinedTip} onClick={() => setView('combined')}>
+                  Stacked
+                  {partsBadge && <span className="parts"> {result.combined.length} parts</span>}
+                </button>
+              </span>
+            </div>
+          )}
+          <div className="fgroup" role="group" aria-label="Noise">
+            <span className="glabel">Noise</span>
             <span className="seg">
-              <button className={view === 'mr' ? 'on' : ''} onClick={() => setView('mr')}>
-                Linear
-              </button>
-              <button className={view === 'combined' ? 'on' : ''} disabled={!hasCombined} title={combinedTip} onClick={() => setView('combined')}>
-                Stacked
-                {partsBadge && <span className="parts"> {result.combined.length} parts</span>}
-              </button>
+              {NOISE.map((n) => (
+                <button key={n.id} className={level === n.id ? 'on' : ''} title={n.hint} onClick={() => setLevel(n.id)}>
+                  {n.label}
+                </button>
+              ))}
             </span>
           </div>
-        )}
-        <div className="fgroup" role="group" aria-label="Noise">
-          <span className="glabel">Noise</span>
-          <span className="seg">
-            {NOISE.map((n) => (
-              <button key={n.id} className={level === n.id ? 'on' : ''} title={n.hint} onClick={() => setLevel(n.id)}>
-                {n.label}
-              </button>
-            ))}
-          </span>
-        </div>
-        {view !== 'summarised' && (
-          <>
+          {view !== 'summarised' && (
             <div className="fgroup" role="group" aria-label="Layout">
               <span className="glabel">Layout</span>
               <span className="seg">
                 {(
                   [
                     ['inline', 'Inline'],
-                    ['side', 'Side by side'],
-                    ['full', 'Full file']
+                    ['side', 'Split'],
+                    ['full', 'Full']
                   ] as const
                 ).map(([id, label]) => (
                   <button key={id} className={layout === id ? 'on' : ''} data-testid={'layout-' + id} onClick={() => setLayout(id)}>
@@ -689,8 +700,12 @@ export function DiffTab(props: { mode: 'summarised' | 'diff'; visible?: (mrKey: 
                 ))}
               </span>
             </div>
-            <div className="fgroup" role="group" aria-label="Files">
-              <span className="glabel">Files</span>
+          )}
+        </div>
+        {view !== 'summarised' && (
+          <div className="toolrow">
+            <div className="fgroup" role="group" aria-label="Status">
+              <span className="glabel">Status</span>
               <span className="seg toggles">
                 {(
                   [
@@ -712,8 +727,8 @@ export function DiffTab(props: { mode: 'summarised' | 'diff'; visible?: (mrKey: 
               </span>
             </div>
             {kindOptions.length > 0 && (
-              <div className="fgroup" role="group" aria-label="Types">
-                <span className="glabel">Types</span>
+              <div className="fgroup" role="group" aria-label="Type">
+                <span className="glabel">Type</span>
                 <span className="seg toggles">
                   {kindOptions.map((k) => (
                     <button
@@ -751,19 +766,35 @@ export function DiffTab(props: { mode: 'summarised' | 'diff'; visible?: (mrKey: 
                 ))}
               </span>
             </div>
-            <div className="fgroup checks" role="group" aria-label="Show">
+            <div className="fgroup" role="group" aria-label="Show">
               <span className="glabel">Show</span>
-              <span className="seg checkseg">
-                <label>
-                  <input type="checkbox" data-testid="hide-viewed" checked={hideViewed} onChange={(e) => setHideViewed(e.target.checked)} /> Hide viewed
-                </label>
-                <label>
-                  <input type="checkbox" data-testid="only-comments" checked={onlyComments} onChange={(e) => setOnlyComments(e.target.checked)} /> Only files
-                  with comments
-                </label>
+              <span className="seg toggles">
+                <button
+                  className={hideViewed ? 'on' : ''}
+                  aria-pressed={hideViewed}
+                  data-testid="hide-viewed"
+                  title="Hide the files that you marked as viewed"
+                  onClick={() => setHideViewed(!hideViewed)}
+                >
+                  Hide viewed <small>{viewedFiles}</small>
+                </button>
+                <button
+                  className={onlyComments ? 'on' : ''}
+                  aria-pressed={onlyComments}
+                  data-testid="only-comments"
+                  title="Show only the files that have comments or drafts"
+                  onClick={() => setOnlyComments(!onlyComments)}
+                >
+                  Commented <small>{commentedFiles}</small>
+                </button>
               </span>
             </div>
-          </>
+            {filtersOn && (
+              <button className="link" data-testid="clear-filters" title="Turn every filter off" onClick={clearFilters}>
+                Clear filters
+              </button>
+            )}
+          </div>
         )}
       </div>
       <div ref={layoutRef} className={dragging ? 'difflayout dragging' : 'difflayout'} style={{ '--tree-width': `${treeWidth}px` } as React.CSSProperties}>

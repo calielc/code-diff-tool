@@ -1,4 +1,4 @@
-import { mergeMine, mineWanted, MINE_WINDOW_MS, type MineItem, type MineResult, type MineRole, type MineState } from '@shared/my-changes'
+import { mergeMine, mineWanted, MINE_WINDOW_MS, type MineItem, type MineResult, type MineRole, type MineScope, type MineState } from '@shared/my-changes'
 import type { Person } from '@shared/provider'
 import { forgeApi, forgePaged, githubAt, gitlabAt } from './forge-api'
 import { currentUser } from './github'
@@ -51,7 +51,7 @@ function gitlabItem(host: string, mr: J, role: MineRole): MineItem {
 }
 
 /** GitLab: the changes assigned to the user and the ones that name the user as reviewer. Open ones always, the others only from the last 30 days. */
-async function gitlabMine(host: string, since: string): Promise<{ items: MineItem[]; viewer: string }> {
+async function gitlabMine(host: string, since: string, scope: MineScope): Promise<{ items: MineItem[]; viewer: string }> {
   const target = gitlabAt({ host })
   const user = (await forgeApi(target, 'user', 'GET')) as J
   const userId = Number(user.id)
@@ -60,8 +60,8 @@ async function gitlabMine(host: string, since: string): Promise<{ items: MineIte
     ['assigned', { scope: 'assigned_to_me' }],
     ['reviewer', { scope: 'all', reviewer_id: userId }]
   ] as const) {
-    calls.push([role, { ...who, state: 'opened' }])
-    calls.push([role, { ...who, state: 'all', updated_after: since }])
+    if (scope !== 'closed') calls.push([role, { ...who, state: 'opened' }])
+    if (scope !== 'open') calls.push([role, { ...who, state: 'all', updated_after: since }])
   }
   const lists = await Promise.all(
     calls.map(async ([role, fields]) => {
@@ -94,7 +94,7 @@ function githubItem(host: string, pr: J, role: MineRole): MineItem {
 }
 
 /** GitHub: one search for each way the user is involved, open and closed (merged ones are closed too). */
-async function githubMine(host: string, since: string): Promise<{ items: MineItem[]; viewer: string }> {
+async function githubMine(host: string, since: string, scope: MineScope): Promise<{ items: MineItem[]; viewer: string }> {
   const target = githubAt({ host })
   const day = since.slice(0, 10)
   const ways: [MineRole, string][] = [
@@ -104,7 +104,7 @@ async function githubMine(host: string, since: string): Promise<{ items: MineIte
   ]
   const lists = await Promise.all(
     ways.flatMap(([role, way]) =>
-      [`is:pr ${way} is:open`, `is:pr ${way} is:closed updated:>=${day}`].map(async (q) => {
+      [scope !== 'closed' ? `is:pr ${way} is:open` : '', scope !== 'open' ? `is:pr ${way} is:closed updated:>=${day}` : ''].filter(Boolean).map(async (q) => {
         const found = await forgePaged<J>(target, 'search/issues', { q }, (p) => (Array.isArray((p as J)?.items) ? (p as J).items : []))
         return found.map((pr) => githubItem(host, pr, role))
       })
@@ -113,15 +113,18 @@ async function githubMine(host: string, since: string): Promise<{ items: MineIte
   return { items: mergeMine(lists), viewer: await currentUser(host) }
 }
 
-/** The changes of every given access. One host that fails gives one error line, and the other hosts still show. The token is never in an error. */
-export async function fetchMine(accesses: MineAccess[], now = Date.now()): Promise<MineResult> {
+/**
+ * The changes of every given access. One host that fails gives one error line, and the other hosts still show. The token is never in an error.
+ * The scope tells which part to read. The open part is small, and the merged and closed part of the last 30 days can be long, so the window reads them in two calls.
+ */
+export async function fetchMine(accesses: MineAccess[], now = Date.now(), scope: MineScope = 'all'): Promise<MineResult> {
   const since = new Date(now - MINE_WINDOW_MS).toISOString()
   const errors: MineResult['errors'] = []
   const viewers: Record<string, string> = {}
   const lists = await Promise.all(
     accesses.map(async (a) => {
       try {
-        const found = a.provider === 'gitlab' ? await gitlabMine(a.host, since) : await githubMine(a.host, since)
+        const found = a.provider === 'gitlab' ? await gitlabMine(a.host, since, scope) : await githubMine(a.host, since, scope)
         viewers[a.host] = found.viewer
         return found.items
       } catch (e) {

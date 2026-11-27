@@ -76,3 +76,21 @@ export function keepFailedHosts(previous: MineResult | null, next: MineResult): 
   for (const host of failed) if (previous.viewers[host] && !viewers[host]) viewers[host] = previous.viewers[host]
   return { ...next, items: [...next.items, ...kept], viewers }
 }
+
+/** Which part of the lists to read: the open and draft changes, the merged and closed ones of the last 30 days, or all of them. */
+export type MineScope = 'open' | 'closed' | 'all'
+
+/**
+ * The two parts of the lists as one answer. The open part is small and arrives first, so a part that has not arrived is null. A host that failed
+ * in both parts gives one error line, and a host that has an error text in one part only shows that text.
+ */
+export function combineMine(open: MineResult | null, closed: MineResult | null): MineResult | null {
+  if (!open || !closed) return open ?? closed
+  const errors = [...open.errors, ...closed.errors].filter((e, i, all) => all.findIndex((x) => x.host === e.host && x.error === e.error) === i)
+  return {
+    items: mergeMine([open.items, closed.items]),
+    errors,
+    viewers: { ...closed.viewers, ...open.viewers },
+    hasAccess: open.hasAccess || closed.hasAccess
+  }
+}

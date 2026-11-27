@@ -11,6 +11,7 @@ import { registerSectionsHandlers } from './ipc/sections'
 import { registerAiHandlers } from './ipc/ai'
 import { registerCommitHandlers } from './ipc/commits'
 import { currentTheme, registerThemeHandlers, setTheme } from './ipc/theme'
+import { prefetchMine } from './services/mine-prefetch'
 import { registerPrefsHandlers } from './ipc/prefs'
 import { registerChangesHandlers } from './ipc/changes'
 import { registerLaunchHandlers, receiveLaunch } from './ipc/launch'
@@ -108,6 +109,7 @@ if (!app.requestSingleInstanceLock()) {
     registerCommitHandlers()
     registerLaunchHandlers()
     registerChangesHandlers()
+    prefetchMine()
     void readAppState().then(async (st) => {
       if (st.workspaceRoot) await markStaleRecords(st.workspaceRoot)
     })

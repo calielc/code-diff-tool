@@ -51,7 +51,7 @@ const REVIEWER_FLAT = ['Nettle', 'Linden', 'Elm', 'Juniper', 'Oak', 'Maple']
 /** Start the app on the fake forge with a token for gitlab.com and github.com (or none), and go to the main screen. */
 async function start(
   fixture: Fixture,
-  opts: { env?: Env; tokens?: boolean; root?: boolean; clock?: boolean } = {}
+  opts: { env?: Env; tokens?: boolean; root?: boolean; clock?: boolean; noPrefetch?: boolean } = {}
 ): Promise<{ page: Page; env: Env; forge: FakeForge }> {
   const env = opts.env ?? makeEnv()
   // Without a workspace root the Prerequisites are not ready, so Home is blocked.
@@ -59,6 +59,8 @@ async function start(
   forge = await startFakeForge(fixture)
   const vars: Record<string, string | undefined> = { ...process.env, CODEDIFF_USER_DATA: env.ud, ...forgeEnv(forge.url) }
   if (opts.tokens === false) delete vars['CODEDIFF_TEST_CREDENTIALS']
+  // A test that counts the calls from the start turns the read-ahead of the main process off.
+  if (opts.noPrefetch) vars['CODEDIFF_NO_PREFETCH'] = '1'
   app = await electron.launch({ args: [main], env: vars as Record<string, string> })
   const page = await app.firstWindow()
   // A fake clock lets a test move the 60 second poll without waiting. Time still runs on its own after the install.
@@ -752,6 +754,105 @@ test.describe('the New review bar at the foot of the home page', () => {
   })
 })
 
+test.describe('the lists are read when the app starts', () => {
+  const openCalls = (f: FakeForge): number =>
+    f.calls.filter(
+      (c) => (c.endpoint === 'merge_requests' && c.query['state'] === 'opened') || (c.endpoint === 'search/issues' && c.query['q']?.includes('is:open'))
+    ).length
+  const closedCalls = (f: FakeForge): number =>
+    f.calls.filter(
+      (c) => (c.endpoint === 'merge_requests' && c.query['state'] === 'all') || (c.endpoint === 'search/issues' && c.query['q']?.includes('is:closed'))
+    ).length
+  const detailCalls = (f: FakeForge): number => f.calls.filter((c) => c.endpoint.endsWith('/approvals')).length
+
+  test('the open part and the details of the newest changes are read before a list tab is shown, and the closed part waits for the tab', async () => {
+    // Arrange and act
+    const { forge: f } = await start(baseFixture())
+
+    // Assert: the Reviews tab shows, and the main process has read the open lists and the details already
+    await expect.poll(() => openCalls(f), { timeout: 5_000 }).toBeGreaterThan(0)
+    await expect.poll(() => detailCalls(f), { timeout: 5_000 }).toBeGreaterThan(0)
+    expect(closedCalls(f)).toBe(0)
+  })
+
+  test('the first read of a list tab uses the answer of the start, so the open part is not read twice', async () => {
+    // Arrange
+    const { page, forge: f } = await start(baseFixture())
+    await expect.poll(() => detailCalls(f), { timeout: 5_000 }).toBeGreaterThan(0)
+    const before = openCalls(f)
+
+    // Act
+    await openTab(page, 'assigned')
+
+    // Assert: the rows are there, with no new read of the open part, and the closed part is read now
+    await expect(rows(page)).toHaveCount(5)
+    await expect.poll(() => closedCalls(f), { timeout: 5_000 }).toBeGreaterThan(0)
+    expect(openCalls(f)).toBe(before)
+  })
+
+  test('with no saved access nothing is read at the start', async () => {
+    // Arrange and act
+    const { forge: f } = await start(baseFixture(), { tokens: false })
+
+    // Assert
+    await new Promise((r) => setTimeout(r, QUIET_MS))
+    expect(mineCalls(f)).toBe(0)
+  })
+})
+
+test.describe('the open changes and the merged and closed ones are read in two calls', () => {
+  /** The calls for the merged and closed part wait 5 seconds. The calls for the open part are fast. */
+  const slowClosed = (): Fixture => {
+    const fx = baseFixture()
+    const gitlab = fx['GET merge_requests'] as object
+    const github = fx['GET search/issues'] as object
+    return {
+      ...fx,
+      'GET merge_requests': { ...gitlab, sleepFor: (q: Record<string, string>) => (q['state'] === 'all' ? 5_000 : 0) },
+      'GET search/issues': { ...github, sleepFor: (q: Record<string, string>) => (q['q']?.includes('is:closed') ? 5_000 : 0) }
+    }
+  }
+
+  test('the open rows show and their details are read while the merged and closed list is still on its way', async () => {
+    // Arrange
+    const { page, forge: f } = await start(slowClosed())
+
+    // Act
+    await openTab(page, 'assigned')
+
+    // Assert: the five open rows are there long before the slow answer, and their snapshots were asked for
+    await expect(rows(page)).toHaveCount(5, { timeout: 3_000 })
+    await expect(pill(page, 'Merged')).toContainText('0')
+    await expect.poll(() => f.calls.filter((c) => c.endpoint.includes('/approvals')).length, { timeout: 3_000 }).toBeGreaterThan(0)
+  })
+
+  test('the counts of the Merged and Closed pills fill in when the slow part arrives, and the open rows stay', async () => {
+    // Arrange
+    const { page } = await start(slowClosed())
+    await openTab(page, 'assigned')
+    await expect(rows(page)).toHaveCount(5, { timeout: 3_000 })
+
+    // Act and assert
+    await expect(pill(page, 'Merged')).toContainText('1', { timeout: 10_000 })
+    await expect(pill(page, 'Closed')).toContainText('1')
+    await expect(rows(page)).toHaveCount(5)
+  })
+
+  test('a host that fails shows one error line, not one for each part, and the other host still shows its rows', async () => {
+    // Arrange
+    const { page } = await start({ ...baseFixture(), 'GET search/issues': { fail: 'HTTP 500 down' } })
+
+    // Act
+    await openTab(page, 'assigned')
+
+    // Assert
+    await expect(page.getByTestId('mine-error').filter({ hasText: 'github.com' })).toHaveCount(1)
+    await expect(page.getByTestId('mine-error')).toHaveCount(1)
+    await expect(row(page, 'Aspen')).toHaveCount(1)
+    await expect(row(page, 'Birch')).toHaveCount(0)
+  })
+})
+
 test.describe('the lists reload by themselves while a list tab is shown', () => {
   test('a poll runs every 60 seconds: none at 50 seconds, one round at 60, and the second round at 120', async () => {
     // Arrange
@@ -795,7 +896,7 @@ test.describe('the lists reload by themselves while a list tab is shown', () => 
 
   test('no poll runs on the Reviews tab', async () => {
     // Arrange
-    const { page, forge: f } = await start(baseFixture(), { clock: true })
+    const { page, forge: f } = await start(baseFixture(), { clock: true, noPrefetch: true })
     const before = f.calls.length
 
     // Act
@@ -1363,7 +1464,7 @@ test.describe('people on the grid', () => {
       assigned: true,
       approvedBy: ['bob']
     }))
-    const { page, forge: f } = await start(changesFixture(many, { people: PEOPLE, snapshotSleepMs: 300 }))
+    const { page, forge: f } = await start(changesFixture(many, { people: PEOPLE, snapshotSleepMs: 300 }), { noPrefetch: true })
     const peak = f.trackPeak(/\/approvals$/)
     const readPeak = f.trackPeak(/^projects\/[^/]+\/merge_requests\/\d+$/)
 
@@ -2804,7 +2905,7 @@ test.describe('the snapshot of the shown rows', () => {
   test('a failed read is tried again by a poll only when the change has a new updated time', async () => {
     // Arrange
     const failing = FULL_SEED.map((c) => (c.iid === 701 ? { ...c, snapshotFail: true } : c))
-    const { page, forge: f } = await start(changesFixture(failing), { clock: true })
+    const { page, forge: f } = await start(changesFixture(failing), { clock: true, noPrefetch: true })
     await openTab(page, 'assigned')
     await snapshotsLoaded(page)
     expect(readCount(f, glUrl(701))).toBe(1)
@@ -2882,7 +2983,7 @@ test.describe('the snapshot of the shown rows', () => {
 
   test('only the rows that show are read: a row with its state pill off has no snapshot call, and turning the pill on reads it once', async () => {
     // Arrange
-    const { page, forge: f } = await start(baseFixture())
+    const { page, forge: f } = await start(baseFixture(), { noPrefetch: true })
 
     // Act
     await openTab(page, 'assigned')
@@ -2910,7 +3011,7 @@ test.describe('the snapshot of the shown rows', () => {
 
   test('with every state pill off all the loaded changes show, so all of them are read', async () => {
     // Arrange
-    const { page, forge: f } = await start(baseFixture())
+    const { page, forge: f } = await start(baseFixture(), { noPrefetch: true })
     await openTab(page, 'assigned')
 
     // Act
@@ -2925,7 +3026,7 @@ test.describe('the snapshot of the shown rows', () => {
 
   test('Refresh reads the shown rows again, once each, and the hidden rows stay unread', async () => {
     // Arrange
-    const { page, forge: f } = await start(baseFixture())
+    const { page, forge: f } = await start(baseFixture(), { noPrefetch: true })
     await openTab(page, 'assigned')
     await snapshotsLoaded(page)
     const shown = [glUrl(1), glUrl(3), glUrl(6), glUrl(7), ghUrl(21)]

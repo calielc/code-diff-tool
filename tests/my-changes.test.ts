@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  combineMine,
   DEFAULT_MINE_APPROVALS,
   DEFAULT_MINE_STATES,
   MINE_POLL_MS,
@@ -8,6 +9,7 @@ import {
   mineReviewers,
   mineWanted,
   type MineItem,
+  type MineResult,
   type MineState
 } from '../src/shared/my-changes'
 
@@ -257,5 +259,79 @@ describe('DEFAULT_MINE_APPROVALS', () => {
 
     // Assert
     expect(approvals).toEqual({ approved: true, notApproved: true })
+  })
+})
+
+describe('combineMine', () => {
+  const item = (url: string, roles: MineItem['roles'], state: MineItem['state'] = 'opened'): MineItem => ({
+    provider: 'gitlab',
+    host: 'gitlab.com',
+    project: 'g/p',
+    iid: 1,
+    url,
+    title: 't',
+    author: 'a',
+    state,
+    updatedAt: '2026-01-01T00:00:00Z',
+    roles,
+    people: {},
+    reviewers: [],
+    approvedBy: null
+  })
+  const result = (items: MineItem[], over: Partial<MineResult> = {}): MineResult => ({
+    items,
+    errors: [],
+    viewers: { 'gitlab.com': 'me' },
+    hasAccess: true,
+    ...over
+  })
+
+  it('gives the part that has arrived while the other is still null', () => {
+    // Arrange
+    const open = result([item('u1', ['assigned'])])
+
+    // Act and Assert
+    expect(combineMine(open, null)).toBe(open)
+    expect(combineMine(null, open)).toBe(open)
+    expect(combineMine(null, null)).toBeNull()
+  })
+
+  it('joins the two parts and merges the roles of a change that both parts hold', () => {
+    // Arrange
+    const open = result([item('u1', ['assigned']), item('u2', ['reviewer'])])
+    const closed = result([item('u3', ['assigned'], 'merged'), item('u1', ['reviewer'])])
+
+    // Act
+    const all = combineMine(open, closed)
+
+    // Assert
+    expect(all?.items.map((i) => i.url).sort()).toEqual(['u1', 'u2', 'u3'])
+    expect(all?.items.find((i) => i.url === 'u1')?.roles.sort()).toEqual(['assigned', 'reviewer'])
+  })
+
+  it('shows one error line for a host that failed in both parts, and keeps a different text of the same host', () => {
+    // Arrange
+    const down = { host: 'gitlab.com', error: 'HTTP 503' }
+    const open = result([], { errors: [down] })
+    const closed = result([], { errors: [down, { host: 'gitlab.com', error: 'HTTP 500' }] })
+
+    // Act
+    const all = combineMine(open, closed)
+
+    // Assert
+    expect(all?.errors).toEqual([down, { host: 'gitlab.com', error: 'HTTP 500' }])
+  })
+
+  it('keeps the viewers of both parts, and says there is access when either part says so', () => {
+    // Arrange
+    const open = result([], { viewers: { 'gitlab.com': 'me' }, hasAccess: false })
+    const closed = result([], { viewers: { 'github.com': 'me2' }, hasAccess: true })
+
+    // Act
+    const all = combineMine(open, closed)
+
+    // Assert
+    expect(all?.viewers).toEqual({ 'github.com': 'me2', 'gitlab.com': 'me' })
+    expect(all?.hasAccess).toBe(true)
   })
 })

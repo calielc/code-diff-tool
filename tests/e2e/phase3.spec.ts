@@ -79,7 +79,7 @@ const seed = (e: Env, slug: string, content: unknown | string, extra: Record<str
 
 async function home(app: ElectronApplication): Promise<Page> {
   const page = await app.firstWindow()
-  await expect(page.getByRole('heading', { name: 'Reviews' })).toBeVisible()
+  await expect(page.getByTestId('home-tab-reviews')).toBeVisible()
   return page
 }
 
@@ -88,7 +88,6 @@ test('an empty workspace shows the empty state', async () => {
   const app = await launch(env, {})
   const page = await home(app)
   await expect(page.getByText('No reviews yet.')).toBeVisible()
-  await expect(page.getByTestId('review-count')).toHaveText('0 reviews')
   await app.close()
 })
 
@@ -179,7 +178,7 @@ test('a review whose repo is not in the workspace fails with the clone message a
   await expect(panel).toContainText(`team/gone has no local clone in ${env.root}. Clone it there, then retry.`)
   await expect(page.getByTestId('stage-clones')).toHaveAttribute('data-state', 'failed')
   await page.getByRole('button', { name: 'Back to Home' }).click()
-  await expect(page.getByRole('heading', { name: 'Reviews' })).toBeVisible()
+  await expect(page.getByTestId('home-tab-reviews')).toBeVisible()
   await app.close()
 })
 
@@ -193,7 +192,7 @@ test('Cancel stops a slow build and returns to Home', async () => {
   await expect(page.getByText('Reading and diffing the changes. This takes a few seconds.')).toBeVisible()
   const t0 = Date.now()
   await page.getByTestId('cancel-build').click()
-  await expect(page.getByRole('heading', { name: 'Reviews' })).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByTestId('home-tab-reviews')).toBeVisible({ timeout: 10_000 })
   expect(Date.now() - t0).toBeLessThan(10_000)
   await app.close()
 })

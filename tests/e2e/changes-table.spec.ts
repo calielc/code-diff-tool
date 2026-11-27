@@ -138,7 +138,7 @@ function buildFixture(shas: Record<string, { base: string; head: string }>, over
 }
 
 async function openReview(page: Page): Promise<void> {
-  await expect(page.getByRole('heading', { name: 'Reviews' })).toBeVisible()
+  await expect(page.getByTestId('home-tab-reviews')).toBeVisible()
   await page.getByTestId('review-R-1').dblclick()
   await expect(page.getByTestId('mrs-summary')).toBeVisible(WAIT)
 }
@@ -635,7 +635,7 @@ test.describe('the group buttons', () => {
 
     // Assert: the other review starts with No group, and the first one is not changed by it
     await page.reload()
-    await expect(page.getByRole('heading', { name: 'Reviews' })).toBeVisible()
+    await expect(page.getByTestId('home-tab-reviews')).toBeVisible()
     await page.getByTestId('review-R-2').dblclick()
     await expect(page.getByTestId('mrs-summary')).toBeVisible(WAIT)
     await expect(modes(page).getByRole('button', { name: 'No group', exact: true })).toHaveAttribute('aria-pressed', 'true')

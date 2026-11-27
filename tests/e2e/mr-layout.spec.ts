@@ -172,7 +172,7 @@ async function launch(over: Record<string, unknown> = {}): Promise<{ app: Electr
     env: { ...process.env, TZ: 'UTC', CODEDIFF_USER_DATA: s.ud, ...forgeEnv(forge.url) } as Record<string, string>
   })
   const page = await app.firstWindow()
-  await expect(page.getByRole('heading', { name: 'Reviews' })).toBeVisible()
+  await expect(page.getByTestId('home-tab-reviews')).toBeVisible()
   await page.getByTestId('review-R-1').dblclick()
   await expect(page.getByTestId('mrs-tab')).toBeVisible()
   return { app, page }

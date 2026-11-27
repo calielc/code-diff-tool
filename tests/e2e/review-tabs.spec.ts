@@ -35,7 +35,7 @@ async function open(options: { saved?: boolean; before?: (page: Page) => Promise
   if (options.before) {
     await options.before(page)
     await page.reload()
-    await expect(page.getByRole('heading', { name: 'Reviews' })).toBeVisible()
+    await expect(page.getByTestId('home-tab-reviews')).toBeVisible()
   }
   await openReview(page, 'R-1')
   return { page, close: () => started.app.close() }

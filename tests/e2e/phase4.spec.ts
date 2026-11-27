@@ -88,7 +88,7 @@ async function open(s: Setup, iids: number[], fixture: Record<string, unknown>):
     env: { ...process.env, CODEDIFF_USER_DATA: s.ud, ...forgeEnv(forge.url) } as Record<string, string>
   })
   const page = await app.firstWindow()
-  await expect(page.getByRole('heading', { name: 'Reviews' })).toBeVisible()
+  await expect(page.getByTestId('home-tab-reviews')).toBeVisible()
   await page.getByTestId('review-R-1').dblclick()
   await page.getByTestId('tab-diff').click()
   await expect(page.getByTestId('diff-tab')).toBeVisible()

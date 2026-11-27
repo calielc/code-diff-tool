@@ -298,7 +298,7 @@ test('screenshots of the main screens', async () => {
   const page = await app.firstWindow()
   await page.setViewportSize({ width: 1600, height: 1000 })
   const shot = (name: string): Promise<Buffer> => page.screenshot({ path: join(out!, `${name}.png`) })
-  await expect(page.getByRole('heading').first()).toBeVisible()
+  await expect(page.getByTestId('home-tab-reviews')).toBeVisible()
   await shot('home')
   await page.getByTestId('home-tab-assigned').click()
   await expect(page.locator('tr[data-testid^="mr-"]').first()).toBeVisible()

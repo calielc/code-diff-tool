@@ -71,7 +71,7 @@ export async function launch(env: Env, fixture: Record<string, unknown>): Promis
 
 export async function home(app: ElectronApplication): Promise<Page> {
   const page = await app.firstWindow()
-  await expect(page.getByRole('heading', { name: 'Reviews' })).toBeVisible()
+  await expect(page.getByTestId('home-tab-reviews')).toBeVisible()
   return page
 }
 

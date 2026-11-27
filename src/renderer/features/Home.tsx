@@ -8,11 +8,11 @@ import { AddToReview } from './AddToReview'
 import { NewReview } from './NewReview'
 import { MineList } from './MineList'
 import { useMine } from './useMine'
-import { PIPELINE_BADNESS, REVIEW_POLL_MS, type ReviewStatus } from '@shared/review-status'
+import { PIPELINE_BADNESS, pendingChanges, REVIEW_POLL_MS, type ReviewStatus } from '@shared/review-status'
 
 type Tab = 'reviews' | 'assigned' | 'reviewer'
-type SortKey = 'title' | 'issues' | 'lastOpened' | 'approved' | 'comments' | 'pipeline'
-const SORT_KEYS: SortKey[] = ['title', 'issues', 'lastOpened', 'approved', 'comments', 'pipeline']
+type SortKey = 'title' | 'issues' | 'lastOpened' | 'state' | 'approved' | 'comments' | 'pipeline'
+const SORT_KEYS: SortKey[] = ['title', 'issues', 'lastOpened', 'state', 'approved', 'comments', 'pipeline']
 const DEFAULT_SORT: { key: SortKey; dir: 'asc' | 'desc' } = { key: 'lastOpened', dir: 'desc' }
 const TABS: Tab[] = ['reviews', 'assigned', 'reviewer']
 
@@ -30,6 +30,11 @@ function compare(a: ReviewSummary, b: ReviewSummary, key: SortKey, status: Statu
     case 'issues':
       return (a.issueCount ?? -1) - (b.issueCount ?? -1)
     // A review with no status yet comes first when ascending, like a column with no value in the tables of changes.
+    // The changes that are still to do: the review with the most open and draft changes comes last when ascending.
+    case 'state': {
+      const left = (s: ReviewStatus | null | undefined): number => (s ? pendingChanges(s) : -1)
+      return left(status[a.slug]) - left(status[b.slug])
+    }
     case 'approved': {
       const ratio = (s: ReviewStatus | null | undefined): number => (s && s.total > 0 ? s.approved / s.total : -1)
       return ratio(status[a.slug]) - ratio(status[b.slug])
@@ -233,6 +238,7 @@ export function Home(props: {
                     {head('title', 'Name')}
                     {head('issues', 'Issues', true)}
                     {head('lastOpened', 'Last opened')}
+                    {head('state', 'Changes')}
                     {head('approved', 'Approved')}
                     {head('comments', 'Comments')}
                     {head('pipeline', 'Pipelines')}
@@ -336,12 +342,21 @@ export function Home(props: {
   )
 }
 
-/** The Approved, Comments and Pipelines cells of a review row. `undefined` is a status that is still read, and `null` one that could not be read. */
+/** The states of the Changes cell, in the order that it shows them. */
+const STATE_WORDS = [
+  ['opened', 'open'],
+  ['draft', 'draft'],
+  ['merged', 'merged'],
+  ['closed', 'closed']
+] as const
+
+/** The Changes, Approved, Comments and Pipelines cells of a review row. `undefined` is a status that is still read, and `null` one that could not be read. */
 function StatusCells(props: { status: ReviewStatus | null | undefined }): React.JSX.Element {
   const s = props.status
   if (s === undefined) {
     return (
       <>
+        <td className="muted">…</td>
         <td className="muted">…</td>
         <td className="muted">…</td>
         <td className="muted">…</td>
@@ -356,13 +371,32 @@ function StatusCells(props: { status: ReviewStatus | null | undefined }): React.
         </td>
         <td className="muted">–</td>
         <td className="muted">–</td>
+        <td className="muted">–</td>
       </>
     )
   }
   const partial = s.unread > 0 ? ` ${s.unread} of the changes could not be read, so the numbers cover the others.` : ''
   const allApproved = s.total > 0 && s.approved === s.total
+  const read = s.states.opened + s.states.draft + s.states.merged + s.states.closed
+  // A review is done when no change is open or draft any more and at least one is merged. Then one green word says so, and a closed change still shows after it.
+  const done = pendingChanges(s) === 0 && s.states.merged > 0
+  const words = STATE_WORDS.filter(([k]) => s.states[k] > 0).map(([k, word]) => `${s.states[k]} ${word}`)
   return (
     <>
+      <td data-testid="status-states" title={`${words.join(', ') || 'No changes'}.${partial}`}>
+        {read === 0 ? (
+          <span className="muted">–</span>
+        ) : (
+          <span className="statepills">
+            {done && <span className="ok-text strong">all merged</span>}
+            {STATE_WORDS.filter(([k]) => s.states[k] > 0 && !(done && k === 'merged')).map(([k, word]) => (
+              <span key={k} className={`statepill ${k}`}>
+                {s.states[k]} {word}
+              </span>
+            ))}
+          </span>
+        )}
+      </td>
       <td
         className={allApproved ? 'ok-text' : ''}
         data-testid="status-approved"

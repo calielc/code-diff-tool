@@ -1,7 +1,12 @@
 import type { ChangeSnapshot } from './provider'
 
 /** What the Reviews tab shows for one review: how far its changes are, summed over the changes. */
+/** The four states that a change shows. A draft is an open change that is marked as a draft. */
+export type ChangeStates = Record<'opened' | 'draft' | 'merged' | 'closed', number>
+
 export interface ReviewStatus {
+  /** How many of the changes that were read are in each state. A closed change counts here, and nowhere else. */
+  states: ChangeStates
   /** The changes that count: open, draft and merged ones. A closed change is left out. */
   total: number
   /** Of those, the changes that are merged or have at least one approval. */
@@ -35,7 +40,10 @@ export function summariseStatus(snapshots: (ChangeSnapshot | null)[]): ReviewSta
   const failing = statuses.filter((p) => p === 'failed').length
   const running = statuses.some((p) => p !== null && RUNNING.has(p))
   const passed = statuses.some((p) => p === 'success')
+  const states: ChangeStates = { opened: 0, draft: 0, merged: 0, closed: 0 }
+  for (const s of read) states[s.info.state === 'merged' ? 'merged' : s.info.state === 'closed' ? 'closed' : s.info.draft ? 'draft' : 'opened']++
   return {
+    states,
     total: counted.length,
     approved: counted.filter((s) => s.info.state === 'merged' || s.approvals.approvedBy.length > 0).length,
     openThreads: counted.reduce((sum, s) => sum + s.threads.filter((t) => t.resolvable && !t.resolved).length, 0),
@@ -44,6 +52,9 @@ export function summariseStatus(snapshots: (ChangeSnapshot | null)[]): ReviewSta
     unread
   }
 }
+
+/** The changes that are still to do: open and draft ones. A review with none left is done. */
+export const pendingChanges = (s: ReviewStatus): number => s.states.opened + s.states.draft
 
 /** The order of the Pipelines column: the worst first when ascending. */
 export const PIPELINE_BADNESS: Record<ReviewStatus['pipeline'], number> = { failed: 0, running: 1, none: 2, passed: 3 }

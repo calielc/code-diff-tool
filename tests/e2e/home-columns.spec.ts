@@ -1,6 +1,6 @@
-import { expect, test, type Locator } from '@playwright/test'
+import { expect, test, type ElectronApplication, type Locator, type Page } from '@playwright/test'
 import { home, launch, makeEnv, mrFixture, seedReview, SHORT, type Env } from './naming-helpers'
-import type { FakeForge } from '../fakes/fake-forge'
+import type { FakeForge, Fixture } from '../fakes/fake-forge'
 
 let forge: FakeForge | undefined
 test.afterEach(async () => {
@@ -155,6 +155,89 @@ test('a review row shows how many changes are approved, the open comments and th
   // Assert: a review whose changes cannot be read shows dashes
   await expect(page.getByTestId('review-R-3').locator('td').nth(3)).toHaveText('–')
   await started.app.close()
+})
+
+test.describe('the status columns refresh by themselves', () => {
+  const k = `projects/${encodeURIComponent('team/backend/x')}/merge_requests/12`
+  const reads = (f: FakeForge): number => f.calls.filter((c) => c.endpoint === k).length
+
+  async function start(): Promise<{ page: Page; env: Env; app: ElectronApplication }> {
+    const env = makeEnv()
+    seedReview(env, 'R-1', { title: 'Watched one', mrs: [mr(12)] })
+    const started = await launch(env, change(env, 12, { pipeline: 'running' }))
+    forge = started.forge
+    const page = await home(started.app)
+    // A fake clock moves the poll without a wait. The page loads again so that its timers use the fake clock.
+    await page.clock.install()
+    await page.reload()
+    await expect(page.getByTestId('home-tab-reviews')).toBeVisible()
+    return { page, env, app: started.app }
+  }
+  const approved = (page: Page): Locator => page.getByTestId('review-R-1').getByTestId('status-approved')
+
+  test('a poll after 2 minutes reads the changes again and shows the new numbers', async () => {
+    // Arrange
+    const { page, env, app } = await start()
+    await expect(approved(page)).toHaveText('0 of 1', { timeout: 10_000 })
+    const before = reads(forge!)
+    forge!.setFixture(change(env, 12, { approvedBy: ['ann'], pipeline: 'success' }) as Fixture)
+
+    // Act
+    await page.clock.fastForward(120_000)
+
+    // Assert: the status changes without any click, and the change was read again
+    await expect(approved(page)).toHaveText('1 of 1', { timeout: 10_000 })
+    await expect(page.getByTestId('review-R-1').getByTestId('status-pipeline')).toHaveText('all green')
+    expect(reads(forge!)).toBeGreaterThan(before)
+    await app.close()
+  })
+
+  test('no poll runs before 2 minutes have passed', async () => {
+    // Arrange
+    const { page, app } = await start()
+    await expect(approved(page)).toHaveText('0 of 1', { timeout: 10_000 })
+    const before = reads(forge!)
+
+    // Act
+    await page.clock.fastForward(100_000)
+    await page.waitForTimeout(500)
+
+    // Assert
+    expect(reads(forge!)).toBe(before)
+    await app.close()
+  })
+
+  test('a focus of the window within 30 seconds uses the read that the main process kept', async () => {
+    // Arrange
+    const { page, app } = await start()
+    await expect(approved(page)).toHaveText('0 of 1', { timeout: 10_000 })
+    const before = reads(forge!)
+
+    // Act
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')))
+    await page.waitForTimeout(800)
+
+    // Assert
+    expect(reads(forge!)).toBe(before)
+    await app.close()
+  })
+
+  test('no poll runs while another tab shows', async () => {
+    // Arrange
+    const { page, app } = await start()
+    await expect(approved(page)).toHaveText('0 of 1', { timeout: 10_000 })
+    await page.getByTestId('home-tab-assigned').click()
+    await page.waitForTimeout(800)
+    const before = reads(forge!)
+
+    // Act
+    await page.clock.fastForward(300_000)
+    await page.waitForTimeout(800)
+
+    // Assert
+    expect(reads(forge!)).toBe(before)
+    await app.close()
+  })
 })
 
 test('the Approved, Comments and Pipelines headers sort the reviews, and the Summarised column and pills are gone', async () => {

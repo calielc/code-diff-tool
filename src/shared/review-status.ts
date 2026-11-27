@@ -16,6 +16,9 @@ export interface ReviewStatus {
   unread: number
 }
 
+/** How often the Reviews tab reads the status again while it shows. A return of the window reads it again too. */
+export const REVIEW_POLL_MS = 120_000
+
 const RUNNING = new Set(['running', 'pending', 'created'])
 
 /**

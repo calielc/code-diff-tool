@@ -15,7 +15,7 @@ const api: CodeDiffApi = {
   reviews: {
     addTo: (input) => ipcRenderer.invoke(CH.reviewsAddTo, input),
     list: () => ipcRenderer.invoke(CH.reviewsList),
-    status: (slug) => ipcRenderer.invoke(CH.reviewsStatus, slug),
+    status: (slug, force) => ipcRenderer.invoke(CH.reviewsStatus, { slug, force }),
     check: (input) => ipcRenderer.invoke(CH.reviewsCheck, input),
     create: (input) => ipcRenderer.invoke(CH.reviewsCreate, input),
     open: (slug) => ipcRenderer.invoke(CH.reviewsOpen, slug),

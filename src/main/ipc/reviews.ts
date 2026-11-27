@@ -27,11 +27,11 @@ export function registerReviewHandlers(): void {
   })
 
   // The status of one review, read from the forges. The window asks for each review on its own, so the rows fill in one by one.
-  handle(CH.reviewsStatus, slug, async (s) => {
+  handle(CH.reviewsStatus, z.object({ slug, force: z.boolean().optional() }), async ({ slug: s, force }) => {
     // A test that answers the forge in a fixed order turns this off. The variable is ignored unless CODEDIFF_TEST is 1.
     if (process.env['CODEDIFF_TEST'] === '1' && process.env['CODEDIFF_NO_REVIEW_STATUS'] === '1') return null
     const state = await readAppState()
-    return state.workspaceRoot ? reviewStatus(state.workspaceRoot, s) : null
+    return state.workspaceRoot ? reviewStatus(state.workspaceRoot, s, force === true) : null
   })
 
   handle(CH.reviewsCheck, form, async (input) => {

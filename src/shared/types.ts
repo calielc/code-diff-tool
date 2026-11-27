@@ -81,8 +81,8 @@ export interface CodeDiffApi {
     /** Adds changes and issues to an existing review. */
     addTo(input: { slug: string; urls: string; issues: string }): Promise<Result<{ slug: string; addedChanges: number; addedIssues: number }>>
     list(): Promise<ReviewSummary[]>
-    /** The status of one review summed over its changes, read from the forges. Null when nothing could be read. */
-    status(slug: string): Promise<ReviewStatus | null>
+    /** The status of one review summed over its changes, read from the forges. Null when nothing could be read. A read that is not forced may use a read of the last 30 seconds. */
+    status(slug: string, force?: boolean): Promise<ReviewStatus | null>
     check(input: { urls: string; issues: string; slug: string }): Promise<Result<CheckResult>>
     create(input: {
       urls: string

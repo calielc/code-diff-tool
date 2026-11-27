@@ -8,7 +8,7 @@ import { AddToReview } from './AddToReview'
 import { NewReview } from './NewReview'
 import { MineList } from './MineList'
 import { useMine } from './useMine'
-import { PIPELINE_BADNESS, type ReviewStatus } from '@shared/review-status'
+import { PIPELINE_BADNESS, REVIEW_POLL_MS, type ReviewStatus } from '@shared/review-status'
 
 type Tab = 'reviews' | 'assigned' | 'reviewer'
 type SortKey = 'title' | 'issues' | 'lastOpened' | 'approved' | 'comments' | 'pipeline'
@@ -103,22 +103,29 @@ export function Home(props: {
 
   // The status of each review comes from the forges, so it arrives one review at a time, after the list. An old status stays on screen while a new one is read.
   const [statuses, setStatuses] = useState<StatusMap>({})
-  const load = useCallback(async () => {
+  const load = useCallback(async (force = false) => {
     const list = await api.reviews.list()
     setReviews(list)
     for (const r of list) {
       if (r.unreadable) continue
       void api.reviews
-        .status(r.slug)
+        .status(r.slug, force)
         .catch(() => null)
         .then((s) => setStatuses((old) => (s === null && old[r.slug] ? old : { ...old, [r.slug]: s })))
     }
   }, [])
+  // The Reviews tab reads again every 2 minutes while it shows, and when the window gains focus. A poll asks for new reads, and a focus may use a read of the last 30 seconds.
   useEffect(() => {
     void load()
-    window.addEventListener('focus', load) // read again when the window gains focus
-    return () => window.removeEventListener('focus', load)
-  }, [load])
+    if (tab !== 'reviews' || props.paused) return
+    const poll = setInterval(() => void load(true), REVIEW_POLL_MS)
+    const onFocus = (): void => void load()
+    window.addEventListener('focus', onFocus)
+    return () => {
+      clearInterval(poll)
+      window.removeEventListener('focus', onFocus)
+    }
+  }, [load, tab, props.paused])
 
   const rows = useMemo(() => {
     const text = filter.toLowerCase()

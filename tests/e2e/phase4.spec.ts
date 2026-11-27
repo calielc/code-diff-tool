@@ -154,7 +154,7 @@ test('shows files with git line numbers, binary and spaced paths, and the noise 
   await expect(page.getByTestId('file-src/a.txt')).toBeVisible()
   await page.getByTestId('file-img.bin').click()
   // "Everything" shows the whitespace-only file
-  await page.getByRole('button', { name: 'Everything' }).click()
+  await page.getByRole('button', { name: 'All', exact: true }).click()
   await expect(page.getByTestId('file-ws.txt')).toBeVisible()
   await page.getByTestId('file-ws.txt').click()
   await expect(page.locator('table.diff tr.del td.code')).toHaveText('y')

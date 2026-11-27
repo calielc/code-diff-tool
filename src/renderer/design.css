@@ -277,10 +277,17 @@ kbd {
 }
 .difftoolbar {
   display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 2px 0 6px;
+}
+/* One row for how the diff looks (View, Noise, Layout), one for which files show (the filters). */
+.toolrow {
+  display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 18px;
-  padding: 2px 0 6px;
+  gap: 6px 18px;
 }
 .fgroup {
   display: inline-flex;
@@ -329,25 +336,6 @@ kbd {
 .seg small {
   font: 500 10.5px var(--mono);
   margin-left: 3px;
-}
-.difftoolbar .checks {
-  margin-left: auto;
-}
-.checkseg {
-  align-items: center;
-  gap: 0;
-  font-size: 12.5px;
-  color: var(--fg);
-}
-.checkseg label {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 12px;
-  white-space: nowrap;
-}
-.checkseg label + label {
-  border-left: 1px solid var(--line);
 }
 
 .difflayout {

@@ -4,6 +4,7 @@ import { CH } from '@shared/channels'
 import { SLUG_RE } from '@shared/review'
 import type { Result } from '@shared/types'
 import { readAppState, writeAppState } from '../services/app-state'
+import { reviewStatus } from '../services/review-status'
 import { cancelBuild, isBuilding, startBuild } from '../services/build'
 import { addSpecFiles } from '../services/issues'
 import { addToReview, checkDeletable, checkReview, createReview, listReviews, pendingCommentCount, renameReview } from '../services/reviews'
@@ -23,6 +24,14 @@ export function registerReviewHandlers(): void {
   handle(CH.reviewsList, null, async () => {
     const state = await readAppState()
     return state.workspaceRoot ? listReviews(state.workspaceRoot, state.recentReviews) : []
+  })
+
+  // The status of one review, read from the forges. The window asks for each review on its own, so the rows fill in one by one.
+  handle(CH.reviewsStatus, z.object({ slug, force: z.boolean().optional() }), async ({ slug: s, force }) => {
+    // A test that answers the forge in a fixed order turns this off. The variable is ignored unless CODEDIFF_TEST is 1.
+    if (process.env['CODEDIFF_TEST'] === '1' && process.env['CODEDIFF_NO_REVIEW_STATUS'] === '1') return null
+    const state = await readAppState()
+    return state.workspaceRoot ? reviewStatus(state.workspaceRoot, s, force === true) : null
   })
 
   handle(CH.reviewsCheck, form, async (input) => {

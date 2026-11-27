@@ -16,7 +16,6 @@ import {
   type CheckResult,
   type CheckedMr,
   type ReviewFile,
-  type SummarisedState,
   type ReviewSummary
 } from '@shared/review'
 import type { Result } from '@shared/types'
@@ -71,16 +70,6 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
-async function summarisedState(dir: string): Promise<SummarisedState> {
-  if (await exists(join(dir, 'sections-error.txt'))) return 'failed'
-  try {
-    JSON.parse(await readFile(join(dir, 'sections.json'), 'utf8'))
-    return 'ready'
-  } catch {
-    return 'not-written'
-  }
-}
-
 /** The folders of reviews/ that hold a readable or unreadable review.json. Files and links are not reviews. */
 export async function listReviews(root: string, recent: { slug: string; openedAt: string }[]): Promise<ReviewSummary[]> {
   let entries
@@ -99,7 +88,7 @@ export async function listReviews(root: string, recent: { slug: string; openedAt
     const openedAt = recent.find((r) => r.slug === e.name)?.openedAt ?? null
     const parsed = await readReviewFile(root, e.name)
     if (!parsed.ok) {
-      out.push({ slug: e.name, title: null, mrCount: null, issueCount: null, modifiedAt, openedAt, summarised: 'not-written', unreadable: true })
+      out.push({ slug: e.name, title: null, mrCount: null, issueCount: null, modifiedAt, openedAt, unreadable: true })
       continue
     }
     out.push({
@@ -109,7 +98,6 @@ export async function listReviews(root: string, recent: { slug: string; openedAt
       issueCount: parsed.value.issues.length,
       modifiedAt,
       openedAt,
-      summarised: await summarisedState(dir),
       unreadable: false
     })
   }

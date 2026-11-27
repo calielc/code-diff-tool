@@ -1,37 +1,45 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { SummarisedState, ReviewSummary } from '@shared/review'
+import type { ReviewSummary } from '@shared/review'
 import type { LaunchRequest } from '@shared/launch'
-import { parseChoice, parseFlags, parseSort, parseText } from '@shared/view-prefs'
+import { parseChoice, parseSort, parseText } from '@shared/view-prefs'
 import { api } from '../api'
 import { HOME, usePref } from '../prefs'
 import { AddToReview } from './AddToReview'
 import { NewReview } from './NewReview'
 import { MineList } from './MineList'
 import { useMine } from './useMine'
+import { PIPELINE_BADNESS, REVIEW_POLL_MS, type ReviewStatus } from '@shared/review-status'
 
 type Tab = 'reviews' | 'assigned' | 'reviewer'
-type SortKey = 'title' | 'mrs' | 'issues' | 'lastOpened' | 'summarised'
-const SORT_KEYS: SortKey[] = ['title', 'mrs', 'issues', 'lastOpened', 'summarised']
+type SortKey = 'title' | 'issues' | 'lastOpened' | 'approved' | 'comments' | 'pipeline'
+const SORT_KEYS: SortKey[] = ['title', 'issues', 'lastOpened', 'approved', 'comments', 'pipeline']
 const DEFAULT_SORT: { key: SortKey; dir: 'asc' | 'desc' } = { key: 'lastOpened', dir: 'desc' }
 const TABS: Tab[] = ['reviews', 'assigned', 'reviewer']
 
-const SUMMARISED_LABEL: Record<SummarisedState, string> = { writing: 'Writing…', failed: 'Failed', ready: 'Ready', 'not-written': 'Not written' }
-const ALL_SUMMARISED: Record<SummarisedState, boolean> = { writing: true, failed: true, ready: true, 'not-written': true }
-const SUMMARISED_ORDER: SummarisedState[] = ['writing', 'failed', 'ready', 'not-written']
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' }) // LX-2 before LX-10
 
 const when = (iso: string): string => new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 
-function compare(a: ReviewSummary, b: ReviewSummary, key: SortKey): number {
+/** The status of a review: undefined while it is read, null when nothing could be read. */
+type StatusMap = Record<string, ReviewStatus | null | undefined>
+
+function compare(a: ReviewSummary, b: ReviewSummary, key: SortKey, status: StatusMap): number {
   switch (key) {
     case 'title':
       return collator.compare(a.title ?? a.slug, b.title ?? b.slug)
-    case 'mrs':
-      return (a.mrCount ?? -1) - (b.mrCount ?? -1)
     case 'issues':
       return (a.issueCount ?? -1) - (b.issueCount ?? -1)
-    case 'summarised':
-      return SUMMARISED_ORDER.indexOf(a.summarised) - SUMMARISED_ORDER.indexOf(b.summarised)
+    // A review with no status yet comes first when ascending, like a column with no value in the tables of changes.
+    case 'approved': {
+      const ratio = (s: ReviewStatus | null | undefined): number => (s && s.total > 0 ? s.approved / s.total : -1)
+      return ratio(status[a.slug]) - ratio(status[b.slug])
+    }
+    case 'comments':
+      return (status[a.slug]?.openThreads ?? -1) - (status[b.slug]?.openThreads ?? -1)
+    case 'pipeline': {
+      const rank = (s: ReviewStatus | null | undefined): number => (s ? PIPELINE_BADNESS[s.pipeline] : -1)
+      return rank(status[a.slug]) - rank(status[b.slug])
+    }
     case 'lastOpened': {
       // A review never opened here comes after every opened one, ordered by the change time of review.json.
       if (!!a.openedAt !== !!b.openedAt) return a.openedAt ? 1 : -1 // ascending: opened first is "smaller" so desc puts it first
@@ -50,10 +58,9 @@ export function Home(props: {
   onOpenReview: (slug: string) => void
 }): React.JSX.Element {
   const [reviews, setReviews] = useState<ReviewSummary[] | null>(null)
-  // The sort, the search, the Summarised pills and the open tab are kept in the settings file, so the page opens as it was left.
+  // The sort, the search and the open tab are kept in the settings file, so the page opens as it was left.
   const [sort, setSort] = usePref(HOME, 'reviewsSort', (v) => parseSort(v, SORT_KEYS, DEFAULT_SORT) ?? DEFAULT_SORT)
   const [filter, setFilter] = usePref(HOME, 'reviewsSearch', (v) => parseText(v, ''))
-  const [summarised, setSummarised] = usePref(HOME, 'reviewsSummarised', (v) => parseFlags(v, ALL_SUMMARISED))
   const [selected, setSelected] = useState<string | null>(null)
   const [showNew, setShowNew] = useState(false)
   const [initial, setInitial] = useState<LaunchRequest | null>(null)
@@ -94,20 +101,39 @@ export function Home(props: {
   const [toast, setToast] = useState<string | null>(null)
   const filterRef = useRef<HTMLInputElement>(null)
 
-  const load = useCallback(async () => setReviews(await api.reviews.list()), [])
+  // The status of each review comes from the forges, so it arrives one review at a time, after the list. An old status stays on screen while a new one is read.
+  const [statuses, setStatuses] = useState<StatusMap>({})
+  const load = useCallback(async (force = false) => {
+    const list = await api.reviews.list()
+    setReviews(list)
+    for (const r of list) {
+      if (r.unreadable) continue
+      void api.reviews
+        .status(r.slug, force)
+        .catch(() => null)
+        .then((s) => setStatuses((old) => (s === null && old[r.slug] ? old : { ...old, [r.slug]: s })))
+    }
+  }, [])
+  // The Reviews tab reads again every 2 minutes while it shows, and when the window gains focus. A poll asks for new reads, and a focus may use a read of the last 30 seconds.
   useEffect(() => {
     void load()
-    window.addEventListener('focus', load) // read again when the window gains focus
-    return () => window.removeEventListener('focus', load)
-  }, [load])
+    if (tab !== 'reviews' || props.paused) return
+    const poll = setInterval(() => void load(true), REVIEW_POLL_MS)
+    const onFocus = (): void => void load()
+    window.addEventListener('focus', onFocus)
+    return () => {
+      clearInterval(poll)
+      window.removeEventListener('focus', onFocus)
+    }
+  }, [load, tab, props.paused])
 
   const rows = useMemo(() => {
     const text = filter.toLowerCase()
-    const kept = (reviews ?? []).filter((r) => summarised[r.summarised] && (!text || (r.title ?? r.slug).toLowerCase().includes(text)))
+    const kept = (reviews ?? []).filter((r) => !text || (r.title ?? r.slug).toLowerCase().includes(text))
     const sign = sort.dir === 'asc' ? 1 : -1
     // Equal values sort by slug ascending in either direction.
-    return kept.sort((a, b) => compare(a, b, sort.key) * sign || collator.compare(a.slug, b.slug))
-  }, [reviews, filter, summarised, sort])
+    return kept.sort((a, b) => compare(a, b, sort.key, statuses) * sign || collator.compare(a.slug, b.slug))
+  }, [reviews, filter, sort, statuses])
 
   useEffect(() => {
     if (!selected || !rows.some((r) => r.slug === selected)) setSelected(rows[0]?.slug ?? null)
@@ -200,28 +226,16 @@ export function Home(props: {
                   onChange={(e) => setFilter(e.target.value)}
                   onKeyDown={(e) => e.key === 'Escape' && setFilter('')}
                 />
-                <div className="seg toggles" role="group" aria-label="Show reviews by summarised state">
-                  {SUMMARISED_ORDER.map((k) => (
-                    <button
-                      key={k}
-                      className={summarised[k] ? 'on' : ''}
-                      aria-pressed={summarised[k]}
-                      title={`Show or hide the reviews that are ${SUMMARISED_LABEL[k].toLowerCase().replace('…', '')}`}
-                      onClick={() => setSummarised({ ...summarised, [k]: !summarised[k] })}
-                    >
-                      {SUMMARISED_LABEL[k]} <small>{(reviews ?? []).filter((r) => r.summarised === k).length}</small>
-                    </button>
-                  ))}
-                </div>
               </div>
               <table className="reviews">
                 <thead>
                   <tr>
                     {head('title', 'Name')}
-                    {head('mrs', 'Change requests', true)}
                     {head('issues', 'Issues', true)}
                     {head('lastOpened', 'Last opened')}
-                    {head('summarised', 'Summarised')}
+                    {head('approved', 'Approved')}
+                    {head('comments', 'Comments')}
+                    {head('pipeline', 'Pipelines')}
                     <th />
                   </tr>
                 </thead>
@@ -234,17 +248,12 @@ export function Home(props: {
                       onClick={() => setSelected(r.slug)}
                       onDoubleClick={() => open(r)}
                     >
-                      <td className={r.unreadable ? 'bad-text' : 'cut strong'} title={r.title ?? r.slug}>
-                        {r.unreadable ? 'Unreadable review.json' : (r.title ?? r.slug)}
-                      </td>
-                      <td className="num">{r.mrCount ?? '–'}</td>
+                      <td className={r.unreadable ? 'bad-text' : 'cut strong'}>{r.unreadable ? 'Unreadable review.json' : (r.title ?? r.slug)}</td>
                       <td className="num">{r.issueCount ?? '–'}</td>
                       <td title={r.openedAt ?? `Last changed ${when(r.modifiedAt)}`}>
                         {r.openedAt ? when(r.openedAt) : <span className="muted">Never opened here</span>}
                       </td>
-                      <td>
-                        <span className={`summ ${r.summarised}`}>{SUMMARISED_LABEL[r.summarised]}</span>
-                      </td>
+                      <StatusCells status={r.unreadable ? null : statuses[r.slug]} />
                       <td className="rowactions">
                         <button disabled={!!props.blocked || r.unreadable} title={r.unreadable ? 'review.json cannot be read' : gate} onClick={() => open(r)}>
                           Open
@@ -260,14 +269,7 @@ export function Home(props: {
               {rows.length === 0 && (
                 <div className="empty">
                   <p>No review matches "{filter}".</p>
-                  <button
-                    onClick={() => {
-                      setFilter('')
-                      setSummarised(ALL_SUMMARISED)
-                    }}
-                  >
-                    Clear filter
-                  </button>
+                  <button onClick={() => setFilter('')}>Clear filter</button>
                 </div>
               )}
               <p className="muted" data-testid="showing">
@@ -331,6 +333,56 @@ export function Home(props: {
         </div>
       )}
     </div>
+  )
+}
+
+/** The Approved, Comments and Pipelines cells of a review row. `undefined` is a status that is still read, and `null` one that could not be read. */
+function StatusCells(props: { status: ReviewStatus | null | undefined }): React.JSX.Element {
+  const s = props.status
+  if (s === undefined) {
+    return (
+      <>
+        <td className="muted">…</td>
+        <td className="muted">…</td>
+        <td className="muted">…</td>
+      </>
+    )
+  }
+  if (s === null) {
+    return (
+      <>
+        <td className="muted" title="The changes could not be read">
+          –
+        </td>
+        <td className="muted">–</td>
+        <td className="muted">–</td>
+      </>
+    )
+  }
+  const partial = s.unread > 0 ? ` ${s.unread} of the changes could not be read, so the numbers cover the others.` : ''
+  const allApproved = s.total > 0 && s.approved === s.total
+  return (
+    <>
+      <td
+        className={allApproved ? 'ok-text' : ''}
+        data-testid="status-approved"
+        title={`${s.approved} of ${s.total} changes are approved or merged.${partial}`}
+      >
+        {s.total === 0 ? '–' : `${s.approved} of ${s.total}`}
+      </td>
+      <td className={s.openThreads > 0 ? 'warn-text' : 'muted'} data-testid="status-comments" title={`${s.openThreads} open comment threads.${partial}`}>
+        {s.openThreads > 0 ? `${s.openThreads} open` : 'none open'}
+      </td>
+      <td
+        data-testid="status-pipeline"
+        title={s.failing > 0 ? `${s.failing} pipeline${s.failing === 1 ? '' : 's'} failing.${partial}` : `Pipelines: ${s.pipeline}.${partial}`}
+      >
+        {s.pipeline === 'failed' && <span className="bad-text">{s.failing} failing</span>}
+        {s.pipeline === 'running' && <span className="warn-text">running</span>}
+        {s.pipeline === 'passed' && <span className="ok-text">all green</span>}
+        {s.pipeline === 'none' && <span className="muted">–</span>}
+      </td>
+    </>
   )
 }
 

@@ -109,7 +109,8 @@ async function open(
   if (comments) writeFileSync(join(dir, 'comments.json'), JSON.stringify(comments))
   const app = await electron.launch({
     args: [main],
-    env: { ...process.env, CODEDIFF_USER_DATA: s.ud, ...forgeEnv(forge.url), ...env } as Record<string, string>
+    // The status columns of the home screen read each change too, which would use up the answers that these tests give in a fixed order.
+    env: { ...process.env, CODEDIFF_USER_DATA: s.ud, CODEDIFF_NO_REVIEW_STATUS: '1', ...forgeEnv(forge.url), ...env } as Record<string, string>
   })
   const page = await app.firstWindow()
   await expect(page.getByTestId('home-tab-reviews')).toBeVisible()

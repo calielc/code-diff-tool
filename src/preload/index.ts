@@ -95,6 +95,10 @@ const api: CodeDiffApi = {
     remove: (kind, host) => ipcRenderer.invoke(CH.accessRemove, { kind, host })
   },
   dev: { readChange: (url) => ipcRenderer.invoke(CH.devReadChange, url) },
+  prefs: {
+    get: () => ipcRenderer.invoke(CH.prefsGet),
+    set: (scope, key, value) => ipcRenderer.invoke(CH.prefsSet, { scope, key, value })
+  },
   theme: {
     get: () => ipcRenderer.invoke(CH.themeGet),
     choose: (id) => ipcRenderer.invoke(CH.themeChoose, id),

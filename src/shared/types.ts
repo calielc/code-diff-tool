@@ -44,6 +44,9 @@ export interface ToolStatus {
   ready: boolean
 }
 
+/** The view settings that the window remembers: sort, filters, grouping and the open tab. The scope `home` holds those of the home page, `review:<slug>` those of one review, and `global` those that every screen shares. */
+export type UiPrefs = Record<string, Record<string, unknown>>
+
 export interface AppState {
   schemaVersion: number
   workspaceRoot?: string
@@ -163,6 +166,12 @@ export interface CodeDiffApi {
   }
   dev: {
     readChange(url: string): Promise<Result<ChangeSnapshot>>
+  }
+  prefs: {
+    /** Every saved view setting, by scope. Read once when the window opens. */
+    get(): Promise<UiPrefs>
+    /** Saves one setting of a scope. */
+    set(scope: string, key: string, value: unknown): Promise<void>
   }
   theme: {
     /** The saved theme id, or `system`. */

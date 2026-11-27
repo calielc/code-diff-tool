@@ -1,6 +1,6 @@
 import { _electron as electron, expect, test, type ElectronApplication, type Locator, type Page } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { forgeEnv, startFakeForge, type FakeForge } from '../fakes/fake-forge'
@@ -143,7 +143,7 @@ async function openReview(page: Page): Promise<void> {
   await expect(page.getByTestId('mrs-summary')).toBeVisible(WAIT)
 }
 
-async function launch(over: Record<string, unknown> = {}): Promise<{ app: ElectronApplication; page: Page }> {
+async function launch(over: Record<string, unknown> = {}): Promise<{ app: ElectronApplication; page: Page; ud: string; root: string }> {
   const tmp = mkdtempSync(join(tmpdir(), 'codediff-e2e-changes-table-'))
   const root = join(tmp, 'ws')
   const shas = {
@@ -163,8 +163,11 @@ async function launch(over: Record<string, unknown> = {}): Promise<{ app: Electr
   })
   const page = await app.firstWindow()
   await openReview(page)
-  return { app, page }
+  return { app, page, ud, root }
 }
+
+/** The settings file of the app: the saved view settings by scope. */
+const savedScopes = (ud: string): Record<string, Record<string, unknown>> => JSON.parse(readFileSync(join(ud, 'ui-prefs.json'), 'utf8')).scopes
 
 const strip = (t: string): string => t.replace(/[▲▼]/g, '').trim()
 const headers = async (page: Page): Promise<string[]> => (await page.locator('[data-testid="mrs-tab"] table thead th').allTextContents()).map(strip)
@@ -361,9 +364,9 @@ test.describe('sorting', () => {
     await app.close()
   })
 
-  test('is saved in codediff:mrSort, so the sort by Reviewers is there after a reload', async () => {
+  test('is saved for the review in the settings file, so the sort by Reviewers is there after a reload', async () => {
     // Arrange
-    const { app, page } = await launch()
+    const { app, page, ud } = await launch()
     await page.getByTestId('sort-reviewers').click()
     await page.getByTestId('sort-reviewers').click()
 
@@ -372,7 +375,7 @@ test.describe('sorting', () => {
     await openReview(page)
 
     // Assert
-    expect(await page.evaluate(() => localStorage.getItem('codediff:mrSort'))).toBe('{"key":"reviewers","dir":"desc"}')
+    expect(savedScopes(ud)['review:R-1']?.['mrSort']).toEqual({ key: 'reviewers', dir: 'desc' })
     await expect(th(page, 'reviewers')).toHaveAttribute('aria-sort', 'descending')
     expect(await rowOrder(page)).toEqual([31, 21, 23, 25, 33, 22, 26])
     await app.close()
@@ -380,7 +383,7 @@ test.describe('sorting', () => {
 })
 
 test.describe('the filters', () => {
-  test('keep the summary text, count the hidden MRs and are saved in codediff:mrFilters', async () => {
+  test('keep the summary text, count the hidden MRs and are saved for the review', async () => {
     // Arrange
     const { app, page } = await launch()
     const states = page.getByRole('group', { name: 'Show change requests by state' })
@@ -612,21 +615,32 @@ test.describe('the group buttons', () => {
     await app.close()
   })
 
-  test('are not saved: after a reload No group is on again, and nothing about the group is in the local storage', async () => {
+  test('are saved for the review: after a reload the group choice is still on, and another review has its own', async () => {
     // Arrange
-    const { app, page } = await launch()
+    const { app, page, ud, root } = await launch()
     await setMode(page, 'Repository')
     await expect(page.getByTestId('group-row')).toHaveCount(2)
-    expect(await page.evaluate(() => Object.keys(localStorage).filter((k) => /group/i.test(k)))).toEqual([])
+    const dir = join(root, '.code-diff', 'reviews', 'R-2')
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, 'review.json'), JSON.stringify({ title: 'Other', mrs: SPECS.map((m) => ({ projectPath: m.project, iid: m.iid })), issues: [] }))
 
     // Act
     await page.reload()
     await openReview(page)
 
-    // Assert
+    // Assert: the first review keeps its choice
+    await expect(modes(page).getByRole('button', { name: 'Repository', exact: true })).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.getByTestId('group-row')).toHaveCount(2)
+    expect(savedScopes(ud)['review:R-1']?.['mrGroup']).toBe('repo')
+
+    // Assert: the other review starts with No group, and the first one is not changed by it
+    await page.reload()
+    await expect(page.getByRole('heading', { name: 'Reviews' })).toBeVisible()
+    await page.getByTestId('review-R-2').dblclick()
+    await expect(page.getByTestId('mrs-summary')).toBeVisible(WAIT)
     await expect(modes(page).getByRole('button', { name: 'No group', exact: true })).toHaveAttribute('aria-pressed', 'true')
     await expect(page.getByTestId('group-row')).toHaveCount(0)
-    expect(await page.evaluate(() => Object.values(localStorage).filter((v) => /"repo"|"approval"|"state":"/.test(v)))).toEqual([])
+    expect(savedScopes(ud)['review:R-1']?.['mrGroup']).toBe('repo')
     await app.close()
   })
 })

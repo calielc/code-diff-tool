@@ -3,6 +3,7 @@ import type { LaunchRequest } from '@shared/launch'
 import type { ToolStatus } from '@shared/types'
 import { api } from './api'
 import { applyTheme } from './theme'
+import { loadPrefs } from './prefs'
 import { DevReader } from './features/DevReader'
 import { Home } from './features/Home'
 import { Prerequisites } from './features/Prerequisites'
@@ -14,6 +15,9 @@ export function App(): React.JSX.Element {
   const [screen, setScreen] = useState<Screen | null>(null)
   const [status, setStatus] = useState<ToolStatus | null>(null)
   const [dev, setDev] = useState(false)
+  // The saved view settings are read before any screen opens, so that every screen starts from its saved state.
+  const [prefsReady, setPrefsReady] = useState(false)
+  useEffect(() => void loadPrefs().then(() => setPrefsReady(true)), [])
 
   useEffect(() => api.events.onOpenDev(() => setDev(true)), [])
   // Settings > Prerequisites… in the menu opens the Prerequisites screen from any screen.
@@ -62,7 +66,7 @@ export function App(): React.JSX.Element {
   }
 
   if (dev) return <DevReader onClose={() => setDev(false)} />
-  if (!screen) return <div className="page muted">Checking tools…</div>
+  if (!screen || !prefsReady) return <div className="page muted">Checking tools…</div>
   if (screen.name === 'review') {
     return <ReviewView slug={screen.slug} onHome={() => setScreen({ name: 'home' })} onOpenPrereq={toPrereq} />
   }

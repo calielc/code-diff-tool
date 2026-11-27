@@ -11,6 +11,7 @@ import { registerSectionsHandlers } from './ipc/sections'
 import { registerAiHandlers } from './ipc/ai'
 import { registerCommitHandlers } from './ipc/commits'
 import { currentTheme, registerThemeHandlers, setTheme } from './ipc/theme'
+import { registerPrefsHandlers } from './ipc/prefs'
 import { registerChangesHandlers } from './ipc/changes'
 import { registerLaunchHandlers, receiveLaunch } from './ipc/launch'
 import { parseLaunchRequest, PROTOCOL } from '@shared/launch'
@@ -119,6 +120,7 @@ if (!app.requestSingleInstanceLock()) {
         (id) => void setTheme(id).then(showMenu)
       )
     registerThemeHandlers(() => void showMenu())
+    registerPrefsHandlers()
     void showMenu()
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) main = createWindow()

@@ -102,7 +102,7 @@ async function openReview(
     env: { ...process.env, CODEDIFF_USER_DATA: s.ud, ...forgeEnv(forge.url), ...extraEnv } as Record<string, string>
   })
   const page = await app.firstWindow()
-  await expect(page.getByRole('heading', { name: 'Reviews' })).toBeVisible()
+  await expect(page.getByTestId('home-tab-reviews')).toBeVisible()
   await page.getByTestId('review-R-1').dblclick()
   await expect(page.getByTestId('mrs-tab')).toBeVisible()
   return { app, page }
@@ -251,7 +251,7 @@ test('a new review can start with spec files, and a refused file is shown before
     env: { ...process.env, CODEDIFF_USER_DATA: s.ud, ...forgeEnv(forge.url), CODEDIFF_TEST_PICK_FILES: JSON.stringify([f.md, f.pdf]) } as Record<string, string>
   })
   const page = await app.firstWindow()
-  await expect(page.getByRole('heading', { name: 'Reviews' })).toBeVisible()
+  await expect(page.getByTestId('home-tab-reviews')).toBeVisible()
   await page.getByTestId('new-review').click()
   await page.getByTestId('urls').fill('https://gitlab.com/team/backend/x/-/merge_requests/12')
   await page.getByTestId('name').fill('S-1')

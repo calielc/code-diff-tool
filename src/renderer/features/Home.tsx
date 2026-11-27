@@ -172,17 +172,26 @@ export function Home(props: {
             </button>
           ))}
         </div>
-        <button className="primary" data-testid="new-review" disabled={!!props.blocked} title={gate} onClick={newReview}>
-          {picked.size > 0 ? `New review (${picked.size})` : 'New review'}
-        </button>
       </div>
       {tab !== 'reviews' && <MineList role={tab} mine={mine} picked={picked} onToggle={toggle} blocked={props.blocked} onOpenPrereq={props.onOpenPrereq} />}
       {tab === 'reviews' && (
         <>
-          <header>
-            <h1>Reviews</h1>
-            {total > 0 && (
-              <>
+          {reviews === null && (
+            <p className="muted" data-testid="review-loading">
+              Reading reviews…
+            </p>
+          )}
+
+          {reviews !== null && total === 0 && (
+            <div className="empty">
+              <p>No reviews yet.</p>
+              <p className="muted">Create a review from the change requests of an issue.</p>
+            </div>
+          )}
+
+          {total > 0 && (
+            <>
+              <div className="mrtools reviewtools">
                 <input
                   ref={filterRef}
                   aria-label="Filter reviews"
@@ -191,26 +200,6 @@ export function Home(props: {
                   onChange={(e) => setFilter(e.target.value)}
                   onKeyDown={(e) => e.key === 'Escape' && setFilter('')}
                 />
-              </>
-            )}
-          </header>
-          <p className="muted" data-testid="review-count">
-            {reviews === null ? 'Reading reviews…' : `${total} ${total === 1 ? 'review' : 'reviews'}`}
-          </p>
-
-          {reviews !== null && total === 0 && (
-            <div className="empty">
-              <p>No reviews yet.</p>
-              <p className="muted">Create a review from the change requests of an issue.</p>
-              <button className="primary" disabled={!!props.blocked} title={gate} onClick={newReview}>
-                New review
-              </button>
-            </div>
-          )}
-
-          {total > 0 && (
-            <>
-              <div className="mrtools reviewtools">
                 <div className="seg toggles" role="group" aria-label="Show reviews by summarised state">
                   {SUMMARISED_ORDER.map((k) => (
                     <button
@@ -288,6 +277,13 @@ export function Home(props: {
           )}
         </>
       )}
+
+      {/* The same button on the three tabs. The bar sticks to the bottom of the window when the page is long, and sits under the content when it is short. */}
+      <div className="newbar">
+        <button className="primary" data-testid="new-review" disabled={!!props.blocked} title={gate} onClick={newReview}>
+          {picked.size > 0 ? `New review (${picked.size})` : 'New review'}
+        </button>
+      </div>
 
       {addTo && (
         <AddToReview

@@ -32,6 +32,34 @@ test('the list of reviews has a Name column and no Slug column, and the filter w
   await started.app.close()
 })
 
+test('the filter box sits in the same row as the Summarised pills, at the left, and the pills at the right', async () => {
+  // Arrange
+  const env = makeEnv()
+  seedReview(env, 'R-1')
+  seedReview(env, 'R-2', { title: 'Second review' })
+  const started = await launch(env, mrFixture('team/backend/x', 12, env.shas.a, env.shas.b))
+  forge = started.forge
+  const page = await home(started.app)
+
+  // Act
+  const input = await page.getByLabel('Filter reviews').boundingBox()
+  const pills = await page.getByRole('group', { name: 'Show reviews by summarised state' }).boundingBox()
+
+  // Assert: the same row (the middles are close), with the box to the left of the pills, and the page has no heading with the name of the tab
+  expect(input).not.toBeNull()
+  expect(pills).not.toBeNull()
+  expect(Math.abs(input!.y + input!.height / 2 - (pills!.y + pills!.height / 2))).toBeLessThan(8)
+  expect(input!.x + input!.width).toBeLessThanOrEqual(pills!.x)
+  const table = await page.locator('table.reviews').boundingBox()
+  expect(Math.abs(input!.x - table!.x)).toBeLessThan(4)
+  await expect(page.getByRole('heading', { name: 'Reviews' })).toHaveCount(0)
+
+  // The count of the reviews shows once, in the footer of the grid, and not under the heading
+  await expect(page.getByTestId('showing')).toHaveText('Showing 2 of 2 reviews')
+  await expect(page.getByText(/^\d+ reviews?$/)).toHaveCount(0)
+  await started.app.close()
+})
+
 test('the Open and Delete buttons of every review are visible and clickable without a hover', async () => {
   // Arrange
   const env = makeEnv()

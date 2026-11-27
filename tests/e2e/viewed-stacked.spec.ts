@@ -100,7 +100,7 @@ async function launch(): Promise<{ app: ElectronApplication; page: Page }> {
     env: { ...process.env, CODEDIFF_USER_DATA: s.ud, ...forgeEnv(forge.url) } as Record<string, string>
   })
   const page = await app.firstWindow()
-  await expect(page.getByRole('heading', { name: 'Reviews' })).toBeVisible()
+  await expect(page.getByTestId('home-tab-reviews')).toBeVisible()
   await page.getByTestId('review-R-1').dblclick()
   await expect(page.getByTestId('mrs-tab')).toBeVisible()
   await page.getByTestId('tab-diff').click()

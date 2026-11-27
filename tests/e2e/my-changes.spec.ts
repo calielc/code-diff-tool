@@ -680,6 +680,78 @@ test('New review is off while the Prerequisites are not ready', async () => {
   await expect(page.getByTestId('new-review')).toBeDisabled()
 })
 
+test.describe('the New review bar at the foot of the home page', () => {
+  const boxOf = async (page: Page, testId: string): Promise<{ y: number; height: number }> => {
+    const box = await page.getByTestId(testId).boundingBox()
+    expect(box, testId).not.toBeNull()
+    return box!
+  }
+  const windowHeight = (page: Page): Promise<number> => page.evaluate(() => window.innerHeight)
+  const lastRowBottom = async (page: Page): Promise<number> => {
+    const box = await rows(page).last().boundingBox()
+    return box!.y + box!.height
+  }
+
+  test('is one button at the foot of each of the three tabs, and the tab bar has none', async () => {
+    // Arrange
+    const { page } = await start(baseFixture())
+
+    // Act and assert: one button on the Reviews tab, and on each list tab
+    for (const tab of ['reviews', 'assigned', 'reviewer'] as const) {
+      await page.getByTestId(`home-tab-${tab}`).click()
+      await expect(page.getByTestId('new-review')).toHaveCount(1)
+      await expect(page.locator('.tabbar').getByTestId('new-review')).toHaveCount(0)
+      await expect(page.locator('.newbar').getByTestId('new-review')).toBeVisible()
+    }
+  })
+
+  test('sits right under a short list, and under the rows', async () => {
+    // Arrange
+    const { page } = await start(baseFixture(SEED.slice(0, 2)))
+
+    // Act
+    await openTab(page, 'assigned')
+    await expect(rows(page)).toHaveCount(2)
+
+    // Assert: the bar is below the last row, and the window is taller than the page, so the bar does not touch the bottom of the window
+    const bar = await boxOf(page, 'new-review')
+    expect(bar.y).toBeGreaterThanOrEqual(await lastRowBottom(page))
+    expect(bar.y + bar.height).toBeLessThan((await windowHeight(page)) - 40)
+  })
+
+  test('sticks to the bottom of the window when the list is long, also after a scroll, and never covers a row', async () => {
+    // Arrange: 40 open changes are taller than the window
+    const long: SeedChange[] = Array.from({ length: 40 }, (_, n) => ({
+      provider: 'gitlab' as const,
+      project: GL,
+      iid: 200 + n,
+      title: `Long ${n}`,
+      state: 'opened' as const,
+      author: 'ann',
+      updatedAt: ago(1 + n / 10),
+      assigned: true
+    }))
+    const { page } = await start(changesFixture(long))
+
+    // Act
+    await openTab(page, 'assigned')
+    await expect(rows(page)).toHaveCount(40)
+    const height = await windowHeight(page)
+
+    // Assert: before a scroll the bar is inside the window, at its bottom edge
+    let bar = await boxOf(page, 'new-review')
+    expect(bar.y + bar.height).toBeLessThanOrEqual(height)
+    expect(bar.y + bar.height).toBeGreaterThan(height - 80)
+
+    // Assert: after a scroll to the end it is still there, and the last row ends above it
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
+    bar = await boxOf(page, 'new-review')
+    expect(bar.y + bar.height).toBeLessThanOrEqual(height)
+    expect(bar.y + bar.height).toBeGreaterThan(height - 80)
+    expect(await lastRowBottom(page)).toBeLessThanOrEqual(bar.y)
+  })
+})
+
 test.describe('the lists reload by themselves while a list tab is shown', () => {
   test('a poll runs every 60 seconds: none at 50 seconds, one round at 60, and the second round at 120', async () => {
     // Arrange

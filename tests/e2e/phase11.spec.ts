@@ -78,7 +78,7 @@ async function openHome(s: Setup, extra: Record<string, string> = {}): Promise<{
   const env = { ...process.env, CODEDIFF_USER_DATA: s.ud, ...forgeEnv(forge.url), FAKE_CLAUDE_LOG: s.log, ...extra } as Record<string, string>
   const app = await electron.launch({ args: [main], env })
   const page = await app.firstWindow()
-  await expect(page.getByRole('heading', { name: 'Reviews' })).toBeVisible()
+  await expect(page.getByTestId('home-tab-reviews')).toBeVisible()
   return { app, page, env }
 }
 
@@ -94,7 +94,7 @@ test('a second start with --mr and --issue hands over to the open app, which fil
   await expect(page.getByTestId('issues')).toHaveValue('LX-7')
   await expect(page.getByTestId('name')).toHaveValue('From outside')
   // nothing was created
-  await expect(page.getByTestId('review-count')).toContainText('0')
+  await expect(page.getByText('No reviews yet.')).toBeVisible()
   await app.close()
 })
 

@@ -436,6 +436,18 @@ textarea {
 .tabbar .tabs {
   flex: 1;
 }
+/* The New review bar at the foot of the home page. It sticks to the bottom of the window while the list is long, and sits right under the list when the list is short. */
+.newbar {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  justify-content: center;
+  margin: 16px -24px -24px;
+  padding: 12px 24px;
+  background: var(--page);
+  border-top: 1px solid var(--line);
+}
 .tabs {
   display: flex;
   gap: 4px;
@@ -1205,6 +1217,10 @@ button.ask {
 .reviewtools {
   justify-content: flex-end;
   margin-top: 8px;
+}
+/* The filter box sits at the left of the row, and the pills stay at the right. */
+.reviewtools input {
+  margin-right: auto;
 }
 tr.minegroup td {
   font-weight: 600;

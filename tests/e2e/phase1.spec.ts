@@ -89,6 +89,27 @@ test('the renderer has no require and no ipcRenderer (check 6)', async () => {
   await app.close()
 })
 
+// Only macOS keeps the app alive when the last window closes, so only there a second start can meet a closed window.
+test('a second start opens a window again when the first window was closed, and the first instance does not crash', async () => {
+  test.skip(process.platform !== 'darwin', 'macOS keeps the app alive with no window')
+  const ud = mkdtempSync(join(tmpdir(), 'codediff-ud-'))
+  const env = { ...process.env, CODEDIFF_USER_DATA: ud } as Record<string, string>
+  const first = await electron.launch({ args: [main], env })
+  await first.firstWindow()
+  const errors: string[] = []
+  first.process().stderr?.on('data', (d: Buffer) => errors.push(String(d)))
+  await first.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().forEach((w) => w.destroy()))
+  await expect.poll(() => first.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length)).toBe(0)
+
+  // The second copy quits by itself because the first holds the lock, and hands its request over.
+  const electronBin = (await import('electron')).default as unknown as string
+  await new Promise<number | null>((resolve) => spawn(electronBin, [main], { env }).once('exit', resolve))
+
+  await expect.poll(() => first.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length)).toBe(1)
+  expect(errors.join('')).not.toContain('Object has been destroyed')
+  await first.close()
+})
+
 test('starting the app twice leaves one window (check 5)', async () => {
   const ud = mkdtempSync(join(tmpdir(), 'codediff-ud-'))
   const env = { ...process.env, CODEDIFF_USER_DATA: ud } as Record<string, string>

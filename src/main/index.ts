@@ -74,10 +74,15 @@ if (!app.requestSingleInstanceLock()) {
   }
 
   // A second start of the app, or a codediff:// link, hands its request to this instance (file 05 section 6.6).
+  // On macOS the app stays alive when its window is closed, so `main` can be a destroyed window.
+  const liveMain = (): BrowserWindow | null => (main && !main.isDestroyed() ? main : null)
   app.on('second-instance', (_e, argv) => {
-    if (main && !hideWindow) {
-      if (main.isMinimized()) main.restore()
-      main.focus()
+    const win = liveMain()
+    if (win && !hideWindow) {
+      if (win.isMinimized()) win.restore()
+      win.focus()
+    } else if (!win && app.isReady()) {
+      main = createWindow()
     }
     receiveLaunch(parseLaunchRequest(argv.slice(1)))
   })
@@ -113,12 +118,7 @@ if (!app.requestSingleInstanceLock()) {
     registerIssueHandlers()
     main = createWindow()
     // The Theme menu marks the saved theme. A choice from the menu or from the page saves it, tells the windows and marks the menu again.
-    const showMenu = async (): Promise<void> =>
-      buildMenu(
-        () => main,
-        await currentTheme(),
-        (id) => void setTheme(id).then(showMenu)
-      )
+    const showMenu = async (): Promise<void> => buildMenu(liveMain, await currentTheme(), (id) => void setTheme(id).then(showMenu))
     registerThemeHandlers(() => void showMenu())
     registerPrefsHandlers()
     void showMenu()

@@ -122,7 +122,7 @@ const api: CodeDiffApi = {
     }
   },
   changes: {
-    mine: () => ipcRenderer.invoke(CH.changesMine),
+    mine: (scope) => ipcRenderer.invoke(CH.changesMine, scope),
     snapshot: (req) => ipcRenderer.invoke(CH.changesSnapshot, req),
     dropSnapshots: (urls) => ipcRenderer.invoke(CH.changesDropSnapshots, { urls }),
     submit: (req) => ipcRenderer.invoke(CH.changesSubmit, req)

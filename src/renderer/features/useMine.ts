@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { keepFailedHosts, MINE_POLL_MS, type MineItem, type MineResult } from '@shared/my-changes'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { combineMine, keepFailedHosts, MINE_POLL_MS, type MineItem, type MineResult, type MineScope } from '@shared/my-changes'
 import type { ChangeSnapshot } from '@shared/provider'
 import { api } from '../api'
 
@@ -22,7 +22,9 @@ export interface Mine {
 
 /** Reads the lists while a list tab is shown. They load at once, again every 60 seconds and again when the window gains focus. */
 export function useMine(active: boolean): Mine {
-  const [result, setResult] = useState<MineResult | null>(null)
+  // The open changes and the merged and closed ones come in two calls. The open part is small and shows first.
+  const [parts, setParts] = useState<Record<'open' | 'closed', MineResult | null>>({ open: null, closed: null })
+  const result = useMemo(() => combineMine(parts.open, parts.closed), [parts])
   const [answers, setAnswers] = useState<Record<string, Answer>>({})
   const [loading, setLoading] = useState(false)
   const latest = useRef(0)
@@ -31,15 +33,19 @@ export function useMine(active: boolean): Mine {
   const load = useCallback((visible: boolean): Promise<void> => {
     const n = ++latest.current
     if (visible) setLoading(true)
-    return api.changes
-      .mine()
-      .then((next) => {
-        if (n === latest.current) setResult((previous) => keepFailedHosts(previous, next))
-      })
-      .catch(() => undefined)
-      .finally(() => {
-        if (visible && n === latest.current) setLoading(false)
-      })
+    const part = (scope: Exclude<MineScope, 'all'>, done?: () => void): Promise<void> =>
+      api.changes
+        .mine(scope)
+        .then((next) => {
+          if (n === latest.current) setParts((p) => ({ ...p, [scope]: keepFailedHosts(p[scope], next) }))
+        })
+        .catch(() => undefined)
+        .finally(done)
+    // The list stops showing as loading when the open part is there. The merged and closed part goes on in the background.
+    const stop = (): void => {
+      if (visible && n === latest.current) setLoading(false)
+    }
+    return Promise.all([part('open', stop), part('closed')]).then(() => undefined)
   }, [])
 
   useEffect(() => {

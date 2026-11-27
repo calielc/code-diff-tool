@@ -3,7 +3,7 @@ import type { LlmConfig, ToolId, CustomTool } from './llm'
 import type { ChatEvent, ChatRequest } from './chat'
 import type { SectionsState } from './sections'
 import type { LaunchRequest } from './launch'
-import type { MineResult } from './my-changes'
+import type { MineResult, MineScope } from './my-changes'
 import type { CommitInfo } from './commits'
 import type { FileObject } from './diff'
 import type { AiStateView } from './ai'
@@ -197,8 +197,8 @@ export interface CodeDiffApi {
     onNew(cb: () => void): () => void
   }
   changes: {
-    /** The changes assigned to the user and the ones with the user as reviewer, from every saved GitLab and GitHub access. */
-    mine(): Promise<MineResult>
+    /** The changes assigned to the user and the ones with the user as reviewer, from every saved GitLab and GitHub access. A scope reads only the open part or only the merged and closed part. */
+    mine(scope?: MineScope): Promise<MineResult>
     /** The full snapshot of one change, the same data as a review reads. The main process keeps it while the updated time stays the same. */
     snapshot(req: { url: string; updatedAt: string }): Promise<Result<ChangeSnapshot>>
     /** Forgets the kept snapshots of these changes, so the next ask reads them again. */

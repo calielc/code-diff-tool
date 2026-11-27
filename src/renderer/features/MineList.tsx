@@ -74,7 +74,8 @@ export function MineList(props: {
     const anyState = Object.values(filters.states).some(Boolean)
     return items.filter((i) => !anyState || filters.states[i.state])
   }, [items, filters.states])
-  useEffect(() => request(shown), [request, shown])
+  // The newest changes are read first, because the list starts sorted by Updated, newest first.
+  useEffect(() => request([...shown].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))), [request, shown])
   // A click on a new column sorts ascending. A click on the sorted column reverses it.
   const sortBy = (key: MrSortKey): void => patch({ sort: sort.key === key ? { key, dir: sort.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' } })
 

@@ -8,6 +8,7 @@ import { submitByUrls } from '../clients/submit-by-url'
 import { fetchMine, type MineAccess } from '../clients/my-changes'
 import { snapshots } from '../clients/snapshots'
 import { listAccess } from '../services/credentials'
+import { takePrefetchedMine } from '../services/mine-prefetch'
 import { handle } from './guard'
 
 const snapshotRequest = z.object({ url: z.string().max(2048), updatedAt: z.string().max(64) })
@@ -25,9 +26,16 @@ const dropRequest = z.object({ urls: z.array(z.string().max(2048)).max(1000) })
 
 export function registerChangesHandlers(): void {
   // Reads the lists with the saved tokens. Only items and error texts go to the window, never a token.
-  handle(CH.changesMine, null, async (): Promise<MineResult> => {
+  handle(CH.changesMine, z.enum(['open', 'closed', 'all']).optional(), async (scope): Promise<MineResult> => {
+    // The open part may be read already, from the start of the app. It is used once, so every later read is a new one.
+    const ready = scope === 'open' ? await takePrefetchedMine() : null
+    if (ready) return ready
     const accesses = listAccess().filter((a): a is typeof a & { kind: MineAccess['provider'] } => a.kind !== 'jira')
-    return fetchMine(accesses.map((a) => ({ provider: a.kind, host: a.host })))
+    return fetchMine(
+      accesses.map((a) => ({ provider: a.kind, host: a.host })),
+      Date.now(),
+      scope
+    )
   })
   // The full snapshot of one change. The window asks for each change on its own, and the main process keeps 6 reads open at most.
   handle(CH.changesSnapshot, snapshotRequest, (req): Promise<Result<ChangeSnapshot>> => snapshots.get(req.url, req.updatedAt))

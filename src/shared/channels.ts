@@ -60,6 +60,7 @@ export const CH = {
   prefsGet: 'prefs:get',
   prefsSet: 'prefs:set',
   reviewsAddTo: 'reviews:addTo',
+  reviewsStatus: 'reviews:status',
   launchTake: 'launch:take',
   launchNew: 'launch:new',
   changesMine: 'changes:mine',

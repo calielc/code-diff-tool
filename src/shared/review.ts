@@ -125,8 +125,6 @@ export interface CheckResult {
   slugExists: boolean
 }
 
-export type SummarisedState = 'writing' | 'failed' | 'ready' | 'not-written'
-
 export interface ReviewSummary {
   slug: string
   title: string | null
@@ -135,7 +133,6 @@ export interface ReviewSummary {
   /** Modification time of review.json, ISO 8601. */
   modifiedAt: string
   openedAt: string | null
-  summarised: SummarisedState
   /** Set when review.json cannot be read. */
   unreadable: boolean
 }

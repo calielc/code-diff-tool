@@ -12,7 +12,9 @@ The app helps a reviewer read the code changes of one piece of work. A piece of 
 
 ## 2. Reviews
 
-The home screen lists your reviews with their name, title, number of changes, number of issues, last opened time and the state of the Summarised page (Ready, Not written or Failed). A new review shows Not written until you open the Summarised tab. Every column sorts. Above the grid, at the right, one row holds a filter box at the left that narrows the list by name, and four pills at the right (Writing, Failed, Ready, Not written) that filter by the state of the Summarised page. They look like the pills of the change request list. Each pill shows how many reviews are in that state, and a click turns the state on or off.
+The home screen lists your reviews with their name, number of issues and last opened time. Three more columns tell where the review stands, summed over its changes: **Approved** (for example `2 of 3`, green when every change is approved), **Comments** (the open comment threads, or `none open`) and **Pipelines** (`all green`, `running`, or `2 failing`). A merged change counts as approved, a closed change is left out of every number, and only open and draft changes count for the pipelines. A tooltip says what a number covers. Every column sorts, and the Pipelines column puts the worst first when it sorts ascending. Above the grid, a filter box at the left narrows the list by name.
+
+The three columns come from GitLab and GitHub, so they fill in a moment after the list, one review at a time, and show … until then. A review whose changes cannot be read shows dashes. When only some of its changes cannot be read, the numbers cover the others, and the tooltip says so. The app keeps what it read for a minute, so a return to the window does not read the same changes again.
 
 ![The Reviews tab of the home screen](docs/images/home.png)
 
@@ -37,7 +39,7 @@ The home screen has three tabs: Reviews, Owned by me and I am the reviewer. Revi
 
 The app saves how you left each screen, so it opens the same way next time. Every change of a toggle, a filter, a sort, a group choice or a tab is saved at once, in the file `ui-prefs.json` in the data folder of the app. Each screen keeps its own settings, so a choice in one place never changes another.
 
-- **The home screen** keeps the open tab. The Reviews tab keeps its sort, its search text and its four Summarised pills. Each of the two list tabs keeps its state pills, approval pills, group choice, collapsed groups and sort.
+- **The home screen** keeps the open tab. The Reviews tab keeps its sort and its search text. Each of the two list tabs keeps its state pills, approval pills, group choice, collapsed groups and sort.
 - **Each review** keeps its own settings, and a review never changes the settings of another review: the open tab, and in the Code changes tab the sort, the state and approval filters, the group choice and the collapsed groups. The Issues tab keeps its sort. The Diff tab keeps its view (Linear or Stacked), the file filter text, the Status, Type, Comments and Show buttons. Deleting a review forgets its settings.
 - **Every screen** shares the Noise setting and the Layout of the Diff tab.
 - The width of the file tree, the Viewed marks, the accepted sections and the folded sections stay where they were. They are kept in the browser storage of the window, as before.

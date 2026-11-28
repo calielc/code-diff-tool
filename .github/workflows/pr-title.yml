@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   title:
-    name: Title has the form type, colon, description
+    name: title
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

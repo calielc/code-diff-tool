@@ -1,6 +1,6 @@
 # EditorConfig: https://editorconfig.org
-# Most editors read this file. Prettier (.prettierrc.json) and Git (.gitattributes) use the same values for the code style
-# and the line endings. If you change a value here, change it there too.
+# The same file is in every repository of the owner. Change it in the setup-github-repo skill, then copy it to the repositories.
+# The formatter of each language and Git (.gitattributes) use the same values. The formatter config sets the line width.
 
 # The top-most EditorConfig file. No file above this folder counts.
 root = true
@@ -17,30 +17,23 @@ insert_final_newline = true
 trim_trailing_whitespace = true
 
 # ----------------------------------------------------------------------------
-# The languages of this repository
+# Languages with two spaces
 # ----------------------------------------------------------------------------
 
-# TypeScript and JavaScript. The line width is the one of the formatter (Prettier, 160 columns).
+# TypeScript and JavaScript.
 [*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}]
 indent_size = 2
-max_line_length = 160
 
 # JSON. npm writes package.json and package-lock.json with two spaces.
 [*.{json,jsonc,json5}]
 indent_size = 2
 
-# YAML: the GitHub workflows and the Renovate file. YAML does not allow tabs.
+# YAML: GitHub workflows, Dependabot, Home Assistant. YAML does not allow tabs.
 [*.{yml,yaml}]
 indent_size = 2
 
-# Markdown. Two spaces at the end of a line are a line break, and a long line is fine.
-[*.{md,markdown}]
-indent_size = 2
-trim_trailing_whitespace = false
-max_line_length = off
-
 # HTML and CSS.
-[*.{html,htm,css,scss,less}]
+[*.{html,htm,css,scss,less,vue,svelte}]
 indent_size = 2
 
 # Shell scripts. They must have LF line endings.
@@ -48,12 +41,37 @@ indent_size = 2
 indent_size = 2
 end_of_line = lf
 
+# Markdown. Two spaces at the end of a line are a line break, and a long line is fine.
+[*.{md,markdown}]
+trim_trailing_whitespace = false
+max_line_length = off
+
+# ----------------------------------------------------------------------------
+# Languages with four spaces or tabs
+# ----------------------------------------------------------------------------
+
+# Python, Rust, Java, Kotlin, C# and PowerShell use four spaces.
+[*.{py,pyi,rs,java,kt,kts,cs,csx,ps1,psm1}]
+indent_size = 4
+
+# .NET project and solution files.
+[*.{csproj,props,targets,sln,slnx}]
+indent_size = 2
+
+# Makefiles, Go and Git files need tabs.
+[{Makefile,makefile,*.mk,*.go,.gitconfig,.gitmodules}]
+indent_style = tab
+
+# Windows batch files need CRLF, as in .gitattributes.
+[*.{bat,cmd}]
+end_of_line = crlf
+
 # ----------------------------------------------------------------------------
 # Files that must keep every character
 # ----------------------------------------------------------------------------
 
 # A patch, a snapshot or a lock file of another tool must not change.
-[*.{diff,patch,snap}]
+[*.{diff,patch,snap,lock}]
 trim_trailing_whitespace = false
 insert_final_newline = unset
 
@@ -70,6 +88,3 @@ indent_size = unset
 insert_final_newline = unset
 trim_trailing_whitespace = unset
 max_line_length = off
-
-# Windows batch files need CRLF. This repository has none. If you add one, also set `*.{bat,cmd} eol=crlf` in
-# .gitattributes, because that file makes every text file LF.
